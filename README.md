@@ -24,7 +24,7 @@ frontend/      静态前端演示应用与前端校验脚本
 ai-service/    AI 提示词与 Provider 占位实现
 docs/          PRD、架构、ADR、测试与工作流文档
 ci/            CI/CD 说明与质量检查脚本
-.github/       CI、Issue 模板、PR 模板、CODEOWNERS
+.github/       CI、Issue 模板、PR 模板
 scripts/       校验、OpenAPI 检查、本地启动辅助脚本
 ```
 

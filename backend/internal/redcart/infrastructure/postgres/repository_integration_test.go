@@ -1,15 +1,17 @@
 package postgres
 
 import (
+	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 )
 
 func TestRepositoryAgainstPostgres(t *testing.T) {
 	dsn := os.Getenv("POSTGRES_DSN")
-	if dsn == "" {
+	if dsn == "" || os.Getenv("RUN_POSTGRES_INTEGRATION") != "1" {
 		t.Skip("POSTGRES_DSN not set")
 	}
 
@@ -24,9 +26,10 @@ func TestRepositoryAgainstPostgres(t *testing.T) {
 		t.Fatal("expected seeded products")
 	}
 
+	phone := fmt.Sprintf("138%08d", time.Now().UnixNano()%100000000)
 	user, err := repo.CreateUser(domain.User{
 		Nickname:     "PG User",
-		Phone:        "13800100001",
+		Phone:        phone,
 		PasswordHash: "hashed",
 		Role:         domain.RoleConsumer,
 	})

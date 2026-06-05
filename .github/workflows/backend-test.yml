@@ -41,4 +41,14 @@ jobs:
       - name: Backend CI
         env:
           POSTGRES_DSN: postgres://postgres:postgres@127.0.0.1:5432/redcart_test?sslmode=disable
+          RUN_POSTGRES_INTEGRATION: "1"
         run: bash ci/scripts/backend-ci.sh
+      - name: Upload backend artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-ci-artifacts
+          path: |
+            backend/coverage.out
+            ci/artifacts/backend-postgres-integration.txt
+            ci/artifacts/backend-benchmark.txt
+            ci/artifacts/backend-qps.txt
