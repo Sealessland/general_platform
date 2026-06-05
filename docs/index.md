@@ -5,6 +5,7 @@
 ## 优先阅读
 
 - 项目总览：`../README.md`
+- 项目约束：`project-constraints.md`
 - 架构边界：`architecture.md`
 - 完成检查清单：`checklists/agent-native-completion.md`
 

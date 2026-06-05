@@ -13,9 +13,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Validate workspace
-        run: bash scripts/validate-workspace.sh
+        run: bash ci/scripts/validate-workspace.sh
       - name: Check OpenAPI
-        run: bash scripts/check-openapi.sh
+        run: bash ci/scripts/check-openapi.sh
+
+  security:
+    uses: ./.github/workflows/security-test.yml
 
   backend:
     uses: ./.github/workflows/backend-test.yml
