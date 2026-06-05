@@ -30,3 +30,12 @@
 - YAML 只负责编排，不做复杂逻辑
 - 先有脚本，再由 workflow 调用
 - 项目约束优先体现在脚本和文档里，而不是只靠口头约定
+
+## QPS 输出
+
+后端 CI 会执行 HTTP 基准测试，并在 `ci/artifacts/` 下产出：
+
+- `backend-benchmark.txt`
+- `backend-qps.txt`
+
+其中 `backend-qps.txt` 会把 `ns/op` 换算成 QPS，便于在 GitHub Actions 中直接查看性能基线。

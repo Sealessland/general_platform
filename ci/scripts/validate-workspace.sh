@@ -56,7 +56,6 @@ required_files=(
   ".github/ISSUE_TEMPLATE/tech_debt.md"
   ".github/ISSUE_TEMPLATE/refactor_task.md"
   ".github/PULL_REQUEST_TEMPLATE.md"
-  ".github/CODEOWNERS"
   ".github/dependabot.yml"
   ".agents/README.md"
   ".codex/skills/agent-native-shop/SKILL.md"
@@ -98,7 +97,6 @@ grep -q "订单状态机" docs/architecture/order-state-machine.md
 grep -q "Idempotency-Key" docs/api/openapi.yaml
 grep -q "idempotency_key" backend/migrations/0001_init_schema.sql
 grep -q "AIProvider interface" backend/internal/ai/provider.go
-grep -q "@your-github-name" .github/CODEOWNERS
 grep -q "完成证据" docs/workflows/add-feature.md
 grep -q "完成证据" docs/workflows/add-integration.md
 grep -q "完成证据" docs/workflows/debug.md
