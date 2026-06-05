@@ -5,5 +5,7 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM nginx:1.27-alpine
-COPY --from=build /src/dist /usr/share/nginx/html
+FROM busybox:1.36
+COPY --from=build /src/dist /www
+EXPOSE 4173
+CMD ["httpd", "-f", "-p", "4173", "-h", "/www"]

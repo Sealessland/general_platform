@@ -1,25 +1,33 @@
 services:
   postgres:
     image: postgres:16
+    network_mode: host
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: redcart
-    ports:
-      - "5432:5432"
+    command: ["postgres", "-p", "15432"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d redcart"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 15432 -U postgres -d redcart"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  redis:
-    image: redis:7
-    ports:
-      - "6379:6379"
+  backend:
+    build:
+      context: ./backend
+    network_mode: host
+    environment:
+      HTTP_PORT: 18080
+      POSTGRES_DSN: postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable
+      AI_PROVIDER: mock
+    depends_on:
+      postgres:
+        condition: service_healthy
 
-  rabbitmq:
-    image: rabbitmq:3-management
-    ports:
-      - "5672:5672"
-      - "15672:15672"
+  frontend:
+    build:
+      context: ./frontend
+    network_mode: host
+    depends_on:
+      - backend
