@@ -1,0 +1,12 @@
+{
+  "name": "redcart-copilot-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "typecheck": "node scripts/typecheck.mjs",
+    "lint": "node scripts/lint.mjs",
+    "build": "node scripts/build.mjs",
+    "test": "node scripts/test.mjs"
+  },
+  "devDependencies": {}
+}

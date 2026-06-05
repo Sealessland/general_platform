@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  workspace:
+    name: Workspace Gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate workspace
+        run: bash scripts/validate-workspace.sh
+      - name: Check OpenAPI
+        run: bash scripts/check-openapi.sh
+
+  backend:
+    uses: ./.github/workflows/backend-test.yml
+
+  frontend:
+    uses: ./.github/workflows/frontend-test.yml
+
+  ai-service:
+    uses: ./.github/workflows/ai-service-test.yml
+
+  docker:
+    uses: ./.github/workflows/docker-build.yml

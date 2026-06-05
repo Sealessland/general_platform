@@ -1,0 +1,20 @@
+# Global owner
+* @your-github-name
+
+# Backend core business
+/backend/internal/order/ @your-github-name
+/backend/internal/inventory/ @your-github-name
+/backend/internal/ai/ @your-github-name
+
+# Frontend pages
+/frontend/src/ @your-github-name
+
+# AI service
+/ai-service/ @your-github-name
+
+# Architecture and decisions
+/docs/architecture/ @your-github-name
+/docs/adr/ @your-github-name
+
+# CI/CD
+/.github/workflows/ @your-github-name

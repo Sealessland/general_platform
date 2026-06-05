@@ -1,0 +1,537 @@
+openapi: 3.0.3
+info:
+  title: RedCart Copilot API
+  version: 0.2.0
+  description: 面向内容电商购物、商家经营与 AI Copilot 的可运行 MVP 接口契约。
+servers:
+  - url: http://127.0.0.1:18080
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: token
+  parameters:
+    ID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            kind:
+              type: string
+            message:
+              type: string
+    LoginRequest:
+      type: object
+      required: [phone, password]
+      properties:
+        phone:
+          type: string
+        password:
+          type: string
+    RegisterRequest:
+      type: object
+      required: [nickname, phone, password, role]
+      properties:
+        nickname:
+          type: string
+        phone:
+          type: string
+        password:
+          type: string
+        role:
+          type: string
+          enum: [consumer, merchant]
+    CartItemRequest:
+      type: object
+      required: [sku_id, quantity]
+      properties:
+        sku_id:
+          type: integer
+          format: int64
+        quantity:
+          type: integer
+          minimum: 1
+    CartItemUpdateRequest:
+      type: object
+      properties:
+        quantity:
+          type: integer
+          minimum: 1
+        selected:
+          type: boolean
+    CheckoutItem:
+      type: object
+      required: [sku_id, quantity]
+      properties:
+        sku_id:
+          type: integer
+          format: int64
+        quantity:
+          type: integer
+          minimum: 1
+    CheckoutRequest:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CheckoutItem"
+        receiver_name:
+          type: string
+        receiver_phone:
+          type: string
+        receiver_address:
+          type: string
+    MerchantProductRequest:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        cover_url:
+          type: string
+        category_id:
+          type: integer
+          format: int64
+        selling_points:
+          type: array
+          items:
+            type: string
+    MerchantSKURequest:
+      type: object
+      properties:
+        sku_name:
+          type: string
+        sku_attrs:
+          type: object
+          additionalProperties:
+            type: string
+        price_cent:
+          type: integer
+          format: int64
+        stock:
+          type: integer
+        status:
+          type: string
+    RefundRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+    MerchantShipRequest:
+      type: object
+      properties:
+        logistics_no:
+          type: string
+        remark:
+          type: string
+    SellingPointRequest:
+      type: object
+      required: [product_name, target_users, price_cent]
+      properties:
+        product_name:
+          type: string
+        attributes:
+          type: array
+          items:
+            type: string
+        target_users:
+          type: string
+        price_cent:
+          type: integer
+          format: int64
+        reviews:
+          type: array
+          items:
+            type: string
+    BusinessReviewRequest:
+      type: object
+      required: [window_days]
+      properties:
+        window_days:
+          type: integer
+        product_id:
+          type: integer
+          format: int64
+security:
+  - bearerAuth: []
+paths:
+  /healthz:
+    get:
+      summary: 健康检查
+      security: []
+      responses:
+        "200":
+          description: 服务运行正常
+  /api/auth/register:
+    post:
+      summary: 注册消费者或商家演示账号
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: 注册成功并返回登录态
+  /api/auth/login:
+    post:
+      summary: 登录并获取 Bearer Token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: 登录成功
+  /api/auth/me:
+    get:
+      summary: 获取当前登录用户信息
+      responses:
+        "200":
+          description: 当前用户信息
+  /api/notes:
+    get:
+      summary: 获取带挂载商品的笔记流
+      security: []
+      responses:
+        "200":
+          description: 返回笔记列表
+  /api/notes/{id}:
+    get:
+      summary: 获取笔记详情，并在已登录时记录浏览事件
+      security:
+        - {}
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: 返回笔记详情
+  /api/products:
+    get:
+      summary: 获取上架商品列表
+      security: []
+      responses:
+        "200":
+          description: 返回商品卡片列表
+  /api/products/{id}:
+    get:
+      summary: 获取商品详情
+      security:
+        - {}
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: 返回商品详情
+  /api/products/{id}/skus:
+    get:
+      summary: 获取商品 SKU 列表
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: 返回 SKU 列表
+  /api/cart:
+    get:
+      summary: 获取当前购物车
+      responses:
+        "200":
+          description: 返回购物车内容
+  /api/cart/items:
+    post:
+      summary: 添加购物车商品
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CartItemRequest"
+      responses:
+        "201":
+          description: 加购成功
+  /api/cart/items/{id}:
+    put:
+      summary: 修改购物车商品数量或勾选状态
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CartItemUpdateRequest"
+      responses:
+        "200":
+          description: 购物车商品已更新
+    delete:
+      summary: 删除购物车商品
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: 购物车商品已删除
+  /api/orders/preview:
+    post:
+      summary: 结算预览，校验金额与库存状态
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutRequest"
+      responses:
+        "200":
+          description: 返回结算预览
+  /api/orders:
+    get:
+      summary: 获取当前消费者订单列表
+      responses:
+        "200":
+          description: 返回订单列表
+    post:
+      summary: 使用幂等键创建订单
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutRequest"
+      responses:
+        "201":
+          description: 订单创建成功，或命中幂等返回已有订单
+        "409":
+          description: 业务冲突或库存冲突
+  /api/orders/{id}:
+    get:
+      summary: 获取订单详情
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: 返回订单详情
+  /api/orders/{id}/pay:
+    post:
+      summary: 模拟支付
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: 订单已支付
+  /api/orders/{id}/cancel:
+    post:
+      summary: 取消未支付订单
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: 订单已取消
+  /api/orders/{id}/finish:
+    post:
+      summary: 确认收货并完成订单
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: 订单已完成
+  /api/orders/{id}/refund:
+    post:
+      summary: 发起退款申请
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefundRequest"
+      responses:
+        "202":
+          description: 退款申请已提交
+  /api/merchant/products:
+    get:
+      summary: 获取商家商品列表
+      responses:
+        "200":
+          description: 返回商家商品列表
+    post:
+      summary: 创建商家商品
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MerchantProductRequest"
+      responses:
+        "201":
+          description: 商品创建成功
+  /api/merchant/products/{id}:
+    put:
+      summary: 更新商家商品
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MerchantProductRequest"
+      responses:
+        "200":
+          description: 商品更新成功
+  /api/merchant/products/{id}/skus:
+    post:
+      summary: 为商品创建 SKU
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MerchantSKURequest"
+      responses:
+        "201":
+          description: SKU 创建成功
+  /api/merchant/skus/{id}:
+    put:
+      summary: 更新 SKU
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MerchantSKURequest"
+      responses:
+        "200":
+          description: SKU 更新成功
+  /api/merchant/products/{id}/online:
+    post:
+      summary: 商品上架
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: 商品状态已更新
+  /api/merchant/products/{id}/offline:
+    post:
+      summary: 商品下架
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: 商品状态已更新
+  /api/merchant/orders:
+    get:
+      summary: 获取商家订单列表
+      responses:
+        "200":
+          description: 返回商家订单列表
+  /api/merchant/orders/{id}:
+    get:
+      summary: 获取商家订单详情
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: 返回商家订单详情
+  /api/merchant/orders/{id}/ship:
+    post:
+      summary: 发货
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MerchantShipRequest"
+      responses:
+        "200":
+          description: 订单已发货
+  /api/merchant/orders/{id}/refund/approve:
+    post:
+      summary: 审批退款
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: 退款审批完成
+  /api/merchant/dashboard/funnel:
+    get:
+      summary: 获取商家漏斗指标
+      responses:
+        "200":
+          description: 返回漏斗指标
+  /api/merchant/dashboard/products:
+    get:
+      summary: 获取商家商品经营数据
+      responses:
+        "200":
+          description: 返回商品经营数据
+  /api/merchant/dashboard/summary:
+    get:
+      summary: 获取商家经营汇总
+      responses:
+        "200":
+          description: 返回经营汇总
+  /api/ai/product-selling-points:
+    post:
+      summary: 生成商品卖点
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SellingPointRequest"
+      responses:
+        "200":
+          description: 返回 AI 任务结果
+  /api/ai/business-review:
+    post:
+      summary: 生成经营复盘草案
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BusinessReviewRequest"
+      responses:
+        "200":
+          description: 返回 AI 任务结果
+  /api/ai/tasks/{id}:
+    get:
+      summary: 获取 AI 任务详情
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: 返回 AI 任务详情
