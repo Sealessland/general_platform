@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -8,12 +9,16 @@ import (
 
 	backendai "github.com/example/redcart-copilot/backend/internal/ai"
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
-	"github.com/example/redcart-copilot/backend/internal/redcart/infrastructure/memory"
+	postgresrepo "github.com/example/redcart-copilot/backend/internal/redcart/infrastructure/postgres"
 	"github.com/example/redcart-copilot/backend/internal/redcart/interfaces/httpapi"
 )
 
 func main() {
-	repo := memory.NewRepository()
+	repo, cleanup, err := initRepository()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer cleanup()
 	service := application.NewService(repo, backendai.MockProvider{})
 	server := &http.Server{
 		Addr:              ":" + envOrDefault("PORT", envOrDefault("HTTP_PORT", "18080")),
@@ -32,4 +37,23 @@ func envOrDefault(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func initRepository() (application.Repository, func(), error) {
+	dsn := os.Getenv("POSTGRES_DSN")
+	if dsn == "" {
+		return nil, func() {}, fmt.Errorf("POSTGRES_DSN is required")
+	}
+
+	repo, err := postgresrepo.NewRepository(dsn)
+	if err != nil {
+		return nil, func() {}, fmt.Errorf("initialize postgres repository: %w", err)
+	}
+
+	log.Printf("postgres repository connected")
+	return repo, func() {
+		if err := repo.Close(); err != nil {
+			log.Printf("close postgres repository: %v", err)
+		}
+	}, nil
 }

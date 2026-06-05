@@ -20,6 +20,7 @@ __pycache__/
 
 # Go
 bin/
+backend/api
 
 # OS/editor
 .DS_Store

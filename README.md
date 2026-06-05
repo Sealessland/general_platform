@@ -48,11 +48,17 @@ npm run typecheck
 npm run build
 ```
 
-启动后端 API：
+推荐直接使用 Docker Compose 启动完整 MVP 环境：
+
+```bash
+bash scripts/local-dev.sh
+```
+
+如果只单独启动后端 API：
 
 ```bash
 cd backend
-HTTP_PORT=18080 GOCACHE=/tmp/go-build-cache go run ./cmd/api
+POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable HTTP_PORT=18080 GOCACHE=/tmp/go-build-cache go run ./cmd/api
 ```
 
 构建后的前端位于：
@@ -71,6 +77,7 @@ python3 -m http.server 4173 --bind 127.0.0.1
 
 - 后端地址：`http://127.0.0.1:18080`
 - 前端静态服务示例：`http://127.0.0.1:4173`
+- PostgreSQL 本地端口：`127.0.0.1:15432`
 
 内置演示账号：
 
@@ -79,13 +86,12 @@ python3 -m http.server 4173 --bind 127.0.0.1
 
 ## 当前实现说明
 
-当前 MVP 为了让主流程可以直接运行，运行时适配层采用了内存实现：
+当前 MVP 运行时采用纯 PostgreSQL 环境：
 
-- 商品、购物车、订单、库存锁、行为事件存放在内存仓储中
+- 后端启动时必须提供 `POSTGRES_DSN`
+- 后端连接 PostgreSQL 后会自动执行初始化迁移与演示种子数据
 - AI 能力使用可重复的 Mock Provider
-- PostgreSQL、Redis、RabbitMQ 仍然保留为文档中的目标架构，而不是被偷偷硬编码到领域层里
-
-这意味着你现在可以直接演示完整链路，也能清楚说明下一步如何替换成真实基础设施。
+- Redis、RabbitMQ 暂不作为运行时前置依赖
 
 ## 工程规则
 
