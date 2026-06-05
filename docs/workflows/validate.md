@@ -14,6 +14,7 @@ bash scripts/validate-workspace.sh
 - 核心文档是否存在
 - 工作流文档是否写明完成证据
 - agent 路由文件是否指向规范文档
+- `ci/` 目录下的 CI/CD 说明和基础脚本是否齐全
 
 ## 完成证据
 
