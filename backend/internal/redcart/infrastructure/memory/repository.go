@@ -686,6 +686,10 @@ func (r *Repository) GetOrder(id int64) (domain.Order, bool) {
 func (r *Repository) SaveOrder(order domain.Order) (domain.Order, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	return r.saveOrderLocked(order), nil
+}
+
+func (r *Repository) saveOrderLocked(order domain.Order) domain.Order {
 	if order.ID == 0 {
 		order.ID = r.nextID(&r.nextOrderID)
 		if order.CreatedAt.IsZero() {
@@ -705,7 +709,37 @@ func (r *Repository) SaveOrder(order domain.Order) (domain.Order, error) {
 	if order.IdempotencyKey != "" {
 		r.orderByIdempotency[fmt.Sprintf("%d:%s", order.UserID, order.IdempotencyKey)] = order.ID
 	}
-	return cloneOrder(order), nil
+	return cloneOrder(order)
+}
+
+func (r *Repository) SaveOrderWithInventoryLocks(order domain.Order, locks []domain.InventoryLock) (domain.Order, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, lock := range locks {
+		sku, ok := r.skus[lock.SKUID]
+		if !ok {
+			return domain.Order{}, fmt.Errorf("sku not found")
+		}
+		if sku.Stock-sku.LockedStock < lock.Quantity {
+			return domain.Order{}, application.ErrInsufficientStock
+		}
+	}
+	saved := r.saveOrderLocked(order)
+	for _, lock := range locks {
+		sku := r.skus[lock.SKUID]
+		sku.LockedStock += lock.Quantity
+		sku.UpdatedAt = time.Now().UTC()
+		r.skus[sku.ID] = cloneSKU(sku)
+
+		lock.ID = r.nextID(&r.nextInventoryLockID)
+		lock.OrderID = saved.ID
+		if lock.CreatedAt.IsZero() {
+			lock.CreatedAt = time.Now().UTC()
+		}
+		lock.UpdatedAt = time.Now().UTC()
+		r.locksByOrder[saved.ID] = append(r.locksByOrder[saved.ID], cloneInventoryLock(lock))
+	}
+	return cloneOrder(saved), nil
 }
 
 func (r *Repository) ListOrderEvents(orderID int64) []domain.OrderEvent {

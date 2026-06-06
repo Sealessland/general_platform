@@ -1,6 +1,12 @@
 package application
 
-import "github.com/example/redcart-copilot/backend/internal/redcart/domain"
+import (
+	"errors"
+
+	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
+)
+
+var ErrInsufficientStock = errors.New("stock is insufficient")
 
 type Repository interface {
 	CreateUser(user domain.User) (domain.User, error)
@@ -35,6 +41,7 @@ type Repository interface {
 	ListOrdersByMerchant(merchantID int64) []domain.Order
 	GetOrder(id int64) (domain.Order, bool)
 	SaveOrder(order domain.Order) (domain.Order, error)
+	SaveOrderWithInventoryLocks(order domain.Order, locks []domain.InventoryLock) (domain.Order, error)
 
 	ListOrderEvents(orderID int64) []domain.OrderEvent
 	AppendOrderEvent(event domain.OrderEvent) (domain.OrderEvent, error)
