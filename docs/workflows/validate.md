@@ -20,3 +20,4 @@ bash scripts/validate-workspace.sh
 
 - 验证命令退出码为 0
 - 如果有刻意保留的缺口，已经在最近的相关文档中说明
+- 本地提交信息已经基于暂存差异复核，能说明具体行为变化，未使用 `risk gaps`、`improve backend`、`update files` 这类空泛表述

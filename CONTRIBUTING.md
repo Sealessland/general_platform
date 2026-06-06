@@ -34,6 +34,38 @@ docs: translate project documents to chinese
 chore: update local validation script
 ```
 
+提交信息必须描述这次提交实际改变了什么行为或公共面，不能只写抽象结论。尤其修复类提交要写清楚被修的风险类型、受影响模块或可观察结果。
+
+不合格示例：
+
+```text
+fix: close risk gaps
+fix: improve backend
+chore: update files
+```
+
+合格示例：
+
+```text
+fix: reject get requests for order state changes
+fix: isolate ai task access by merchant ownership
+fix: reserve postgres inventory atomically on order create
+docs: record audited risk fixes and validation evidence
+```
+
+提交前先看暂存差异，再写信息：
+
+```bash
+git diff --cached --stat
+git diff --cached --name-only
+```
+
+如果一个提交同时改了多个风险点，提交信息仍要点名主要行为，例如：
+
+```text
+fix: enforce method gates, ai ownership, and inventory locks
+```
+
 ## 提交前检查
 
 - 功能改动是否有对应任务

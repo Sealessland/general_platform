@@ -2,11 +2,14 @@ package application_test
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
 
 	backendai "github.com/example/redcart-copilot/backend/internal/ai"
 	orderdomain "github.com/example/redcart-copilot/backend/internal/order/domain"
 	application "github.com/example/redcart-copilot/backend/internal/redcart/application"
+	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 	"github.com/example/redcart-copilot/backend/internal/redcart/infrastructure/memory"
 )
 
@@ -81,4 +84,49 @@ func TestRefundReturnsInventory(t *testing.T) {
 	if after.LockedStock != 0 {
 		t.Fatalf("expected locked stock reset, got %d", after.LockedStock)
 	}
+}
+
+func TestConsumerCannotGenerateAISellingPoints(t *testing.T) {
+	repo := memory.NewRepository()
+	service := application.NewService(repo, backendai.MockProvider{})
+	consumer := application.Actor{UserID: 1, Role: domain.RoleConsumer}
+
+	_, err := service.GenerateSellingPoints(context.Background(), consumer, application.SellingPointInput{
+		ProductName: "Travel Makeup Organizer",
+		Attributes:  []string{"portable"},
+		TargetUsers: "dorm users",
+		PriceCent:   8900,
+	})
+	if !isAppError(err, application.ErrorForbidden) {
+		t.Fatalf("expected forbidden for consumer AI generation, got %v", err)
+	}
+}
+
+func TestConsumerCannotReadAnotherConsumersLegacyAITask(t *testing.T) {
+	repo := memory.NewRepository()
+	service := application.NewService(repo, backendai.MockProvider{})
+	now := time.Now().UTC()
+	task, err := repo.CreateAITask(domain.AIGenerationTask{
+		UserID:     1,
+		MerchantID: 0,
+		TaskType:   domain.TaskTypeSellingPoints,
+		Input:      map[string]any{"product_name": "legacy task"},
+		Output:     map[string]any{"core_points": []string{"legacy"}},
+		Status:     domain.AITaskStatusCompleted,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	})
+	if err != nil {
+		t.Fatalf("create legacy ai task: %v", err)
+	}
+
+	_, err = service.GetAITask(context.Background(), application.Actor{UserID: 99, Role: domain.RoleConsumer}, task.ID)
+	if !isAppError(err, application.ErrorNotFound) {
+		t.Fatalf("expected not found for cross-consumer ai task read, got %v", err)
+	}
+}
+
+func isAppError(err error, kind application.ErrorKind) bool {
+	var appErr *application.AppError
+	return errors.As(err, &appErr) && appErr.Kind == kind
 }

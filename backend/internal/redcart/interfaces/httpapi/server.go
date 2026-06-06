@@ -362,6 +362,10 @@ func (s *Server) handleOrderByID(w http.ResponseWriter, r *http.Request, actor a
 	path := strings.TrimPrefix(r.URL.Path, "/api/orders/")
 	switch {
 	case strings.HasSuffix(path, "/pay"):
+		if r.Method != http.MethodPost {
+			writeMethodNotAllowed(w)
+			return
+		}
 		id, err := parseSuffixID(path, "/pay")
 		if err != nil {
 			writeBadRequest(w, err)
@@ -374,6 +378,10 @@ func (s *Server) handleOrderByID(w http.ResponseWriter, r *http.Request, actor a
 		}
 		writeJSON(w, http.StatusOK, result)
 	case strings.HasSuffix(path, "/cancel"):
+		if r.Method != http.MethodPost {
+			writeMethodNotAllowed(w)
+			return
+		}
 		id, err := parseSuffixID(path, "/cancel")
 		if err != nil {
 			writeBadRequest(w, err)
@@ -386,6 +394,10 @@ func (s *Server) handleOrderByID(w http.ResponseWriter, r *http.Request, actor a
 		}
 		writeJSON(w, http.StatusOK, result)
 	case strings.HasSuffix(path, "/finish"):
+		if r.Method != http.MethodPost {
+			writeMethodNotAllowed(w)
+			return
+		}
 		id, err := parseSuffixID(path, "/finish")
 		if err != nil {
 			writeBadRequest(w, err)
@@ -398,6 +410,10 @@ func (s *Server) handleOrderByID(w http.ResponseWriter, r *http.Request, actor a
 		}
 		writeJSON(w, http.StatusOK, result)
 	case strings.HasSuffix(path, "/refund"):
+		if r.Method != http.MethodPost {
+			writeMethodNotAllowed(w)
+			return
+		}
 		id, err := parseSuffixID(path, "/refund")
 		if err != nil {
 			writeBadRequest(w, err)
@@ -484,6 +500,10 @@ func (s *Server) handleMerchantProductByID(w http.ResponseWriter, r *http.Reques
 		}
 		writeJSON(w, http.StatusCreated, result)
 	case strings.HasSuffix(path, "/online"):
+		if r.Method != http.MethodPost {
+			writeMethodNotAllowed(w)
+			return
+		}
 		id, err := parseSuffixID(path, "/online")
 		if err != nil {
 			writeBadRequest(w, err)
@@ -496,6 +516,10 @@ func (s *Server) handleMerchantProductByID(w http.ResponseWriter, r *http.Reques
 		}
 		writeJSON(w, http.StatusOK, result)
 	case strings.HasSuffix(path, "/offline"):
+		if r.Method != http.MethodPost {
+			writeMethodNotAllowed(w)
+			return
+		}
 		id, err := parseSuffixID(path, "/offline")
 		if err != nil {
 			writeBadRequest(w, err)
@@ -571,6 +595,10 @@ func (s *Server) handleMerchantOrderByID(w http.ResponseWriter, r *http.Request,
 	path := strings.TrimPrefix(r.URL.Path, "/api/merchant/orders/")
 	switch {
 	case strings.HasSuffix(path, "/ship"):
+		if r.Method != http.MethodPost {
+			writeMethodNotAllowed(w)
+			return
+		}
 		id, err := parseSuffixID(path, "/ship")
 		if err != nil {
 			writeBadRequest(w, err)
@@ -588,6 +616,10 @@ func (s *Server) handleMerchantOrderByID(w http.ResponseWriter, r *http.Request,
 		}
 		writeJSON(w, http.StatusOK, result)
 	case strings.HasSuffix(path, "/refund/approve"):
+		if r.Method != http.MethodPost {
+			writeMethodNotAllowed(w)
+			return
+		}
 		id, err := parseSuffixID(path, "/refund/approve")
 		if err != nil {
 			writeBadRequest(w, err)

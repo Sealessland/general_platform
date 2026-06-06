@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -352,19 +353,9 @@ func (s *Service) CreateOrder(ctx context.Context, actor Actor, idempotencyKey s
 			UpdatedAt:            now,
 		})
 	}
-	saved, err := s.repo.SaveOrder(order)
-	if err != nil {
-		return nil, err
-	}
+	locks := make([]domain.InventoryLock, 0, len(order.Items))
 	for _, item := range order.Items {
-		sku, _ := s.repo.GetSKU(item.SKUID)
-		sku.LockedStock += item.Quantity
-		_, err = s.repo.SaveSKU(sku)
-		if err != nil {
-			return nil, err
-		}
-		_, err = s.repo.SaveInventoryLock(domain.InventoryLock{
-			OrderID:   saved.ID,
+		locks = append(locks, domain.InventoryLock{
 			SKUID:     item.SKUID,
 			Quantity:  item.Quantity,
 			Status:    domain.InventoryLockStatusLocked,
@@ -372,9 +363,13 @@ func (s *Service) CreateOrder(ctx context.Context, actor Actor, idempotencyKey s
 			CreatedAt: now,
 			UpdatedAt: now,
 		})
-		if err != nil {
-			return nil, err
+	}
+	saved, err := s.repo.SaveOrderWithInventoryLocks(order, locks)
+	if err != nil {
+		if errors.Is(err, ErrInsufficientStock) {
+			return nil, newError(ErrorConflict, "stock is insufficient")
 		}
+		return nil, err
 	}
 	_, _ = s.repo.AppendOrderEvent(domain.OrderEvent{
 		OrderID:      saved.ID,
@@ -947,6 +942,9 @@ func (s *Service) DashboardSummary(ctx context.Context, actor Actor) (*Dashboard
 }
 
 func (s *Service) GenerateSellingPoints(ctx context.Context, actor Actor, input SellingPointInput) (*AITaskView, error) {
+	if actor.Role != domain.RoleMerchant {
+		return nil, newError(ErrorForbidden, "merchant access required")
+	}
 	task, err := s.repo.CreateAITask(domain.AIGenerationTask{
 		UserID:     actor.UserID,
 		MerchantID: actor.MerchantID,
@@ -1043,11 +1041,18 @@ func (s *Service) GenerateBusinessReview(ctx context.Context, actor Actor, input
 func (s *Service) GetAITask(ctx context.Context, actor Actor, taskID int64) (*AITaskView, error) {
 	_ = ctx
 	task, ok := s.repo.GetAITask(taskID)
-	if !ok || (task.UserID != actor.UserID && task.MerchantID != actor.MerchantID) {
+	if !ok || !canReadAITask(actor, task) {
 		return nil, newError(ErrorNotFound, "ai task not found")
 	}
 	view := s.toAITaskView(task)
 	return &view, nil
+}
+
+func canReadAITask(actor Actor, task domain.AIGenerationTask) bool {
+	if actor.Role == domain.RoleMerchant {
+		return actor.MerchantID != 0 && task.MerchantID == actor.MerchantID
+	}
+	return task.UserID == actor.UserID
 }
 
 type checkoutLine struct {

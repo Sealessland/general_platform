@@ -601,6 +601,76 @@ func (r *Repository) SaveOrder(order domain.Order) (domain.Order, error) {
 	return mustGetOrder(r, order.ID)
 }
 
+func (r *Repository) SaveOrderWithInventoryLocks(order domain.Order, locks []domain.InventoryLock) (domain.Order, error) {
+	if order.ID != 0 {
+		return r.SaveOrder(order)
+	}
+	tx, err := r.db.Begin()
+	if err != nil {
+		return domain.Order{}, err
+	}
+	defer tx.Rollback()
+
+	orderedLocks := append([]domain.InventoryLock(nil), locks...)
+	sort.Slice(orderedLocks, func(i, j int) bool { return orderedLocks[i].SKUID < orderedLocks[j].SKUID })
+	for _, lock := range orderedLocks {
+		result, err := tx.Exec(
+			`UPDATE product_skus
+			SET locked_stock = locked_stock + $1
+			WHERE id = $2 AND stock - locked_stock >= $1`,
+			lock.Quantity, lock.SKUID,
+		)
+		if err != nil {
+			return domain.Order{}, err
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return domain.Order{}, err
+		}
+		if affected == 0 {
+			return domain.Order{}, application.ErrInsufficientStock
+		}
+	}
+
+	err = tx.QueryRow(
+		`INSERT INTO orders (order_no, user_id, merchant_id, status, total_amount_cent, pay_amount_cent, discount_amount_cent, idempotency_key, receiver_name, receiver_phone, receiver_address, paid_at, cancelled_at, shipped_at, finished_at, created_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,COALESCE($16, CURRENT_TIMESTAMP),COALESCE($17, CURRENT_TIMESTAMP))
+		RETURNING id, created_at, updated_at`,
+		order.OrderNo, order.UserID, order.MerchantID, string(order.Status), order.TotalAmountCent, order.PayAmountCent, order.DiscountAmountCent, order.IdempotencyKey,
+		order.ReceiverName, order.ReceiverPhone, order.ReceiverAddress, order.PaidAt, order.CancelledAt, order.ShippedAt, order.FinishedAt,
+		nullTime(order.CreatedAt), nullTime(order.UpdatedAt),
+	).Scan(&order.ID, &order.CreatedAt, &order.UpdatedAt)
+	if err != nil {
+		return domain.Order{}, err
+	}
+
+	for _, item := range order.Items {
+		if _, err := tx.Exec(
+			`INSERT INTO order_items (order_id, product_id, sku_id, product_title_snapshot, sku_name_snapshot, price_cent_snapshot, quantity, total_amount_cent, created_at, updated_at)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,COALESCE($9, CURRENT_TIMESTAMP),COALESCE($10, CURRENT_TIMESTAMP))`,
+			order.ID, item.ProductID, item.SKUID, item.ProductTitleSnapshot, item.SKUNameSnapshot, item.PriceCentSnapshot, item.Quantity, item.TotalAmountCent,
+			nullTime(item.CreatedAt), nullTime(item.UpdatedAt),
+		); err != nil {
+			return domain.Order{}, err
+		}
+	}
+
+	for _, lock := range locks {
+		if _, err := tx.Exec(
+			`INSERT INTO inventory_locks (order_id, sku_id, quantity, status, locked_at, confirmed_at, released_at, created_at, updated_at)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,COALESCE($8, CURRENT_TIMESTAMP),COALESCE($9, CURRENT_TIMESTAMP))`,
+			order.ID, lock.SKUID, lock.Quantity, lock.Status, lock.LockedAt, lock.ConfirmedAt, lock.ReleasedAt, nullTime(lock.CreatedAt), nullTime(lock.UpdatedAt),
+		); err != nil {
+			return domain.Order{}, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return domain.Order{}, err
+	}
+	return mustGetOrder(r, order.ID)
+}
+
 func (r *Repository) ListOrderEvents(orderID int64) []domain.OrderEvent {
 	rows, err := r.db.Query(`SELECT id, order_id, from_status, to_status, event_type, operator_id, operator_role, remark, created_at FROM order_events WHERE order_id = $1 ORDER BY id`, orderID)
 	if err != nil {

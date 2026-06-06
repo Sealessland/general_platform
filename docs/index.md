@@ -16,6 +16,12 @@
 - 排查故障：`workflows/debug.md`
 - 交付前验证：`workflows/validate.md`
 
+## 风险与测试记录
+
+- 测试策略：`testing/test-strategy.md`
+- 端到端用例：`testing/e2e-cases.md`
+- 已确认风险归档：`testing/2026-06-05-risk-audit.md`
+
 ## Agent 路由
 
 - 仓库级说明：`../AGENTS.md`
