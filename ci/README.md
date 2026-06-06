@@ -33,9 +33,13 @@
 
 ## QPS 输出
 
-后端 CI 会执行 HTTP 基准测试，并在 `ci/artifacts/` 下产出：
+后端 CI 会执行运行时 HTTP 基准测试，并在 `ci/artifacts/` 下产出：
 
-- `backend-benchmark.txt`
-- `backend-qps.txt`
+- `backend-postgres-http-benchmark.txt`
+- `backend-postgres-http-qps.txt`
 
-其中 `backend-qps.txt` 会把 `ns/op` 换算成 QPS，便于在 GitHub Actions 中直接查看性能基线。
+`backend-postgres-http-benchmark.txt` 和 `backend-postgres-http-qps.txt` 只有在 `RUN_POSTGRES_INTEGRATION=1` 时执行，使用真实 PostgreSQL 仓储，覆盖 Gin -> 应用层 -> GORM/PostgreSQL 的读写路径。它们是评估 PostgreSQL/GORM 迁移后的运行时 QPS 基线。
+
+脚本也会保留 `backend-benchmark.txt` 和 `backend-qps.txt` 作为内存仓储诊断产物，用于观察 Gin HTTP 路由、JSON 编解码和应用层轻量路径；它们不进入运行时性能 baseline。
+
+所有 QPS 文件都会把 `ns/op` 换算成 QPS，便于在 GitHub Actions 或本地 CI 产物中直接查看。

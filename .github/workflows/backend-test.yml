@@ -6,11 +6,16 @@ on:
     branches: [main]
     paths:
       - "backend/**"
+      - "ci/README.md"
+      - "ci/scripts/backend-ci.sh"
       - ".github/workflows/backend-test.yml"
   push:
     branches: [main]
     paths:
       - "backend/**"
+      - "ci/README.md"
+      - "ci/scripts/backend-ci.sh"
+      - ".github/workflows/backend-test.yml"
 
 jobs:
   backend:
@@ -50,5 +55,8 @@ jobs:
           path: |
             backend/coverage.out
             ci/artifacts/backend-postgres-integration.txt
+            ci/artifacts/backend-postgres-http-integration.txt
             ci/artifacts/backend-benchmark.txt
             ci/artifacts/backend-qps.txt
+            ci/artifacts/backend-postgres-http-benchmark.txt
+            ci/artifacts/backend-postgres-http-qps.txt
