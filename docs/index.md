@@ -26,6 +26,7 @@
 
 - 测试策略：`testing/test-strategy.md`
 - 端到端用例：`testing/e2e-cases.md`
+- 性能基线：`testing/performance-baseline.md`
 - 已确认风险归档：`testing/2026-06-05-risk-audit.md`
 
 ## Agent 路由

@@ -121,3 +121,15 @@ AI 任务：根据测试审计中已确认的风险点，修复 HTTP 写操作 m
 - AI 生成入口要求商家角色，AI 任务读取按角色做所有权判断，避免 `merchant_id=0` 横向匹配。
 - 新增 `SaveOrderWithInventoryLocks` 仓储契约，PostgreSQL 路径在事务内用条件更新原子预锁库存，内存路径在互斥锁内完成同样语义。
 - 将已确认问题、修复状态、验证命令和剩余风险记录到 `docs/testing/2026-06-05-risk-audit.md`。
+
+### 案例四：Gin/GORM 迁移性能口径修正
+
+AI 任务：分析现有 QPS 数据是否能评估 Gin/GORM 迁移成果，并补充能打到关键运行路径的测试和 CI 产物。
+
+人工修正：
+
+- 明确原有 `BenchmarkHTTPNotes` 和 `BenchmarkHTTPOrderPreview` 只使用内存仓储，只能代表 Gin 路由、JSON 编解码和应用层轻量路径。
+- 新增 PostgreSQL-backed HTTP 集成测试，覆盖 Gin -> 应用层 -> PostgreSQL/GORM 的注册、商品/SKU、上架、结算预览、幂等下单、库存预锁、支付确认、发货、完成、看板和 AI 任务读取。
+- 新增 PostgreSQL-backed HTTP 反向路径测试，覆盖取消释放库存、支付后退款恢复库存、库存不足无副作用、错误 method 不触发状态变化、消费者访问商家接口、跨用户读取订单和跨商家读取 AI 任务。
+- 新增 HTTP 并发下单测试，确认真实 HTTP 路径下库存为 1 的 SKU 只能创建 1 笔订单，其余请求返回 `409 conflict`。
+- 新增 PostgreSQL-backed benchmark 和 CI 产物，把 `backend-qps.txt` 与 `backend-postgres-http-qps.txt` 分开，避免用内存仓储数据评估 PostgreSQL/GORM 性能。
