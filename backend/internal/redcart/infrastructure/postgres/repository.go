@@ -12,60 +12,129 @@ import (
 	"sync"
 	"time"
 
-	_ "github.com/jackc/pgx/stdlib"
-
 	orderdomain "github.com/example/redcart-copilot/backend/internal/order/domain"
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 type Repository struct {
-	db *sql.DB
+	db     *gormSQL
+	gormDB *gorm.DB
+	sqlDB  *sql.DB
 
 	sessionMu sync.RWMutex
 	sessions  map[string]int64
 }
 
+type gormSQL struct {
+	db *gorm.DB
+}
+
+type gormTx struct {
+	db *gorm.DB
+}
+
+type gormResult struct {
+	rowsAffected int64
+}
+
+func (g *gormSQL) QueryRow(query string, args ...any) *sql.Row {
+	return g.db.Raw(query, args...).Row()
+}
+
+func (g *gormSQL) Query(query string, args ...any) (*sql.Rows, error) {
+	return g.db.Raw(query, args...).Rows()
+}
+
+func (g *gormSQL) Exec(query string, args ...any) (sql.Result, error) {
+	result := g.db.Exec(query, args...)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return gormResult{rowsAffected: result.RowsAffected}, nil
+}
+
+func (g *gormSQL) Begin() (*gormTx, error) {
+	tx := g.db.Begin()
+	return &gormTx{db: tx}, tx.Error
+}
+
+func (tx *gormTx) QueryRow(query string, args ...any) *sql.Row {
+	return tx.db.Raw(query, args...).Row()
+}
+
+func (tx *gormTx) Exec(query string, args ...any) (sql.Result, error) {
+	result := tx.db.Exec(query, args...)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return gormResult{rowsAffected: result.RowsAffected}, nil
+}
+
+func (tx *gormTx) Commit() error {
+	return tx.db.Commit().Error
+}
+
+func (tx *gormTx) Rollback() error {
+	return tx.db.Rollback().Error
+}
+
+func (r gormResult) LastInsertId() (int64, error) {
+	return 0, fmt.Errorf("last insert id is not supported")
+}
+
+func (r gormResult) RowsAffected() (int64, error) {
+	return r.rowsAffected, nil
+}
+
 var _ application.Repository = (*Repository)(nil)
 
 func NewRepository(dsn string) (*Repository, error) {
-	db, err := sql.Open("pgx", dsn)
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
-		return nil, fmt.Errorf("open postgres: %w", err)
+		return nil, fmt.Errorf("open postgres with gorm: %w", err)
 	}
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(10)
-	db.SetConnMaxLifetime(30 * time.Minute)
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, fmt.Errorf("get postgres sql db from gorm: %w", err)
+	}
+	sqlDB.SetMaxOpenConns(10)
+	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetConnMaxLifetime(30 * time.Minute)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := db.PingContext(ctx); err != nil {
-		_ = db.Close()
+	if err := sqlDB.PingContext(ctx); err != nil {
+		_ = sqlDB.Close()
 		return nil, fmt.Errorf("ping postgres: %w", err)
 	}
 
 	repo := &Repository{
-		db:       db,
+		db:       &gormSQL{db: db},
+		gormDB:   db,
+		sqlDB:    sqlDB,
 		sessions: make(map[string]int64),
 	}
 	if err := repo.migrate(ctx); err != nil {
-		_ = db.Close()
+		_ = sqlDB.Close()
 		return nil, err
 	}
 	if err := repo.seed(ctx); err != nil {
-		_ = db.Close()
+		_ = sqlDB.Close()
 		return nil, err
 	}
 	return repo, nil
 }
 
 func (r *Repository) Close() error {
-	return r.db.Close()
+	return r.sqlDB.Close()
 }
 
 func (r *Repository) migrate(ctx context.Context) error {
 	var exists string
-	err := r.db.QueryRowContext(ctx, `SELECT COALESCE(to_regclass('public.users')::text, '')`).Scan(&exists)
+	err := r.gormDB.WithContext(ctx).Raw(`SELECT COALESCE(to_regclass('public.users')::text, '')`).Row().Scan(&exists)
 	if err == nil && exists == "users" {
 		return nil
 	}
@@ -77,7 +146,7 @@ func (r *Repository) migrate(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("read migration file: %w", err)
 	}
-	if _, err := r.db.ExecContext(ctx, string(sqlText)); err != nil {
+	if err := r.gormDB.WithContext(ctx).Exec(string(sqlText)).Error; err != nil {
 		return fmt.Errorf("apply migration: %w", err)
 	}
 	return nil
@@ -102,7 +171,7 @@ func resolveMigrationFile() (string, error) {
 
 func (r *Repository) seed(ctx context.Context) error {
 	var count int
-	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
+	if err := r.gormDB.WithContext(ctx).Raw(`SELECT COUNT(*) FROM users`).Row().Scan(&count); err != nil {
 		return fmt.Errorf("count users: %w", err)
 	}
 	if count > 0 {
@@ -202,7 +271,7 @@ SELECT setval(pg_get_serial_sequence('inventory_locks', 'id'), COALESCE((SELECT 
 SELECT setval(pg_get_serial_sequence('behavior_events', 'id'), COALESCE((SELECT MAX(id) FROM behavior_events), 1), true);
 `
 
-	if _, err := r.db.ExecContext(ctx, seedSQL); err != nil {
+	if err := r.gormDB.WithContext(ctx).Exec(seedSQL).Error; err != nil {
 		return fmt.Errorf("seed postgres: %w", err)
 	}
 	return nil

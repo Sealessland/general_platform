@@ -9,8 +9,14 @@
 - 架构边界：`architecture.md`
 - 完成检查清单：`checklists/agent-native-completion.md`
 
+## API 文档
+
+- OpenAPI 契约：`api/openapi.yaml`
+- 接口文档表：`api/endpoint-table.md`
+
 ## 工作流文档
 
+- AI Native 开发工作流：`../AI_WORKFLOW.md`
 - 新增或修改功能：`workflows/add-feature.md`
 - 新增集成或适配器：`workflows/add-integration.md`
 - 排查故障：`workflows/debug.md`

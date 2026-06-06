@@ -9,80 +9,120 @@ import (
 	"strings"
 
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
+	"github.com/gin-gonic/gin"
 )
 
 type Server struct {
 	service *application.Service
-	mux     *http.ServeMux
+	router  *gin.Engine
 }
 
 func NewServer(service *application.Service) *Server {
+	gin.SetMode(gin.ReleaseMode)
 	s := &Server{
 		service: service,
-		mux:     http.NewServeMux(),
+		router:  gin.New(),
 	}
 	s.registerRoutes()
 	return s
 }
 
 func (s *Server) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		setCORSHeaders(w)
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		s.mux.ServeHTTP(w, r)
-	})
+	return s.router
 }
 
 func (s *Server) registerRoutes() {
-	s.mux.HandleFunc("/healthz", s.handleHealth)
-	s.mux.HandleFunc("/api/auth/register", s.handleRegister)
-	s.mux.HandleFunc("/api/auth/login", s.handleLogin)
-	s.mux.HandleFunc("/api/auth/me", s.withAuth(false, s.handleMe))
+	s.router.HandleMethodNotAllowed = true
+	s.router.Use(corsMiddleware())
+	s.router.NoMethod(func(c *gin.Context) {
+		writeMethodNotAllowed(c.Writer)
+	})
+	s.router.NoRoute(func(c *gin.Context) {
+		writeJSON(c.Writer, http.StatusNotFound, map[string]any{
+			"error": map[string]any{
+				"kind":    string(application.ErrorNotFound),
+				"message": "route not found",
+			},
+		})
+	})
 
-	s.mux.HandleFunc("/api/notes", s.handleNotes)
-	s.mux.HandleFunc("/api/notes/", s.handleNoteByID)
-	s.mux.HandleFunc("/api/products", s.handleProducts)
-	s.mux.HandleFunc("/api/products/", s.handleProductRoutes)
+	s.router.GET("/healthz", ginHTTP(s.handleHealth))
+	s.router.POST("/api/auth/register", ginHTTP(s.handleRegister))
+	s.router.POST("/api/auth/login", ginHTTP(s.handleLogin))
+	s.router.GET("/api/auth/me", s.withAuth(false, s.handleMe))
 
-	s.mux.HandleFunc("/api/cart", s.withAuth(true, s.handleCart))
-	s.mux.HandleFunc("/api/cart/items", s.withAuth(true, s.handleCartItems))
-	s.mux.HandleFunc("/api/cart/items/", s.withAuth(true, s.handleCartItemByID))
+	s.router.GET("/api/notes", ginHTTP(s.handleNotes))
+	s.router.GET("/api/notes/:id", ginHTTP(s.handleNoteByID))
+	s.router.GET("/api/products", ginHTTP(s.handleProducts))
+	s.router.GET("/api/products/:id", ginHTTP(s.handleProductByID))
+	s.router.GET("/api/products/:id/skus", ginHTTP(s.handleProductSKUs))
 
-	s.mux.HandleFunc("/api/orders/preview", s.withAuth(true, s.handleOrderPreview))
-	s.mux.HandleFunc("/api/orders", s.withAuth(true, s.handleOrders))
-	s.mux.HandleFunc("/api/orders/", s.withAuth(true, s.handleOrderByID))
+	s.router.GET("/api/cart", s.withAuth(true, s.handleCart))
+	s.router.POST("/api/cart/items", s.withAuth(true, s.handleCartItems))
+	s.router.PUT("/api/cart/items/:id", s.withAuth(true, s.handleCartItemByID))
+	s.router.DELETE("/api/cart/items/:id", s.withAuth(true, s.handleCartItemByID))
 
-	s.mux.HandleFunc("/api/merchant/products", s.withAuth(true, s.handleMerchantProducts))
-	s.mux.HandleFunc("/api/merchant/products/", s.withAuth(true, s.handleMerchantProductByID))
-	s.mux.HandleFunc("/api/merchant/skus/", s.withAuth(true, s.handleMerchantSKUByID))
-	s.mux.HandleFunc("/api/merchant/orders", s.withAuth(true, s.handleMerchantOrders))
-	s.mux.HandleFunc("/api/merchant/orders/", s.withAuth(true, s.handleMerchantOrderByID))
-	s.mux.HandleFunc("/api/merchant/dashboard/funnel", s.withAuth(true, s.handleMerchantDashboardFunnel))
-	s.mux.HandleFunc("/api/merchant/dashboard/products", s.withAuth(true, s.handleMerchantDashboardProducts))
-	s.mux.HandleFunc("/api/merchant/dashboard/summary", s.withAuth(true, s.handleMerchantDashboardSummary))
+	s.router.POST("/api/orders/preview", s.withAuth(true, s.handleOrderPreview))
+	s.router.GET("/api/orders", s.withAuth(true, s.handleOrders))
+	s.router.POST("/api/orders", s.withAuth(true, s.handleOrders))
+	s.router.GET("/api/orders/:id", s.withAuth(true, s.handleOrderByID))
+	s.router.POST("/api/orders/:id/pay", s.withAuth(true, s.handleOrderByID))
+	s.router.POST("/api/orders/:id/cancel", s.withAuth(true, s.handleOrderByID))
+	s.router.POST("/api/orders/:id/finish", s.withAuth(true, s.handleOrderByID))
+	s.router.POST("/api/orders/:id/refund", s.withAuth(true, s.handleOrderByID))
 
-	s.mux.HandleFunc("/api/ai/product-selling-points", s.withAuth(true, s.handleAISellingPoints))
-	s.mux.HandleFunc("/api/ai/business-review", s.withAuth(true, s.handleAIBusinessReview))
-	s.mux.HandleFunc("/api/ai/tasks/", s.withAuth(true, s.handleAITaskByID))
+	s.router.GET("/api/merchant/products", s.withAuth(true, s.handleMerchantProducts))
+	s.router.POST("/api/merchant/products", s.withAuth(true, s.handleMerchantProducts))
+	s.router.PUT("/api/merchant/products/:id", s.withAuth(true, s.handleMerchantProductByID))
+	s.router.POST("/api/merchant/products/:id/skus", s.withAuth(true, s.handleMerchantProductByID))
+	s.router.POST("/api/merchant/products/:id/online", s.withAuth(true, s.handleMerchantProductByID))
+	s.router.POST("/api/merchant/products/:id/offline", s.withAuth(true, s.handleMerchantProductByID))
+	s.router.PUT("/api/merchant/skus/:id", s.withAuth(true, s.handleMerchantSKUByID))
+	s.router.GET("/api/merchant/orders", s.withAuth(true, s.handleMerchantOrders))
+	s.router.GET("/api/merchant/orders/:id", s.withAuth(true, s.handleMerchantOrderByID))
+	s.router.POST("/api/merchant/orders/:id/ship", s.withAuth(true, s.handleMerchantOrderByID))
+	s.router.POST("/api/merchant/orders/:id/refund/approve", s.withAuth(true, s.handleMerchantOrderByID))
+	s.router.GET("/api/merchant/dashboard/funnel", s.withAuth(true, s.handleMerchantDashboardFunnel))
+	s.router.GET("/api/merchant/dashboard/products", s.withAuth(true, s.handleMerchantDashboardProducts))
+	s.router.GET("/api/merchant/dashboard/summary", s.withAuth(true, s.handleMerchantDashboardSummary))
+
+	s.router.POST("/api/ai/product-selling-points", s.withAuth(true, s.handleAISellingPoints))
+	s.router.POST("/api/ai/business-review", s.withAuth(true, s.handleAIBusinessReview))
+	s.router.GET("/api/ai/tasks/:id", s.withAuth(true, s.handleAITaskByID))
 }
 
 type authedHandler func(http.ResponseWriter, *http.Request, application.Actor)
 
-func (s *Server) withAuth(required bool, next authedHandler) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		actor, err := s.authenticate(r)
-		if err != nil {
-			if !required {
-				next(w, r, application.Actor{})
-				return
-			}
-			writeAppError(w, err)
+func ginHTTP(next http.HandlerFunc) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		next(c.Writer, c.Request)
+	}
+}
+
+func corsMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		setCORSHeaders(c.Writer)
+		if c.Request.Method == http.MethodOptions {
+			c.Status(http.StatusNoContent)
+			c.Abort()
 			return
 		}
-		next(w, r, *actor)
+		c.Next()
+	}
+}
+
+func (s *Server) withAuth(required bool, next authedHandler) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		actor, err := s.authenticate(c.Request)
+		if err != nil {
+			if !required {
+				next(c.Writer, c.Request, application.Actor{})
+				return
+			}
+			writeAppError(c.Writer, err)
+			return
+		}
+		next(c.Writer, c.Request, *actor)
 	}
 }
 
