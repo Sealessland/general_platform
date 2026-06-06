@@ -12,20 +12,22 @@ RedCart Copilot 面向四类直接可见的使用面：
 - `backend`：Go API 服务与业务模块
 - `frontend`：消费者与商家共用的前端演示应用
 - `ai-service`：提示词与 AI Provider 占位实现
-- `postgresql`：目标中的业务数据源
-- `redis`：目标中的购物车、库存预扣、幂等与热点缓存
-- `rabbitmq`：规划中的订单、库存、分析事件总线
+- `postgresql`：当前 MVP 的运行时业务数据源
+- `redis`：规划中的购物车、库存预扣、幂等与热点缓存适配目标
+- `rabbitmq`：规划中的订单、库存、分析事件总线适配目标
 
 ## 当前 MVP 的运行边界
 
 当前可执行 MVP 明确保持了分层边界：
 
-- 产品接口层：`backend/cmd/api` 和 `frontend/`
+- 产品接口层：`backend/cmd/api`、Gin HTTP 适配器 `backend/internal/redcart/interfaces/httpapi` 和 `frontend/`
 - 运行编排层：`backend/internal/redcart/application`
 - 领域能力层：`backend/internal/order/domain` 与 `backend/internal/redcart/domain`
-- 集成适配层：内存仓储 `backend/internal/redcart/infrastructure/memory` 与 Mock AI Provider `backend/internal/ai`
+- 集成适配层：PostgreSQL 仓储 `backend/internal/redcart/infrastructure/postgres`、迁移 `backend/migrations/`、内存测试仓储 `backend/internal/redcart/infrastructure/memory` 与 Mock AI Provider `backend/internal/ai`
 
-这样做的目的，是让主链路先可运行、可演示、可测试；PostgreSQL、Redis、RabbitMQ 仍然作为下一阶段适配目标存在，而不是混进当前领域逻辑里。
+后端运行时必须提供 `POSTGRES_DSN`。PostgreSQL 仓储在启动时负责初始化迁移和演示种子数据，并在订单创建路径中用事务和条件更新完成库存预锁。内存仓储只用于测试和契约对齐，不是当前 Docker Compose MVP 的运行时数据源。
+
+Redis 与 RabbitMQ 尚未作为运行前置依赖接入。相关能力仍通过适配层边界保留扩展点，不能把中间件细节混进领域逻辑。
 
 ## 核心数据流
 

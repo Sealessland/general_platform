@@ -58,6 +58,19 @@
 
 领域能力层不能反向依赖产品接口、运行时、供应商 SDK 或部署环境。
 
+## 当前实现映射
+
+RedCart Copilot 当前 MVP 的代码映射如下：
+
+- 产品接口层：`backend/cmd/api`、`backend/internal/redcart/interfaces/httpapi`、`frontend/`
+- 运行编排层：`backend/internal/redcart/application`
+- 领域能力层：`backend/internal/order/domain`、`backend/internal/redcart/domain`
+- 集成适配层：`backend/internal/redcart/infrastructure/postgres`、`backend/internal/redcart/infrastructure/memory`、`backend/internal/ai`
+
+当前运行时数据库是 PostgreSQL。后端启动必须提供 `POSTGRES_DSN`，并由 PostgreSQL 仓储适配器负责迁移、种子数据和数据访问。内存仓储保留为服务层、HTTP 层测试和契约对齐用适配器，不作为当前 Docker Compose MVP 的运行时数据源。
+
+HTTP 入口当前由 Gin 负责路由和 method gate，但 Gin 只停留在产品接口层；应用层和领域层不依赖 Gin 类型。AI 能力当前使用 Mock Provider，Redis 与 RabbitMQ 仍是规划中的适配目标，不是当前运行前置依赖。
+
 ## 扩展方式
 
 - 新增用户能力时，优先在产品接口层暴露公共入口，再调用稳定的运行编排或领域契约。
