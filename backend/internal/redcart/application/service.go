@@ -324,46 +324,8 @@ func (s *Service) CreateOrder(ctx context.Context, actor Actor, idempotencyKey s
 		return nil, newError(ErrorConflict, "stock is insufficient")
 	}
 	now := s.now()
-	order := domain.Order{
-		OrderNo:            fmt.Sprintf("RC%014d", now.UnixNano()%1e14),
-		UserID:             actor.UserID,
-		MerchantID:         preview.MerchantID,
-		Status:             orderdomain.StatusCreated,
-		TotalAmountCent:    preview.TotalAmountCent,
-		PayAmountCent:      preview.PayAmountCent,
-		DiscountAmountCent: preview.DiscountAmountCent,
-		IdempotencyKey:     idempotencyKey,
-		ReceiverName:       strings.TrimSpace(input.ReceiverName),
-		ReceiverPhone:      strings.TrimSpace(input.ReceiverPhone),
-		ReceiverAddress:    strings.TrimSpace(input.ReceiverAddress),
-		CreatedAt:          now,
-		UpdatedAt:          now,
-		Items:              make([]domain.OrderItem, 0, len(preview.Items)),
-	}
-	for _, item := range preview.Items {
-		order.Items = append(order.Items, domain.OrderItem{
-			ProductID:            item.ProductID,
-			SKUID:                item.SKUID,
-			ProductTitleSnapshot: item.ProductTitle,
-			SKUNameSnapshot:      item.SKUName,
-			PriceCentSnapshot:    item.PriceCent,
-			Quantity:             item.Quantity,
-			TotalAmountCent:      item.TotalAmountCent,
-			CreatedAt:            now,
-			UpdatedAt:            now,
-		})
-	}
-	locks := make([]domain.InventoryLock, 0, len(order.Items))
-	for _, item := range order.Items {
-		locks = append(locks, domain.InventoryLock{
-			SKUID:     item.SKUID,
-			Quantity:  item.Quantity,
-			Status:    domain.InventoryLockStatusLocked,
-			LockedAt:  now,
-			CreatedAt: now,
-			UpdatedAt: now,
-		})
-	}
+	order := buildCreatedOrder(actor, idempotencyKey, input, *preview, now)
+	locks := buildInventoryLocks(order.Items, now)
 	saved, err := s.repo.SaveOrderWithInventoryLocks(order, locks)
 	if err != nil {
 		if errors.Is(err, ErrInsufficientStock) {
@@ -1105,6 +1067,54 @@ func (s *Service) normalizeCheckoutLines(actor Actor, items []OrderLineInput) ([
 		out = append(out, checkoutLine{product: product, sku: sku, quantity: line.Quantity})
 	}
 	return out, nil
+}
+
+func buildCreatedOrder(actor Actor, idempotencyKey string, input CheckoutInput, preview OrderPreview, now time.Time) domain.Order {
+	order := domain.Order{
+		OrderNo:            fmt.Sprintf("RC%014d", now.UnixNano()%1e14),
+		UserID:             actor.UserID,
+		MerchantID:         preview.MerchantID,
+		Status:             orderdomain.StatusCreated,
+		TotalAmountCent:    preview.TotalAmountCent,
+		PayAmountCent:      preview.PayAmountCent,
+		DiscountAmountCent: preview.DiscountAmountCent,
+		IdempotencyKey:     idempotencyKey,
+		ReceiverName:       strings.TrimSpace(input.ReceiverName),
+		ReceiverPhone:      strings.TrimSpace(input.ReceiverPhone),
+		ReceiverAddress:    strings.TrimSpace(input.ReceiverAddress),
+		CreatedAt:          now,
+		UpdatedAt:          now,
+		Items:              make([]domain.OrderItem, 0, len(preview.Items)),
+	}
+	for _, item := range preview.Items {
+		order.Items = append(order.Items, domain.OrderItem{
+			ProductID:            item.ProductID,
+			SKUID:                item.SKUID,
+			ProductTitleSnapshot: item.ProductTitle,
+			SKUNameSnapshot:      item.SKUName,
+			PriceCentSnapshot:    item.PriceCent,
+			Quantity:             item.Quantity,
+			TotalAmountCent:      item.TotalAmountCent,
+			CreatedAt:            now,
+			UpdatedAt:            now,
+		})
+	}
+	return order
+}
+
+func buildInventoryLocks(items []domain.OrderItem, now time.Time) []domain.InventoryLock {
+	locks := make([]domain.InventoryLock, 0, len(items))
+	for _, item := range items {
+		locks = append(locks, domain.InventoryLock{
+			SKUID:     item.SKUID,
+			Quantity:  item.Quantity,
+			Status:    domain.InventoryLockStatusLocked,
+			LockedAt:  now,
+			CreatedAt: now,
+			UpdatedAt: now,
+		})
+	}
+	return locks
 }
 
 func (s *Service) buildOrderPreview(lines []checkoutLine) (*OrderPreview, error) {

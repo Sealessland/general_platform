@@ -14,6 +14,7 @@
 - 回退 README 和 CHANGELOG 中的本地 PNG 图片资产与引用。
 - 调整 Pyroscope 验证口径：不使用 curl profile 查询作为 CI/CD 门禁，profile 数据保留为本地人工/界面复核。
 - 增加 Pyroscope mutex/block profiling 的可选采样配置，默认仍只启用 CPU/alloc/inuse profiling。
+- 拆分下单流程中的订单草稿和库存锁构建逻辑，并补充订单创建副作用回归测试。
 
 ## [0.1.0] - 2026-06-05
 
