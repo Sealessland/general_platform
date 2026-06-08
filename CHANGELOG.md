@@ -12,7 +12,7 @@
 - 将 `ai-service` 的 Dependabot 扫描从不存在的 Python manifest 改为 Dockerfile 依赖面。
 - 明确每个 commit 都应同步更新 `CHANGELOG.md`，并把例外说明纳入交付验证工作流。
 - 回退 README 和 CHANGELOG 中的本地 PNG 图片资产与引用。
-- 复核 Pyroscope Go push mode 可用性，确认本地能查询 `redcart.backend` 的 profile types 与 CPU/alloc/inuse flamegraph 数据。
+- 调整 Pyroscope 验证口径：不使用 curl profile 查询作为 CI/CD 门禁，profile 数据保留为本地人工/界面复核。
 
 ## [0.1.0] - 2026-06-05
 
