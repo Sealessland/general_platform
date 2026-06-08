@@ -41,6 +41,7 @@ required_files=(
   "ci/scripts/scan-secrets.sh"
   "ci/scripts/validate-workspace.sh"
   "ci/scripts/backend-ci.sh"
+  "ci/scripts/backend-test-metrics.sh"
   "ci/scripts/frontend-ci.sh"
   "ci/scripts/ai-service-ci.sh"
   "ci/scripts/security-ci.sh"
@@ -100,6 +101,7 @@ grep -q "AIProvider interface" backend/internal/ai/provider.go
 grep -q "完成证据" docs/workflows/add-feature.md
 grep -q "完成证据" docs/workflows/add-integration.md
 grep -q "完成证据" docs/workflows/debug.md
+grep -q "CHANGELOG.md" docs/workflows/validate.md
 grep -q "bash scripts/validate-workspace.sh" README.md
 grep -q "docs/index.md" AGENTS.md
 

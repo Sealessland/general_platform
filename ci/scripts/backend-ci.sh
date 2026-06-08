@@ -19,8 +19,9 @@ fi
 
 go vet ./...
 
-POSTGRES_DSN="${POSTGRES_DSN:-postgres://postgres:postgres@127.0.0.1:5432/redcart_test?sslmode=disable}" go test ./... -coverprofile=coverage.out
-go build ./cmd/api
+POSTGRES_DSN="${POSTGRES_DSN:-postgres://postgres:postgres@127.0.0.1:5432/redcart_test?sslmode=disable}" \
+  go test ./... -coverprofile=coverage.out | tee "$ARTIFACT_DIR/backend-test.txt"
+go build -o /tmp/redcart-backend-api ./cmd/api
 
 POSTGRES_DSN="${POSTGRES_DSN:-postgres://postgres:postgres@127.0.0.1:5432/redcart_test?sslmode=disable}" \
   RUN_POSTGRES_INTEGRATION="${RUN_POSTGRES_INTEGRATION:-0}" \
@@ -62,3 +63,5 @@ else
   printf 'postgres http benchmark skipped: RUN_POSTGRES_INTEGRATION is not 1\n' | tee "$ARTIFACT_DIR/backend-postgres-http-benchmark.txt"
   printf 'postgres http qps skipped: RUN_POSTGRES_INTEGRATION is not 1\n' | tee "$ARTIFACT_DIR/backend-postgres-http-qps.txt"
 fi
+
+RUN_POSTGRES_INTEGRATION="${RUN_POSTGRES_INTEGRATION:-0}" bash "$ROOT_DIR/ci/scripts/backend-test-metrics.sh"

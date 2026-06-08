@@ -8,6 +8,12 @@
 bash scripts/validate-workspace.sh
 ```
 
+## CHANGELOG 约束
+
+- 每个 commit 都应同步更新 `CHANGELOG.md`，记录本次提交带来的用户可见变化、工程行为变化、验证门禁变化或文档资产变化。
+- 不把多次提交的变化留到发布前一次性补写；`CHANGELOG.md` 应反映提交粒度的演进记录。
+- 如果某个提交确实只有机械整理且没有可记录变化，必须在 PR 描述或交付说明中明确说明不更新 `CHANGELOG.md` 的原因。
+
 ## 这个检查会验证什么
 
 - 顶层关键入口文件是否存在
@@ -20,6 +26,7 @@ bash scripts/validate-workspace.sh
 ## 完成证据
 
 - 验证命令退出码为 0
+- 当前提交已经同步更新 `CHANGELOG.md`，或已经明确说明本次不更新的原因
 - 如果有刻意保留的缺口，已经在最近的相关文档中说明
 - AI 参与设计、实现、测试、审查或验收时，已经记录到 `../../AI_WORKFLOW.md`、ADR、风险归档或 PR 描述
 - 本地提交信息已经基于暂存差异复核，能说明具体行为变化，未使用 `risk gaps`、`improve backend`、`update files` 这类空泛表述

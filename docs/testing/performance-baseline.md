@@ -40,6 +40,25 @@
 - 新增的 PostgreSQL-backed HTTP 并发测试确认库存为 1 的 SKU 在 24 个并发下单请求下只能创建 1 笔订单，其余请求返回 `409 conflict`。
 - 新增的 PostgreSQL-backed HTTP 反向路径测试已经覆盖取消释放库存、支付后退款恢复库存、库存不足无副作用、错误 method 不触发状态变化、消费者访问商家接口、跨用户读取订单和跨商家读取 AI 任务。
 
+## 2026-06-08 Pyroscope 可用性复核
+
+本地复核结论：Pyroscope 在当前 Docker Compose 运行路径下可用。后端日志显示 `pyroscope profiling enabled for redcart.backend -> http://127.0.0.1:4040`，`/ready` 返回 `ready`，业务请求打到后端后，Pyroscope 查询接口能返回 `redcart.backend` 的 profile types 和 flamegraph 数据。
+
+复核命令：
+
+```bash
+rtk curl -s http://127.0.0.1:4040/ready
+rtk curl -s http://127.0.0.1:18080/healthz
+rtk curl -s http://127.0.0.1:18080/api/notes
+rtk curl -s -X POST http://127.0.0.1:18080/api/auth/login -H Content-Type:application/json -d '{"phone":"13800000001","password":"consumer-demo"}'
+rtk curl -s -H Content-Type:application/json -d '{"start":1780910000000,"end":1780913400000}' http://127.0.0.1:4040/querier.v1.QuerierService/ProfileTypes
+rtk curl -s -H Content-Type:application/json -d '{"start":1780910000000,"end":1780913400000,"labelSelector":"{service_name=\"redcart.backend\"}","profileTypeID":"process_cpu:cpu:nanoseconds:cpu:nanoseconds","maxNodes":16}' http://127.0.0.1:4040/querier.v1.QuerierService/SelectMergeStacktraces
+rtk curl -s -H Content-Type:application/json -d '{"start":1780910000000,"end":1780913400000,"labelSelector":"{service_name=\"redcart.backend\"}","profileTypeID":"memory:alloc_space:bytes:space:bytes","maxNodes":16}' http://127.0.0.1:4040/querier.v1.QuerierService/SelectMergeStacktraces
+rtk curl -s -H Content-Type:application/json -d '{"start":1780910000000,"end":1780913400000,"labelSelector":"{service_name=\"redcart.backend\"}","profileTypeID":"memory:inuse_space:bytes:space:bytes","maxNodes":16}' http://127.0.0.1:4040/querier.v1.QuerierService/SelectMergeStacktraces
+```
+
+仍保留的边界：当前只验证默认 profile types 中的 CPU、alloc space 和 inuse space 查询可用；mutex、block 等 profile types 尚未作为性能诊断基线使用。
+
 ## 后续优化方向
 
 - 为 `CreateOrder` 路径拆分数据库查询次数和写入阶段耗时，定位慢点是预览构建、事务写入、事件写入还是订单视图回填。
