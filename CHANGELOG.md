@@ -16,6 +16,9 @@
 - 增加 Pyroscope mutex/block profiling 的可选采样配置，默认仍只启用 CPU/alloc/inuse profiling。
 - 拆分下单流程中的订单草稿和库存锁构建逻辑，并补充订单创建副作用回归测试。
 - 拆分下单流程中的订单创建事件记录逻辑，并补强事件元数据测试。
+- 按主题拆分 HTTP 层测试文件，保留原有测试与 benchmark 行为不变。
+- 增加项目专用 Codex hook，在本仓库交付前检查 `rtk` 命令约束、测试入口保留、OpenAPI 和 workspace 门禁。
+- 归档 2026-06-08 本地全量验证状态，记录后端、前端、AI service、安全、OpenAPI、workspace 和 Docker build 通过证据。
 
 ## [0.1.0] - 2026-06-05
 

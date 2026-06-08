@@ -10,4 +10,5 @@
 - AI 参与过的需求、方案、实现、测试、审查或验收已经按 `../../AI_WORKFLOW.md` 留档
 - 当前提交已经更新 `CHANGELOG.md`，或交付说明中已经明确记录不更新的原因
 - 完成证据体现在命令结果、测试、fixture 或明确阻塞记录中
+- 项目 Codex hook quick gate 已通过；跨层、高风险或 PostgreSQL 路径改动已跑 full gate 或等价 CI 脚本
 - `bash scripts/validate-workspace.sh` 通过

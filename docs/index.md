@@ -28,11 +28,13 @@
 - 端到端用例：`testing/e2e-cases.md`
 - 性能基线：`testing/performance-baseline.md`
 - 已确认风险归档：`testing/2026-06-05-risk-audit.md`
+- 当前验证状态：`testing/2026-06-08-validation-status.md`
 
 ## Agent 路由
 
 - 仓库级说明：`../AGENTS.md`
 - 本地 agent 注册：`../.agents/README.md`
 - Codex 技能入口：`../.codex/skills/agent-native-shop/SKILL.md`
+- 项目 Codex hook：`../.codex/config.toml`、`../.codex/hooks/redcart_project_hook.py`
 
 面向 agent 的文件只负责路由，不重复维护业务事实；稳定事实统一落到 `docs/`。

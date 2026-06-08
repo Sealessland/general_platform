@@ -19,6 +19,7 @@
 - AI 服务：`python -m compileall app tests`、`python -m unittest discover -s tests -v`、`python app/check_prompts.py`
 - 仓库：`bash scripts/validate-workspace.sh`
 - API：`bash scripts/check-openapi.sh`
+- 项目 Codex 交付 hook：`python3 .codex/hooks/redcart_project_hook.py --mode quick`；高风险或跨层改动使用 `--mode full`
 
 ## 质量指标口径
 
@@ -68,8 +69,8 @@
 - `backend/internal/redcart/infrastructure/memory/repository_test.go` 覆盖内存仓储的种子数据、clone 边界、用户/session/商家、目录读取、购物车、订单库存锁、事件列表和 AI task 基础路径。
 - `backend/internal/redcart/infrastructure/postgres/repository_helpers_test.go` 覆盖 PostgreSQL 仓储适配器的 row scanner、nullable helper、迁移文件解析和 GORM result 适配，不依赖真实数据库。
 - `backend/internal/redcart/infrastructure/postgres/repository_integration_test.go` 在 `RUN_POSTGRES_INTEGRATION=1` 时覆盖真实 PostgreSQL 下的用户/商家、笔记更新、商品/SKU、购物车、订单保存与列表、库存锁、行为事件和 AI task 读写。
-- `backend/internal/redcart/application/service_test.go` 与 `service_additional_test.go` 覆盖幂等下单、退款库存恢复、注册/登录、内容/商品读取、购物车选择结算、checkout 校验、订单权限边界、非法状态流转、商家商品/SKU、dashboard、AI 任务成功/失败落库。
-- `backend/internal/redcart/interfaces/httpapi/server_test.go` 覆盖消费者主链路、退款与 AI 生成、写操作 method gate、未登录拒绝、基础路由/CORS/404、认证和目录负向、购物车增删改、订单列表/详情、订单非法输入和状态冲突、商家商品/SKU、dashboard、AI business review 和任务读取边界。
+- `backend/internal/redcart/application/service_test.go` 以及 `service_auth_additional_test.go`、`service_checkout_additional_test.go`、`service_order_additional_test.go`、`service_merchant_dashboard_additional_test.go`、`service_ai_additional_test.go` 覆盖幂等下单、退款库存恢复、注册/登录、内容/商品读取、购物车选择结算、checkout 校验、订单权限边界、非法状态流转、商家商品/SKU、dashboard、AI 任务成功/失败落库。
+- `backend/internal/redcart/interfaces/httpapi/server_test.go`、`server_cart_test.go`、`server_orders_test.go`、`server_merchant_test.go`、`server_ai_test.go`、`server_postgres_test.go`、`server_benchmark_test.go` 和 `server_test_helpers_test.go` 覆盖消费者主链路、退款与 AI 生成、写操作 method gate、未登录拒绝、基础路由/CORS/404、认证和目录负向、购物车增删改、订单列表/详情、订单非法输入和状态冲突、商家商品/SKU、dashboard、AI business review、任务读取边界、PostgreSQL-backed HTTP 集成路径和 HTTP benchmark。
 - PostgreSQL-backed HTTP 测试在 `RUN_POSTGRES_INTEGRATION=1` 时覆盖真实 Gin -> 应用层 -> PostgreSQL/GORM 路径，包括主链路、并发库存、库存补偿、库存不足无副作用、错误 method 和越权。
 - `frontend/tests/app.test.mjs` 是源码守卫，确认前端仍使用整数分金额、可售库存扣减 locked stock、结算幂等键、购物车、dashboard 和 AI 入口。
 - `ai-service/tests/test_provider.py` 覆盖 mock selling points、business review 以及非法输入。

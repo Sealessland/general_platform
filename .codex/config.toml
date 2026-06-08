@@ -1,0 +1,19 @@
+[features]
+hooks = true
+
+[[hooks.PreToolUse]]
+matcher = "^Bash$"
+
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = '/usr/bin/python3 "$(git rev-parse --show-toplevel)/.codex/hooks/redcart_project_hook.py"'
+timeout = 10
+statusMessage = "Checking RedCart shell policy"
+
+[[hooks.Stop]]
+
+[[hooks.Stop.hooks]]
+type = "command"
+command = '/usr/bin/python3 "$(git rev-parse --show-toplevel)/.codex/hooks/redcart_project_hook.py" --mode quick'
+timeout = 240
+statusMessage = "Running RedCart handoff gate"

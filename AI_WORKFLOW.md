@@ -377,3 +377,68 @@ rtk env GOCACHE=/tmp/go-build-cache go test ./internal/redcart/application
 ### 剩余风险
 
 - `CreateOrder` 仍负责 idempotency、校验编排、库存预锁保存和购物车清理；RF-001 后续还需要继续拆 validator、locker 和 cart cleanup 边界。
+
+## 2026-06-08：HTTP 测试文件按主题拆分
+
+### AI 参与范围
+
+- 将 `backend/internal/redcart/interfaces/httpapi/server_test.go` 按测试主题机械拆分为基础路由、购物车、订单、商家、AI、PostgreSQL 集成、benchmark 和公共 helper 文件。
+- 保留原有测试和 benchmark 行为，只移动顶层声明与对应 imports。
+
+### 人工或主代理修正
+
+- 用原文件与拆分后文件的 `Test*`/`Benchmark*` 名称对比确认没有遗漏测试入口。
+- 保持 HTTP 契约、OpenAPI、应用层行为和仓储契约不变，本次只做测试文件组织整理。
+
+### 验证证据
+
+```bash
+rtk env GOCACHE=/tmp/go-build-cache go test ./internal/redcart/interfaces/httpapi
+rtk env GOCACHE=/tmp/go-build-cache go test ./...
+rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable RUN_POSTGRES_INTEGRATION=1 POSTGRES_BENCHTIME=1s GOCACHE=/tmp/go-build-cache bash ci/scripts/backend-ci.sh
+rtk bash ci/scripts/frontend-ci.sh
+rtk bash ci/scripts/ai-service-ci.sh
+rtk bash ci/scripts/security-ci.sh
+rtk bash ci/scripts/check-openapi.sh
+rtk bash ci/scripts/validate-workspace.sh
+rtk bash -lc 'tmp1=$(mktemp); tmp2=$(mktemp); git show HEAD:backend/internal/redcart/interfaces/httpapi/server_test.go | rg -o "^func (Test|Benchmark)[^(]+" | sed "s/^func //" | sort > "$tmp1"; rg -o "^func (Test|Benchmark)[^(]+" backend/internal/redcart/interfaces/httpapi/*_test.go | sed "s/.*func //" | sort > "$tmp2"; diff -u "$tmp1" "$tmp2"; status=$?; rm -f "$tmp1" "$tmp2"; exit $status'
+rtk git diff --check
+rtk bash scripts/validate-workspace.sh
+rtk bash scripts/check-openapi.sh
+rtk docker build -t redcart-backend:ci backend
+rtk docker build -t redcart-frontend:ci frontend
+rtk docker build -t redcart-ai-service:ci ai-service
+```
+
+### 剩余风险
+
+- PostgreSQL HTTP 测试仍默认依赖 `RUN_POSTGRES_INTEGRATION=1` 和 `POSTGRES_DSN` 才会实际连库执行；本次默认后端测试覆盖的是 skip 路径。
+
+## 2026-06-08：项目专用 Codex Hook 与验证状态归档
+
+### AI 参与范围
+
+- 根据本次测试拆分和全量验证经验，设计项目本地 Codex hook，避免后续 agent 在本仓库绕过 `rtk`、遗漏测试入口对比或只跑结构校验就结束交付。
+- 更新测试策略、验证工作流、完成清单、项目技能入口和验证状态归档，让 hook 与本地全量验证状态可被后续 agent 发现。
+
+### 人工或主代理修正
+
+- 将 hook 限定在本仓库 `.codex/config.toml` 和 `.codex/hooks/redcart_project_hook.py`，不写入全局 Codex 配置，不影响其他 workspace。
+- 用官方 Codex Hooks 文档核对项目级 hook 发现位置、`PreToolUse` deny 输出和 `Stop` 继续/停止语义。
+- 将 hook 脚本纳入 `scripts/validate-workspace.sh` 的结构检查和自测，避免 hook 配置失效后无人察觉。
+
+### 验证证据
+
+```bash
+rtk python3 .codex/hooks/redcart_project_hook.py --self-test
+rtk python3 -m py_compile .codex/hooks/redcart_project_hook.py
+rtk python3 -c 'import tomllib, pathlib; data=tomllib.loads(pathlib.Path(".codex/config.toml").read_text()); assert data["features"]["hooks"] is True; assert "PreToolUse" in data["hooks"]; assert "Stop" in data["hooks"]; print("project codex hook config shape passed")'
+rtk python3 .codex/hooks/redcart_project_hook.py --mode quick
+rtk python3 .codex/hooks/redcart_project_hook.py --mode full
+rtk bash scripts/validate-workspace.sh
+```
+
+### 剩余风险
+
+- 项目本地 Codex hook 需要在 Codex `/hooks` 面板中信任后才会自动运行；脚本或配置变更后需要重新信任。
+- Hook quick gate 是交付兜底，不替代高风险改动后的完整 CI、PostgreSQL 集成测试和 Docker build。
