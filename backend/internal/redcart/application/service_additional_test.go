@@ -179,8 +179,15 @@ func TestCreateOrderPersistsCreationSideEffects(t *testing.T) {
 	if order.Status != "CREATED" || len(order.Items) != 1 {
 		t.Fatalf("expected created order with one item, got %+v", order)
 	}
-	if len(order.Events) != 1 || order.Events[0].EventType != "ORDER_CREATED" || order.Events[0].ToStatus != "CREATED" {
+	if len(order.Events) != 1 {
 		t.Fatalf("expected order created event, got %+v", order.Events)
+	}
+	event := order.Events[0]
+	if event.EventType != "ORDER_CREATED" || event.FromStatus != "" || event.ToStatus != "CREATED" {
+		t.Fatalf("expected order created transition event, got %+v", event)
+	}
+	if event.OperatorID != actor.UserID || event.OperatorRole != actor.Role || event.Remark != "order created" || event.CreatedAt.IsZero() {
+		t.Fatalf("expected order created operator metadata, got %+v", event)
 	}
 	if len(order.InventoryLocks) != 1 {
 		t.Fatalf("expected one inventory lock, got %+v", order.InventoryLocks)
