@@ -326,3 +326,27 @@ rtk bash scripts/validate-workspace.sh
 ### 剩余风险
 
 - mutex/block profile types 已可临时启用，但尚未纳入固定性能诊断基线或本地 UI 人工复核记录。
+
+## 2026-06-08：下单流程构建逻辑拆分
+
+### AI 参与范围
+
+- 根据 RF-001 重构计划，选择不改变外部 API 的最小切片。
+- 先补充 `CreateOrder` 行为测试，锁住订单创建事件、库存锁、locked stock 和行为事件副作用。
+- 将订单草稿构建和库存锁构建从 `CreateOrder` 主流程抽为私有 helper。
+
+### 人工或主代理修正
+
+- 保持仓储契约、HTTP 契约和 OpenAPI 不变，本次只做应用层内部结构拆分。
+- 没有引入新的 `OrderFactory` 公共类型，避免在一次小提交里扩大抽象面；RF-001 后续可继续按测试保护逐步拆分。
+- 用内存仓储行为测试验证下单副作用，而不是只测试私有 helper。
+
+### 验证证据
+
+```bash
+rtk env GOCACHE=/tmp/go-build-cache go test ./internal/redcart/application
+```
+
+### 剩余风险
+
+- `CreateOrder` 仍负责 idempotency、校验编排、保存、事件记录和购物车清理；RF-001 还需要继续拆分 validator、locker 和 event publisher。

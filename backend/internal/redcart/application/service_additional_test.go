@@ -155,6 +155,61 @@ func TestCartSelectionAndCheckoutFromSelectedItems(t *testing.T) {
 	}
 }
 
+func TestCreateOrderPersistsCreationSideEffects(t *testing.T) {
+	t.Parallel()
+
+	repo := memory.NewRepository()
+	service := application.NewService(repo, backendai.MockProvider{})
+	actor := application.Actor{UserID: 1, Role: domain.RoleConsumer}
+	beforeSKU, ok := repo.GetSKU(1)
+	if !ok {
+		t.Fatal("expected seeded sku")
+	}
+
+	order, err := service.CreateOrder(context.Background(), actor, "creation-side-effects", application.CheckoutInput{
+		Items:           []application.OrderLineInput{{SKUID: 1, Quantity: 2}},
+		ReceiverName:    "Alice",
+		ReceiverPhone:   "13800000001",
+		ReceiverAddress: "Shanghai",
+	})
+	if err != nil {
+		t.Fatalf("create order: %v", err)
+	}
+
+	if order.Status != "CREATED" || len(order.Items) != 1 {
+		t.Fatalf("expected created order with one item, got %+v", order)
+	}
+	if len(order.Events) != 1 || order.Events[0].EventType != "ORDER_CREATED" || order.Events[0].ToStatus != "CREATED" {
+		t.Fatalf("expected order created event, got %+v", order.Events)
+	}
+	if len(order.InventoryLocks) != 1 {
+		t.Fatalf("expected one inventory lock, got %+v", order.InventoryLocks)
+	}
+	lock := order.InventoryLocks[0]
+	if lock.SKUID != 1 || lock.Quantity != 2 || lock.Status != domain.InventoryLockStatusLocked || lock.LockedAt.IsZero() {
+		t.Fatalf("expected locked inventory for created order, got %+v", lock)
+	}
+
+	afterSKU, ok := repo.GetSKU(1)
+	if !ok {
+		t.Fatal("expected sku after create order")
+	}
+	if afterSKU.Stock != beforeSKU.Stock || afterSKU.LockedStock != beforeSKU.LockedStock+2 {
+		t.Fatalf("expected locked stock increased by 2 without reducing stock, before=%+v after=%+v", beforeSKU, afterSKU)
+	}
+
+	foundBehaviorEvent := false
+	for _, event := range repo.ListBehaviorEvents() {
+		if event.EventType == domain.BehaviorOrderCreate && event.OrderID == order.ID && event.UserID == actor.UserID && event.MerchantID == order.MerchantID {
+			foundBehaviorEvent = true
+			break
+		}
+	}
+	if !foundBehaviorEvent {
+		t.Fatalf("expected order create behavior event for order %d", order.ID)
+	}
+}
+
 func TestCheckoutValidationRejectsInvalidItems(t *testing.T) {
 	t.Parallel()
 
