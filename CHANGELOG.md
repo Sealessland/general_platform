@@ -13,6 +13,7 @@
 - 明确每个 commit 都应同步更新 `CHANGELOG.md`，并把例外说明纳入交付验证工作流。
 - 回退 README 和 CHANGELOG 中的本地 PNG 图片资产与引用。
 - 调整 Pyroscope 验证口径：不使用 curl profile 查询作为 CI/CD 门禁，profile 数据保留为本地人工/界面复核。
+- 增加 Pyroscope mutex/block profiling 的可选采样配置，默认仍只启用 CPU/alloc/inuse profiling。
 
 ## [0.1.0] - 2026-06-05
 

@@ -299,3 +299,30 @@ rtk curl -s -X POST http://127.0.0.1:18080/api/auth/login -H Content-Type:applic
 
 - 远端 GitHub Actions workflow run 尚未在本地会话中触发。
 - mutex、block 等 profile types 尚未纳入性能诊断基线。
+
+## 2026-06-08：Pyroscope Mutex/Block 采样开关
+
+### AI 参与范围
+
+- 根据性能基线中保留的诊断边界，设计 Pyroscope mutex/block profile 的最小可选接入方案。
+- 补充后端启动配置测试，覆盖默认关闭、可选采样、非法采样值、启动失败恢复和停止恢复。
+- 更新运行配置文档、Compose 环境传递和性能基线口径。
+
+### 人工或主代理修正
+
+- 保持默认行为不变：只配置 `PYROSCOPE_SERVER_ADDRESS` 时仍只启用 CPU/alloc/inuse profiles。
+- 将 mutex/block 采样限定为显式正整数环境变量，避免在常规运行和 CI 中默认增加采样开销。
+- 在 Pyroscope start 前应用 runtime 采样设置，并在启动失败或停止时恢复 mutex 采样，避免全局 runtime 状态泄漏。
+
+### 验证证据
+
+```bash
+rtk env GOCACHE=/tmp/go-build-cache go test ./cmd/api
+rtk env GOCACHE=/tmp/go-build-cache go test ./...
+rtk bash scripts/check-openapi.sh
+rtk bash scripts/validate-workspace.sh
+```
+
+### 剩余风险
+
+- mutex/block profile types 已可临时启用，但尚未纳入固定性能诊断基线或本地 UI 人工复核记录。
