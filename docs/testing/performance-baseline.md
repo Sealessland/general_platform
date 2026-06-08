@@ -35,29 +35,18 @@
 - 下单写路径约 71 QPS，主要覆盖多次查询、事务、条件更新、订单明细写入、库存锁写入和后续事件写入，仍然是后续优化的重点。
 - `CreateOrder` 路径约比 `OrderPreview` 慢两个数量级，并伴随 `69457 B/op`、`1081 allocs/op`，说明写路径的对象分配和数据库往返成本都偏高。
 - 本轮 `redcart.backend` 的 CPU profile 顶部主要落在 `runtime.schedule`、`runtime.findRunnable`、`runtime.notesleep`、`runtime.futexsleep`、`runtime.gcBgMarkWorker`、`runtime.gcDrain` 和 `net/http` 写出路径；这说明在当前压力模型下，调度与 GC 开销已经足够明显，单次采样里没有业务函数压过 runtime 热点。
-- Pyroscope 容器启动后存在 `metastore`、`ingester`、`segment writer` 的 staged readiness 窗口，自动化采样前必须等待 `/ready` 返回 `ready`，不能只看容器 `Up`。
+- Pyroscope 容器启动后存在 `metastore`、`ingester`、`segment writer` 的 staged readiness 窗口，本地人工复核前必须确认服务已经 ready，不能只看容器 `Up`。
 - 新增的 PostgreSQL-backed HTTP 集成测试已经覆盖注册、登录、商品/SKU、上架、结算预览、幂等下单、库存预锁、支付确认、发货、完成、看板和 AI 任务读取。
 - 新增的 PostgreSQL-backed HTTP 并发测试确认库存为 1 的 SKU 在 24 个并发下单请求下只能创建 1 笔订单，其余请求返回 `409 conflict`。
 - 新增的 PostgreSQL-backed HTTP 反向路径测试已经覆盖取消释放库存、支付后退款恢复库存、库存不足无副作用、错误 method 不触发状态变化、消费者访问商家接口、跨用户读取订单和跨商家读取 AI 任务。
 
-## 2026-06-08 Pyroscope 可用性复核
+## 2026-06-08 Pyroscope 可用性复核口径
 
-本地复核结论：Pyroscope 在当前 Docker Compose 运行路径下可用。后端日志显示 `pyroscope profiling enabled for redcart.backend -> http://127.0.0.1:4040`，`/ready` 返回 `ready`，业务请求打到后端后，Pyroscope 查询接口能返回 `redcart.backend` 的 profile types 和 flamegraph 数据。
+本地复核结论：Pyroscope 在当前 Docker Compose 运行路径下可用。后端日志显示 `pyroscope profiling enabled for redcart.backend -> http://127.0.0.1:4040`，并且可以通过本地 Pyroscope UI 人工检查 `redcart.backend` 的 profile 数据。
 
-复核命令：
+Pyroscope profile 查询不进入 GitHub Actions 门禁，也不使用 curl 查询 profile API 作为自动化证据。CI 只验证后端 profiling 配置解析、默认关闭路径、启动失败传播和常规业务/性能门禁；profile 诊断保留为本地手动复核能力。
 
-```bash
-rtk curl -s http://127.0.0.1:4040/ready
-rtk curl -s http://127.0.0.1:18080/healthz
-rtk curl -s http://127.0.0.1:18080/api/notes
-rtk curl -s -X POST http://127.0.0.1:18080/api/auth/login -H Content-Type:application/json -d '{"phone":"13800000001","password":"consumer-demo"}'
-rtk curl -s -H Content-Type:application/json -d '{"start":1780910000000,"end":1780913400000}' http://127.0.0.1:4040/querier.v1.QuerierService/ProfileTypes
-rtk curl -s -H Content-Type:application/json -d '{"start":1780910000000,"end":1780913400000,"labelSelector":"{service_name=\"redcart.backend\"}","profileTypeID":"process_cpu:cpu:nanoseconds:cpu:nanoseconds","maxNodes":16}' http://127.0.0.1:4040/querier.v1.QuerierService/SelectMergeStacktraces
-rtk curl -s -H Content-Type:application/json -d '{"start":1780910000000,"end":1780913400000,"labelSelector":"{service_name=\"redcart.backend\"}","profileTypeID":"memory:alloc_space:bytes:space:bytes","maxNodes":16}' http://127.0.0.1:4040/querier.v1.QuerierService/SelectMergeStacktraces
-rtk curl -s -H Content-Type:application/json -d '{"start":1780910000000,"end":1780913400000,"labelSelector":"{service_name=\"redcart.backend\"}","profileTypeID":"memory:inuse_space:bytes:space:bytes","maxNodes":16}' http://127.0.0.1:4040/querier.v1.QuerierService/SelectMergeStacktraces
-```
-
-仍保留的边界：当前只验证默认 profile types 中的 CPU、alloc space 和 inuse space 查询可用；mutex、block 等 profile types 尚未作为性能诊断基线使用。
+仍保留的边界：mutex、block 等 profile types 尚未作为性能诊断基线使用。
 
 ## 后续优化方向
 

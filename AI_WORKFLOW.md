@@ -230,8 +230,6 @@ rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmod
 rtk curl -s http://127.0.0.1:18080/healthz
 rtk curl -s http://127.0.0.1:18080/api/notes
 rtk curl -s -X POST http://127.0.0.1:18080/api/auth/login -H Content-Type:application/json -d '{"phone":"13800000001","password":"consumer-demo"}'
-rtk curl -s -H Content-Type:application/json -d '{"start":1780889400000,"end":1780893400000}' http://127.0.0.1:4040/querier.v1.QuerierService/ProfileTypes
-rtk curl -s -H Content-Type:application/json -d '{"start":1780889400000,"end":1780893400000,"labelSelector":"{service_name=\"redcart.backend\"}","profileTypeID":"process_cpu:cpu:nanoseconds:cpu:nanoseconds","maxNodes":16}' http://127.0.0.1:4040/querier.v1.QuerierService/SelectMergeStacktraces
 ```
 
 ### 剩余风险
@@ -277,28 +275,24 @@ rtk python3 -c "import yaml, pathlib; [yaml.safe_load(path.read_text()) for path
 
 ### AI 参与范围
 
-- 复核 Pyroscope Go push mode 是否在本地 Docker Compose 运行路径下真实可用。
+- 复核 Pyroscope Go push mode 的验证口径，避免把 profile API 查询放进 CI/CD 门禁。
 - 回退 README 和 CHANGELOG 中的本地 PNG 资产引用，并删除已生成的 PNG 文件。
 - 按新增的 CHANGELOG 约束记录本次提交粒度变化。
 
 ### 人工或主代理修正
 
-- 将 Pyroscope 判断口径从“容器启动”收紧为：`/ready` 返回、后端启用日志、业务请求触发样本、ProfileTypes 查询和 CPU/alloc/inuse flamegraph 查询均可用。
+- 将 Pyroscope 判断口径调整为：CI 只验证后端 profiling 配置解析、默认关闭路径、启动错误传播和常规业务门禁；profile 数据保留为本地 UI 人工复核，不使用 curl 查询 profile API 作为自动化证据。
 - 明确此前本地 PNG 是 Python + Pillow 绘制的确定性图片，不是 imagegen 模型输出；已按要求回退，不再作为仓库资产保留。
 - 将可用性证据同步到 `docs/testing/performance-baseline.md`，避免只停留在对话结论。
 
 ### 验证证据
 
 ```bash
-rtk curl -s http://127.0.0.1:4040/ready
+rtk env GOCACHE=/tmp/go-build-cache go test ./cmd/api
 rtk curl -s http://127.0.0.1:18080/healthz
 rtk docker compose logs --tail=40 backend
 rtk curl -s http://127.0.0.1:18080/api/notes
 rtk curl -s -X POST http://127.0.0.1:18080/api/auth/login -H Content-Type:application/json -d '{"phone":"13800000001","password":"consumer-demo"}'
-rtk curl -s -H Content-Type:application/json -d '{"start":1780910000000,"end":1780913400000}' http://127.0.0.1:4040/querier.v1.QuerierService/ProfileTypes
-rtk curl -s -H Content-Type:application/json -d '{"start":1780910000000,"end":1780913400000,"labelSelector":"{service_name=\"redcart.backend\"}","profileTypeID":"process_cpu:cpu:nanoseconds:cpu:nanoseconds","maxNodes":16}' http://127.0.0.1:4040/querier.v1.QuerierService/SelectMergeStacktraces
-rtk curl -s -H Content-Type:application/json -d '{"start":1780910000000,"end":1780913400000,"labelSelector":"{service_name=\"redcart.backend\"}","profileTypeID":"memory:alloc_space:bytes:space:bytes","maxNodes":16}' http://127.0.0.1:4040/querier.v1.QuerierService/SelectMergeStacktraces
-rtk curl -s -H Content-Type:application/json -d '{"start":1780910000000,"end":1780913400000,"labelSelector":"{service_name=\"redcart.backend\"}","profileTypeID":"memory:inuse_space:bytes:space:bytes","maxNodes":16}' http://127.0.0.1:4040/querier.v1.QuerierService/SelectMergeStacktraces
 ```
 
 ### 剩余风险
