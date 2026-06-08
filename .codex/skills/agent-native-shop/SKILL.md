@@ -20,4 +20,12 @@ Before completion, run:
 rtk bash scripts/validate-workspace.sh
 ```
 
+Project-local Codex hooks live in `.codex/config.toml` and `.codex/hooks/redcart_project_hook.py`.
+For handoff validation, run the quick hook gate; for cross-layer or PostgreSQL-sensitive changes, run the full gate:
+
+```bash
+rtk python3 .codex/hooks/redcart_project_hook.py --mode quick
+rtk python3 .codex/hooks/redcart_project_hook.py --mode full
+```
+
 Use `docs/checklists/agent-native-completion.md` to audit the result.

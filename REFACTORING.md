@@ -37,6 +37,13 @@
 
 - 抽出订单草稿和库存锁构建逻辑，降低 `CreateOrder` 主流程复杂度。
 - 补充订单创建副作用测试，覆盖创建事件、行为事件、库存锁和 locked stock 变化。
+- 抽出订单创建事件与行为事件记录逻辑，保持事件记录失败不阻断下单的原语义。
+- 将应用层追加测试按 auth、checkout、order、merchant dashboard 和 AI 主题拆分，降低后续 RF-001 切片的测试定位成本。
+
+当前验证状态：
+
+- `docs/testing/2026-06-08-validation-status.md` 已记录本地完整 CI、PostgreSQL integration、benchmark 和 Docker build 通过证据。
+- `.codex/hooks/redcart_project_hook.py` 已作为项目专用 Codex handoff hook，交付前检查 `rtk` 命令约束、测试入口保留、OpenAPI 和 workspace 门禁。
 
 ### RF-002 落地真实库存适配层
 

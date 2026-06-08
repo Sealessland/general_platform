@@ -31,6 +31,7 @@ required_files=(
   "docs/adr/0004-ai-provider-abstraction.md"
   "docs/testing/test-strategy.md"
   "docs/testing/e2e-cases.md"
+  "docs/testing/2026-06-08-validation-status.md"
   "docs/workflows/add-feature.md"
   "docs/workflows/add-integration.md"
   "docs/workflows/debug.md"
@@ -59,6 +60,8 @@ required_files=(
   ".github/PULL_REQUEST_TEMPLATE.md"
   ".github/dependabot.yml"
   ".agents/README.md"
+  ".codex/config.toml"
+  ".codex/hooks/redcart_project_hook.py"
   ".codex/skills/agent-native-shop/SKILL.md"
   "backend/go.mod"
   "backend/cmd/api/main.go"
@@ -104,6 +107,11 @@ grep -q "完成证据" docs/workflows/debug.md
 grep -q "CHANGELOG.md" docs/workflows/validate.md
 grep -q "bash scripts/validate-workspace.sh" README.md
 grep -q "docs/index.md" AGENTS.md
+grep -q "redcart_project_hook.py" .codex/config.toml
+grep -q "Project-scoped Codex hook" .codex/hooks/redcart_project_hook.py
+grep -q "项目专用 Codex Hook" docs/testing/2026-06-08-validation-status.md
+
+python3 .codex/hooks/redcart_project_hook.py --self-test >/tmp/redcart-hook-self-test.out
 
 bash ci/scripts/scan-secrets.sh
 
