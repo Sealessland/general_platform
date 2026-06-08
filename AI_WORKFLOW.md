@@ -442,3 +442,30 @@ rtk bash scripts/validate-workspace.sh
 
 - 项目本地 Codex hook 需要在 Codex `/hooks` 面板中信任后才会自动运行；脚本或配置变更后需要重新信任。
 - Hook quick gate 是交付兜底，不替代高风险改动后的完整 CI、PostgreSQL 集成测试和 Docker build。
+
+## 2026-06-08：仅 PostgreSQL 适配层的写路径性能优化
+
+### AI 参与范围
+
+- 分析 `backend/internal/redcart/infrastructure/postgres/repository.go` 的写路径热点，定位 `SaveProduct`、`SaveSKU`、`SaveCartItem`、`SaveOrder`、`SaveOrderWithInventoryLocks` 中的写后回读和 GORM 运行时包装开销。
+- 仅在 PostgreSQL 适配层内改写运行时 SQL 调用与返回值回填方式，不改应用层、HTTP 层、内存仓储、schema、migration 或 OpenAPI。
+- 根据基准结果整理性能记录，说明优化动作、原因和收益口径。
+
+### 人工或主代理修正
+
+- 保持事务边界、库存条件更新 SQL、冲突语义和并发安全测试口径不变。
+- 不把优化扩展到应用层批量接口或 schema 变更，避免超出“只改 pgsql 写性能”的范围。
+- 对更新路径保留 `RETURNING created_at, updated_at`，避免因为去掉回读而丢失数据库侧时间戳。
+
+### 验证证据
+
+```bash
+rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable RUN_POSTGRES_INTEGRATION=1 GOCACHE=/tmp/go-build-cache go test ./internal/redcart/infrastructure/postgres
+rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable RUN_POSTGRES_INTEGRATION=1 POSTGRES_BENCHTIME=2s GOCACHE=/tmp/go-build-cache go test ./internal/redcart/interfaces/httpapi -run '^$' -bench BenchmarkHTTPPostgresCreateOrder -benchmem
+rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable RUN_POSTGRES_INTEGRATION=1 GOCACHE=/tmp/go-build-cache bash ci/scripts/backend-ci.sh
+```
+
+### 剩余风险
+
+- 这次优化依赖 PostgreSQL `RETURNING` 回填当前真正会变化的字段；如果后续在数据库侧新增会改写更多业务字段的 trigger 或规则，需要扩大 `RETURNING` 列表或恢复针对性回读。
+- 当前收益主要来自减少往返和分配，`CreateOrder` 仍然是多 SQL 事务写路径，若后续还要继续提吞吐，应直接分析 `SaveOrderWithInventoryLocks` 的 SQL 往返数和事件写入阶段耗时。
