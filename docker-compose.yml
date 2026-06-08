@@ -13,6 +13,10 @@ services:
       timeout: 5s
       retries: 5
 
+  pyroscope:
+    image: grafana/pyroscope:latest
+    network_mode: host
+
   backend:
     build:
       context: ./backend
@@ -21,9 +25,16 @@ services:
       HTTP_PORT: 18080
       POSTGRES_DSN: postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable
       AI_PROVIDER: mock
+      PYROSCOPE_SERVER_ADDRESS: ${PYROSCOPE_SERVER_ADDRESS-http://127.0.0.1:4040}
+      PYROSCOPE_APPLICATION_NAME: ${PYROSCOPE_APPLICATION_NAME-redcart.backend}
+      PYROSCOPE_BASIC_AUTH_USER: ${PYROSCOPE_BASIC_AUTH_USER:-}
+      PYROSCOPE_BASIC_AUTH_PASSWORD: ${PYROSCOPE_BASIC_AUTH_PASSWORD:-}
+      PYROSCOPE_TENANT_ID: ${PYROSCOPE_TENANT_ID:-}
     depends_on:
       postgres:
         condition: service_healthy
+      pyroscope:
+        condition: service_started
 
   frontend:
     build:

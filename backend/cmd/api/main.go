@@ -14,6 +14,12 @@ import (
 )
 
 func main() {
+	stopProfiler, err := startProfilerFromEnv(pyroscopeStart, log.Default())
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer stopProfiler()
+
 	repo, cleanup, err := initRepository()
 	if err != nil {
 		log.Fatal(err)

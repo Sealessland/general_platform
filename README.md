@@ -60,12 +60,26 @@ npm run build
 bash scripts/local-dev.sh
 ```
 
+`local-dev` 默认会同时启动本地 Pyroscope，后端会以 Go push mode 把 profile 发送到 `http://127.0.0.1:4040`。如果你想关闭 profiling，可在启动前把 `PYROSCOPE_SERVER_ADDRESS` 设为空值。
+
 如果只单独启动后端 API：
 
 ```bash
 cd backend
 POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable HTTP_PORT=18080 GOCACHE=/tmp/go-build-cache go run ./cmd/api
 ```
+
+如需启用 Grafana Pyroscope Go push mode，可额外提供这些环境变量：
+
+```bash
+PYROSCOPE_SERVER_ADDRESS=http://127.0.0.1:4040
+PYROSCOPE_APPLICATION_NAME=redcart.backend
+PYROSCOPE_BASIC_AUTH_USER=
+PYROSCOPE_BASIC_AUTH_PASSWORD=
+PYROSCOPE_TENANT_ID=
+```
+
+只配置 `PYROSCOPE_SERVER_ADDRESS` 即可启用默认的 CPU/alloc/inuse profiling；未配置时 profiling 默认关闭，不影响现有运行路径。
 
 构建后的前端位于：
 
@@ -84,6 +98,7 @@ python3 -m http.server 4173 --bind 127.0.0.1
 - 后端地址：`http://127.0.0.1:18080`
 - 前端静态服务示例：`http://127.0.0.1:4173`
 - PostgreSQL 本地端口：`127.0.0.1:15432`
+- Pyroscope：`http://127.0.0.1:4040`
 
 内置演示账号：
 
