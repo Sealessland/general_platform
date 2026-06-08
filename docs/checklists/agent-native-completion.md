@@ -8,5 +8,6 @@
 - 公共 API、命令、结构或工作流具备可执行验证
 - 不支持的假设和非目标已经写清楚
 - AI 参与过的需求、方案、实现、测试、审查或验收已经按 `../../AI_WORKFLOW.md` 留档
+- 当前提交已经更新 `CHANGELOG.md`，或交付说明中已经明确记录不更新的原因
 - 完成证据体现在命令结果、测试、fixture 或明确阻塞记录中
 - `bash scripts/validate-workspace.sh` 通过

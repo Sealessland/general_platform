@@ -2,20 +2,7 @@ name: Backend Test
 
 on:
   workflow_call:
-  pull_request:
-    branches: [main]
-    paths:
-      - "backend/**"
-      - "ci/README.md"
-      - "ci/scripts/backend-ci.sh"
-      - ".github/workflows/backend-test.yml"
-  push:
-    branches: [main]
-    paths:
-      - "backend/**"
-      - "ci/README.md"
-      - "ci/scripts/backend-ci.sh"
-      - ".github/workflows/backend-test.yml"
+  workflow_dispatch:
 
 jobs:
   backend:
@@ -34,10 +21,6 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
-      redis:
-        image: redis:7
-        ports:
-          - 6379:6379
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -54,6 +37,11 @@ jobs:
           name: backend-ci-artifacts
           path: |
             backend/coverage.out
+            ci/artifacts/backend-test.txt
+            ci/artifacts/backend-test-list.txt
+            ci/artifacts/backend-coverage-functions.txt
+            ci/artifacts/backend-coverage-summary.txt
+            ci/artifacts/backend-test-metrics.json
             ci/artifacts/backend-postgres-integration.txt
             ci/artifacts/backend-postgres-http-integration.txt
             ci/artifacts/backend-benchmark.txt

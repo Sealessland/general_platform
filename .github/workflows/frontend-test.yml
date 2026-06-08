@@ -2,15 +2,7 @@ name: Frontend Test
 
 on:
   workflow_call:
-  pull_request:
-    branches: [main]
-    paths:
-      - "frontend/**"
-      - ".github/workflows/frontend-test.yml"
-  push:
-    branches: [main]
-    paths:
-      - "frontend/**"
+  workflow_dispatch:
 
 jobs:
   frontend:

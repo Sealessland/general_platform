@@ -2,6 +2,18 @@
 
 所有对 RedCart Copilot 有意义的变更都记录在这里。
 
+## [未发布] - 2026-06-08
+
+### 优化
+
+- 将 PR 与 `main` push 的统一门禁收敛到 `.github/workflows/ci.yml`。
+- 将后端、前端、AI service、安全和 Docker 子 workflow 保留为复用与手动运行入口。
+- 移除后端 CI 中未使用的 Redis service，保留当前 PostgreSQL 运行时依赖。
+- 将 `ai-service` 的 Dependabot 扫描从不存在的 Python manifest 改为 Dockerfile 依赖面。
+- 明确每个 commit 都应同步更新 `CHANGELOG.md`，并把例外说明纳入交付验证工作流。
+- 回退 README 和 CHANGELOG 中的本地 PNG 图片资产与引用。
+- 复核 Pyroscope Go push mode 可用性，确认本地能查询 `redcart.backend` 的 profile types 与 CPU/alloc/inuse flamegraph 数据。
+
 ## [0.1.0] - 2026-06-05
 
 ### 新增

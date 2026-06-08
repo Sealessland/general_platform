@@ -2,15 +2,7 @@ name: AI Service Test
 
 on:
   workflow_call:
-  pull_request:
-    branches: [main]
-    paths:
-      - "ai-service/**"
-      - ".github/workflows/ai-service-test.yml"
-  push:
-    branches: [main]
-    paths:
-      - "ai-service/**"
+  workflow_dispatch:
 
 jobs:
   ai-service:

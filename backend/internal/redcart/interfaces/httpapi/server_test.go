@@ -210,6 +210,282 @@ func TestUnauthorizedRequestsRejected(t *testing.T) {
 	}
 }
 
+func TestBaseRoutesCatalogAndCORS(t *testing.T) {
+	handler := newTestHandler()
+
+	health := requestJSON(t, handler, http.MethodGet, "/healthz", "", nil, http.StatusOK)
+	if health["status"].(string) != "ok" {
+		t.Fatalf("expected health ok, got %+v", health)
+	}
+
+	optionsReq := httptest.NewRequest(http.MethodOptions, "/api/notes", nil)
+	optionsRec := httptest.NewRecorder()
+	handler.ServeHTTP(optionsRec, optionsReq)
+	if optionsRec.Code != http.StatusNoContent {
+		t.Fatalf("expected options 204, got %d", optionsRec.Code)
+	}
+	if optionsRec.Header().Get("Access-Control-Allow-Origin") != "*" {
+		t.Fatalf("expected cors headers, got %+v", optionsRec.Header())
+	}
+
+	_ = requestJSON(t, handler, http.MethodGet, "/api/missing", "", nil, http.StatusNotFound)
+	_ = requestJSON(t, handler, http.MethodPost, "/api/auth/login", "", "{", http.StatusBadRequest)
+
+	notes := requestJSON(t, handler, http.MethodGet, "/api/notes", "", nil, http.StatusOK)
+	if len(notes["items"].([]any)) == 0 {
+		t.Fatalf("expected notes, got %+v", notes)
+	}
+	note := requestJSON(t, handler, http.MethodGet, "/api/notes/1", "", nil, http.StatusOK)
+	if len(note["linked_products"].([]any)) == 0 {
+		t.Fatalf("expected linked products, got %+v", note)
+	}
+	products := requestJSON(t, handler, http.MethodGet, "/api/products", "", nil, http.StatusOK)
+	if len(products["items"].([]any)) == 0 {
+		t.Fatalf("expected products, got %+v", products)
+	}
+	product := requestJSON(t, handler, http.MethodGet, "/api/products/1", "", nil, http.StatusOK)
+	if len(product["skus"].([]any)) == 0 {
+		t.Fatalf("expected product skus, got %+v", product)
+	}
+	skus := requestJSON(t, handler, http.MethodGet, "/api/products/1/skus", "", nil, http.StatusOK)
+	if len(skus["items"].([]any)) == 0 {
+		t.Fatalf("expected sku list, got %+v", skus)
+	}
+}
+
+func TestMeAndListEndpoints(t *testing.T) {
+	handler := newTestHandler()
+	consumerToken := loginAndGetToken(t, handler, map[string]any{
+		"phone":    "13800000001",
+		"password": "consumer-demo",
+	})
+	merchantToken := loginAndGetToken(t, handler, map[string]any{
+		"phone":    "13800000002",
+		"password": "merchant-demo",
+	})
+
+	me := requestJSON(t, handler, http.MethodGet, "/api/auth/me", consumerToken, nil, http.StatusOK)
+	if me["role"].(string) != "consumer" {
+		t.Fatalf("expected consumer me, got %+v", me)
+	}
+	orders := requestJSON(t, handler, http.MethodGet, "/api/orders", consumerToken, nil, http.StatusOK)
+	if len(orders["items"].([]any)) == 0 {
+		t.Fatalf("expected consumer orders, got %+v", orders)
+	}
+	merchantOrders := requestJSON(t, handler, http.MethodGet, "/api/merchant/orders", merchantToken, nil, http.StatusOK)
+	items := merchantOrders["items"].([]any)
+	if len(items) == 0 {
+		t.Fatalf("expected merchant orders, got %+v", merchantOrders)
+	}
+	orderID := int64Field(t, items[0].(map[string]any), "id")
+	_ = requestJSON(t, handler, http.MethodGet, pathf("/api/merchant/orders/%d", orderID), merchantToken, nil, http.StatusOK)
+}
+
+func TestAuthAndCatalogHTTPValidation(t *testing.T) {
+	handler := newTestHandler()
+
+	_ = requestJSON(t, handler, http.MethodPost, "/api/auth/register", "", map[string]any{
+		"nickname": "Bad Role",
+		"phone":    "13910000001",
+		"password": "secret",
+		"role":     "admin",
+	}, http.StatusBadRequest)
+	registered := requestJSON(t, handler, http.MethodPost, "/api/auth/register", "", map[string]any{
+		"nickname": "New Merchant",
+		"phone":    "13910000002",
+		"password": "secret",
+		"role":     "merchant",
+	}, http.StatusCreated)
+	if registered["token"].(string) == "" {
+		t.Fatalf("expected token in register response: %+v", registered)
+	}
+	user := registered["user"].(map[string]any)
+	if int64Field(t, user, "merchant_id") == 0 {
+		t.Fatalf("expected merchant_id in register response: %+v", user)
+	}
+	_ = requestJSON(t, handler, http.MethodPost, "/api/auth/login", "", map[string]any{
+		"phone":    "13910000002",
+		"password": "wrong",
+	}, http.StatusUnauthorized)
+
+	_ = requestJSON(t, handler, http.MethodGet, "/api/notes/999999", "", nil, http.StatusNotFound)
+	_ = requestJSON(t, handler, http.MethodGet, "/api/products/999999", "", nil, http.StatusNotFound)
+	_ = requestJSON(t, handler, http.MethodGet, "/api/products/999999/skus", "", nil, http.StatusNotFound)
+}
+
+func TestCartHTTPFlowAndValidation(t *testing.T) {
+	handler := newTestHandler()
+	consumerToken := loginAndGetToken(t, handler, map[string]any{
+		"phone":    "13800000001",
+		"password": "consumer-demo",
+	})
+
+	_ = requestJSON(t, handler, http.MethodPost, "/api/cart/items", consumerToken, map[string]any{
+		"sku_id":   1,
+		"quantity": 0,
+	}, http.StatusBadRequest)
+	item := requestJSON(t, handler, http.MethodPost, "/api/cart/items", consumerToken, map[string]any{
+		"sku_id":   1,
+		"quantity": 1,
+	}, http.StatusCreated)
+	itemID := int64Field(t, item, "id")
+
+	updated := requestJSON(t, handler, http.MethodPut, pathf("/api/cart/items/%d", itemID), consumerToken, map[string]any{
+		"quantity": 2,
+		"selected": false,
+	}, http.StatusOK)
+	if int64Field(t, updated, "quantity") != 2 || updated["selected"].(bool) {
+		t.Fatalf("expected updated quantity and selection, got %+v", updated)
+	}
+	cart := requestJSON(t, handler, http.MethodGet, "/api/cart", consumerToken, nil, http.StatusOK)
+	if int64Field(t, cart, "selected_item_count") != 0 || int64Field(t, cart, "selected_amount_cent") != 0 {
+		t.Fatalf("expected no selected totals, got %+v", cart)
+	}
+
+	_ = requestJSON(t, handler, http.MethodDelete, pathf("/api/cart/items/%d", itemID), consumerToken, nil, http.StatusOK)
+	_ = requestJSON(t, handler, http.MethodDelete, pathf("/api/cart/items/%d", itemID), consumerToken, nil, http.StatusNotFound)
+}
+
+func TestOrderHTTPValidationAndStateConflicts(t *testing.T) {
+	handler := newTestHandler()
+	consumerToken := loginAndGetToken(t, handler, map[string]any{
+		"phone":    "13800000001",
+		"password": "consumer-demo",
+	})
+	merchantToken := loginAndGetToken(t, handler, map[string]any{
+		"phone":    "13800000002",
+		"password": "merchant-demo",
+	})
+
+	_ = requestJSON(t, handler, http.MethodPost, "/api/orders", consumerToken, map[string]any{
+		"items": []map[string]any{{"sku_id": 1, "quantity": 1}},
+	}, http.StatusBadRequest)
+	_ = requestJSON(t, handler, http.MethodPost, "/api/orders/preview", consumerToken, map[string]any{
+		"items": []map[string]any{{"sku_id": 1, "quantity": 0}},
+	}, http.StatusBadRequest)
+	_ = requestJSON(t, handler, http.MethodPost, "/api/orders/preview", consumerToken, map[string]any{
+		"items": []map[string]any{{"sku_id": 999999, "quantity": 1}},
+	}, http.StatusNotFound)
+	_ = requestJSON(t, handler, http.MethodPost, "/api/orders/preview", consumerToken, map[string]any{
+		"items": []map[string]any{{"sku_id": 1, "quantity": 999999}},
+	}, http.StatusConflict)
+
+	order := requestJSON(t, handler, http.MethodPost, "/api/orders", consumerToken, map[string]any{
+		"items":            []map[string]any{{"sku_id": 1, "quantity": 1}},
+		"receiver_name":    "Alice",
+		"receiver_phone":   "13800000001",
+		"receiver_address": "Shanghai",
+	}, http.StatusCreated, headerKV{"Idempotency-Key", "http-state-conflicts"})
+	orderID := int64Field(t, order, "id")
+
+	_ = requestJSON(t, handler, http.MethodPost, pathf("/api/merchant/orders/%d/ship", orderID), merchantToken, map[string]any{
+		"logistics_no": "EARLY",
+	}, http.StatusConflict)
+	_ = requestJSON(t, handler, http.MethodPost, pathf("/api/orders/%d/pay", orderID), consumerToken, nil, http.StatusOK)
+	_ = requestJSON(t, handler, http.MethodPost, pathf("/api/orders/%d/cancel", orderID), consumerToken, nil, http.StatusConflict)
+	_ = requestJSON(t, handler, http.MethodPost, pathf("/api/merchant/orders/%d/ship", orderID), merchantToken, map[string]any{
+		"logistics_no": "SF123",
+	}, http.StatusOK)
+	_ = requestJSON(t, handler, http.MethodPost, pathf("/api/orders/%d/finish", orderID), consumerToken, nil, http.StatusOK)
+	_ = requestJSON(t, handler, http.MethodPost, pathf("/api/orders/%d/refund", orderID), consumerToken, map[string]any{
+		"reason": "too late",
+	}, http.StatusConflict)
+}
+
+func TestMerchantProductSKUAndDashboardHTTP(t *testing.T) {
+	handler := newTestHandler()
+	consumerToken := loginAndGetToken(t, handler, map[string]any{
+		"phone":    "13800000001",
+		"password": "consumer-demo",
+	})
+	merchantToken := loginAndGetToken(t, handler, map[string]any{
+		"phone":    "13800000002",
+		"password": "merchant-demo",
+	})
+
+	_ = requestJSON(t, handler, http.MethodPost, "/api/merchant/products", consumerToken, map[string]any{
+		"title": "Consumer Product",
+	}, http.StatusForbidden)
+	_ = requestJSON(t, handler, http.MethodPost, "/api/merchant/products", merchantToken, map[string]any{
+		"title": "",
+	}, http.StatusBadRequest)
+	product := requestJSON(t, handler, http.MethodPost, "/api/merchant/products", merchantToken, map[string]any{
+		"title":          "HTTP Product",
+		"description":    "created by test",
+		"category_id":    88,
+		"selling_points": []string{"stable"},
+	}, http.StatusCreated)
+	productID := int64Field(t, product, "id")
+	updated := requestJSON(t, handler, http.MethodPut, pathf("/api/merchant/products/%d", productID), merchantToken, map[string]any{
+		"title":          "HTTP Product Updated",
+		"description":    "updated by test",
+		"category_id":    89,
+		"selling_points": []string{"stable", "fast"},
+	}, http.StatusOK)
+	if updated["title"].(string) != "HTTP Product Updated" {
+		t.Fatalf("expected updated product title, got %+v", updated)
+	}
+
+	_ = requestJSON(t, handler, http.MethodPost, pathf("/api/merchant/products/%d/skus", productID), merchantToken, map[string]any{
+		"sku_name":   "Bad SKU",
+		"price_cent": 0,
+		"stock":      1,
+	}, http.StatusBadRequest)
+	sku := requestJSON(t, handler, http.MethodPost, pathf("/api/merchant/products/%d/skus", productID), merchantToken, map[string]any{
+		"sku_name":   "Standard",
+		"sku_attrs":  map[string]string{"color": "red"},
+		"price_cent": 9900,
+		"stock":      5,
+		"status":     "active",
+	}, http.StatusCreated)
+	skuID := int64Field(t, sku, "id")
+	updatedSKU := requestJSON(t, handler, http.MethodPut, pathf("/api/merchant/skus/%d", skuID), merchantToken, map[string]any{
+		"sku_name":   "Standard Updated",
+		"price_cent": 10900,
+		"stock":      4,
+		"status":     "inactive",
+	}, http.StatusOK)
+	if updatedSKU["sku_name"].(string) != "Standard Updated" || int64Field(t, updatedSKU, "stock") != 4 {
+		t.Fatalf("expected updated sku, got %+v", updatedSKU)
+	}
+	_ = requestJSON(t, handler, http.MethodPost, pathf("/api/merchant/products/%d/online", productID), merchantToken, nil, http.StatusOK)
+	_ = requestJSON(t, handler, http.MethodPost, pathf("/api/merchant/products/%d/offline", productID), merchantToken, nil, http.StatusOK)
+	_ = requestJSON(t, handler, http.MethodGet, "/api/merchant/dashboard/funnel", consumerToken, nil, http.StatusForbidden)
+	_ = requestJSON(t, handler, http.MethodGet, "/api/merchant/dashboard/products", merchantToken, nil, http.StatusOK)
+	_ = requestJSON(t, handler, http.MethodGet, "/api/merchant/dashboard/summary", merchantToken, nil, http.StatusOK)
+}
+
+func TestAIHTTPBusinessReviewAndTaskBoundaries(t *testing.T) {
+	handler := newTestHandler()
+	consumerToken := loginAndGetToken(t, handler, map[string]any{
+		"phone":    "13800000001",
+		"password": "consumer-demo",
+	})
+	merchantToken := loginAndGetToken(t, handler, map[string]any{
+		"phone":    "13800000002",
+		"password": "merchant-demo",
+	})
+
+	_ = requestJSON(t, handler, http.MethodPost, "/api/ai/business-review", consumerToken, map[string]any{
+		"window_days": 7,
+	}, http.StatusForbidden)
+	_ = requestJSON(t, handler, http.MethodPost, "/api/ai/business-review", merchantToken, map[string]any{
+		"window_days": 7,
+	}, http.StatusOK)
+	task := requestJSON(t, handler, http.MethodPost, "/api/ai/product-selling-points", merchantToken, map[string]any{
+		"product_name": "AI HTTP Product",
+		"attributes":   []string{"compact"},
+		"target_users": "commuters",
+		"price_cent":   19900,
+	}, http.StatusOK)
+	taskID := int64Field(t, task, "id")
+	_ = requestJSON(t, handler, http.MethodGet, pathf("/api/ai/tasks/%d", taskID), consumerToken, nil, http.StatusNotFound)
+	fetched := requestJSON(t, handler, http.MethodGet, pathf("/api/ai/tasks/%d", taskID), merchantToken, nil, http.StatusOK)
+	if fetched["status"].(string) != "completed" {
+		t.Fatalf("expected completed task, got %+v", fetched)
+	}
+}
+
 func TestPostgresHTTPCriticalPath(t *testing.T) {
 	handler, cleanup := newPostgresTestHandler(t)
 	defer cleanup()
