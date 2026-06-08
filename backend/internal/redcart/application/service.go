@@ -333,23 +333,7 @@ func (s *Service) CreateOrder(ctx context.Context, actor Actor, idempotencyKey s
 		}
 		return nil, err
 	}
-	_, _ = s.repo.AppendOrderEvent(domain.OrderEvent{
-		OrderID:      saved.ID,
-		FromStatus:   "",
-		ToStatus:     string(orderdomain.StatusCreated),
-		EventType:    "ORDER_CREATED",
-		OperatorID:   actor.UserID,
-		OperatorRole: actor.Role,
-		Remark:       "order created",
-		CreatedAt:    now,
-	})
-	_, _ = s.repo.AppendBehaviorEvent(domain.BehaviorEvent{
-		UserID:     actor.UserID,
-		EventType:  domain.BehaviorOrderCreate,
-		OrderID:    saved.ID,
-		MerchantID: saved.MerchantID,
-		CreatedAt:  now,
-	})
+	s.recordOrderCreated(saved, actor, now)
 	_ = s.repo.DeleteSelectedCartItems(actor.UserID)
 	view, err := s.enrichOrderView(saved)
 	if err != nil {
@@ -1115,6 +1099,26 @@ func buildInventoryLocks(items []domain.OrderItem, now time.Time) []domain.Inven
 		})
 	}
 	return locks
+}
+
+func (s *Service) recordOrderCreated(order domain.Order, actor Actor, now time.Time) {
+	_, _ = s.repo.AppendOrderEvent(domain.OrderEvent{
+		OrderID:      order.ID,
+		FromStatus:   "",
+		ToStatus:     string(orderdomain.StatusCreated),
+		EventType:    "ORDER_CREATED",
+		OperatorID:   actor.UserID,
+		OperatorRole: actor.Role,
+		Remark:       "order created",
+		CreatedAt:    now,
+	})
+	_, _ = s.repo.AppendBehaviorEvent(domain.BehaviorEvent{
+		UserID:     actor.UserID,
+		EventType:  domain.BehaviorOrderCreate,
+		OrderID:    order.ID,
+		MerchantID: order.MerchantID,
+		CreatedAt:  now,
+	})
 }
 
 func (s *Service) buildOrderPreview(lines []checkoutLine) (*OrderPreview, error) {

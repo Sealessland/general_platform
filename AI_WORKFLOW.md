@@ -345,8 +345,35 @@ rtk bash scripts/validate-workspace.sh
 
 ```bash
 rtk env GOCACHE=/tmp/go-build-cache go test ./internal/redcart/application
+rtk env GOCACHE=/tmp/go-build-cache go test ./...
+rtk bash scripts/check-openapi.sh
+rtk bash scripts/validate-workspace.sh
 ```
 
 ### 剩余风险
 
 - `CreateOrder` 仍负责 idempotency、校验编排、保存、事件记录和购物车清理；RF-001 还需要继续拆分 validator、locker 和 event publisher。
+
+## 2026-06-08：下单创建事件记录拆分
+
+### AI 参与范围
+
+- 继续 RF-001 的低风险切片，聚焦订单创建后的事件记录逻辑。
+- 补强 `CreateOrder` 行为测试，增加订单创建事件的 from/to status、operator、remark 和时间断言。
+- 将订单创建事件与行为事件记录抽为 `recordOrderCreated` 私有 helper。
+
+### 人工或主代理修正
+
+- 保持原有事件记录失败不阻断下单的策略，不在本次切片中改变错误传播语义。
+- 不新增外部 event publisher 契约，避免在单次提交中扩大接口面；后续可在更多状态事件有测试保护后继续抽象。
+- 保持 HTTP、OpenAPI、仓储契约不变。
+
+### 验证证据
+
+```bash
+rtk env GOCACHE=/tmp/go-build-cache go test ./internal/redcart/application
+```
+
+### 剩余风险
+
+- `CreateOrder` 仍负责 idempotency、校验编排、库存预锁保存和购物车清理；RF-001 后续还需要继续拆 validator、locker 和 cart cleanup 边界。
