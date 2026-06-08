@@ -6,6 +6,7 @@
 
 ### 优化
 
+- 仅在 PostgreSQL 适配层优化写路径：将运行时 SQL 调用切到 `database/sql`，用 `INSERT/UPDATE ... RETURNING` 取代写后回读，并让订单写入阶段直接回填 `order_items.id` 与时间戳，减少下单热路径的数据库往返和对象分配。
 - 将 PR 与 `main` push 的统一门禁收敛到 `.github/workflows/ci.yml`。
 - 将后端、前端、AI service、安全和 Docker 子 workflow 保留为复用与手动运行入口。
 - 移除后端 CI 中未使用的 Redis service，保留当前 PostgreSQL 运行时依赖。
