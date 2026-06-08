@@ -44,9 +44,9 @@
 
 本地复核结论：Pyroscope 在当前 Docker Compose 运行路径下可用。后端日志显示 `pyroscope profiling enabled for redcart.backend -> http://127.0.0.1:4040`，并且可以通过本地 Pyroscope UI 人工检查 `redcart.backend` 的 profile 数据。
 
-Pyroscope profile 查询不进入 GitHub Actions 门禁，也不使用 curl 查询 profile API 作为自动化证据。CI 只验证后端 profiling 配置解析、默认关闭路径、启动失败传播和常规业务/性能门禁；profile 诊断保留为本地手动复核能力。
+Pyroscope profile 查询不进入 GitHub Actions 门禁，也不使用 curl 查询 profile API 作为自动化证据。CI 只验证后端 profiling 配置解析、默认关闭路径、启动失败传播、可选 mutex/block 采样配置和常规业务/性能门禁；profile 诊断保留为本地手动复核能力。
 
-仍保留的边界：mutex、block 等 profile types 尚未作为性能诊断基线使用。
+仍保留的边界：mutex、block 等 profile types 已可通过环境变量临时启用，但尚未作为性能诊断基线固定采样。
 
 ## 后续优化方向
 

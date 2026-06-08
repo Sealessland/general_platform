@@ -77,9 +77,11 @@ PYROSCOPE_APPLICATION_NAME=redcart.backend
 PYROSCOPE_BASIC_AUTH_USER=
 PYROSCOPE_BASIC_AUTH_PASSWORD=
 PYROSCOPE_TENANT_ID=
+PYROSCOPE_MUTEX_PROFILE_FRACTION=
+PYROSCOPE_BLOCK_PROFILE_RATE=
 ```
 
-只配置 `PYROSCOPE_SERVER_ADDRESS` 即可启用默认的 CPU/alloc/inuse profiling；未配置时 profiling 默认关闭，不影响现有运行路径。
+只配置 `PYROSCOPE_SERVER_ADDRESS` 即可启用默认的 CPU/alloc/inuse profiling；未配置时 profiling 默认关闭，不影响现有运行路径。如果需要诊断锁竞争或阻塞，可额外把 `PYROSCOPE_MUTEX_PROFILE_FRACTION` 和 `PYROSCOPE_BLOCK_PROFILE_RATE` 设置为正整数，例如 `5`，后端会启用对应的 mutex/block profile types。
 
 构建后的前端位于：
 
