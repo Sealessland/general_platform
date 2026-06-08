@@ -10,19 +10,32 @@
 - PostgreSQL：Docker Compose 中的 `postgres:16`，本地端口 `127.0.0.1:15432`
 - 命令：`rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable RUN_POSTGRES_INTEGRATION=1 POSTGRES_BENCHTIME=2s GOCACHE=/tmp/go-build-cache bash ci/scripts/backend-ci.sh`
 
+## 2026-06-08 Pyroscope 接入后复测
+
+测试环境：
+
+- CPU：11th Gen Intel(R) Core(TM) i7-1185G7 @ 3.00GHz
+- 启动方式：`rtk docker compose up -d --build --remove-orphans postgres pyroscope backend frontend`
+- PostgreSQL：Docker Compose 中的 `postgres:16`，本地端口 `127.0.0.1:15432`
+- Profiling：后端通过 Go push mode 上报到本地 `http://127.0.0.1:4040`
+- Benchmark 命令：`rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable RUN_POSTGRES_INTEGRATION=1 POSTGRES_BENCHTIME=2s GOCACHE=/tmp/go-build-cache bash ci/scripts/backend-ci.sh`
+
 ## 当前运行时数据
 
 | Benchmark | QPS | ns/op | 口径 |
 |---|---:|---:|---|
-| `BenchmarkHTTPPostgresOrderPreview-8` | 2795.48 | 357720 | Gin -> 应用层 -> PostgreSQL/GORM 读多查询路径 |
-| `BenchmarkHTTPPostgresCreateOrder-8` | 53.68 | 18629841 | Gin -> 应用层 -> PostgreSQL/GORM 写路径，覆盖幂等下单、事务、库存条件更新、订单明细和库存锁写入 |
+| `BenchmarkHTTPPostgresOrderPreview-8` | 6962.58 | 143625 | Gin -> 应用层 -> PostgreSQL/GORM 读多查询路径 |
+| `BenchmarkHTTPPostgresCreateOrder-8` | 70.96 | 14091653 | Gin -> 应用层 -> PostgreSQL/GORM 写路径，覆盖幂等下单、事务、库存条件更新、订单明细和库存锁写入 |
 
 ## 评估结论
 
 - 本基线数据来自 Gin handler -> 应用层 -> GORM PostgreSQL driver -> 本地 Docker Compose PostgreSQL 的真实运行路径。
 - `backend-qps.txt` 是内存仓储下的诊断数据，不进入运行时 baseline，也不用于评估数据库迁移成果。
-- 结算预览在 PostgreSQL-backed 路径约 2800 QPS，说明读路径可以作为当前 MVP 的可演示基线。
-- 下单写路径约 54 QPS，主要覆盖多次查询、事务、条件更新、订单明细写入、库存锁写入和后续事件写入，是后续优化的重点。
+- 结算预览在 PostgreSQL-backed 路径约 6960 QPS，读路径表现明显好于上一次基线，仍可作为当前 MVP 的可演示基线。
+- 下单写路径约 71 QPS，主要覆盖多次查询、事务、条件更新、订单明细写入、库存锁写入和后续事件写入，仍然是后续优化的重点。
+- `CreateOrder` 路径约比 `OrderPreview` 慢两个数量级，并伴随 `69457 B/op`、`1081 allocs/op`，说明写路径的对象分配和数据库往返成本都偏高。
+- 本轮 `redcart.backend` 的 CPU profile 顶部主要落在 `runtime.schedule`、`runtime.findRunnable`、`runtime.notesleep`、`runtime.futexsleep`、`runtime.gcBgMarkWorker`、`runtime.gcDrain` 和 `net/http` 写出路径；这说明在当前压力模型下，调度与 GC 开销已经足够明显，单次采样里没有业务函数压过 runtime 热点。
+- Pyroscope 容器启动后存在 `metastore`、`ingester`、`segment writer` 的 staged readiness 窗口，自动化采样前必须等待 `/ready` 返回 `ready`，不能只看容器 `Up`。
 - 新增的 PostgreSQL-backed HTTP 集成测试已经覆盖注册、登录、商品/SKU、上架、结算预览、幂等下单、库存预锁、支付确认、发货、完成、看板和 AI 任务读取。
 - 新增的 PostgreSQL-backed HTTP 并发测试确认库存为 1 的 SKU 在 24 个并发下单请求下只能创建 1 笔订单，其余请求返回 `409 conflict`。
 - 新增的 PostgreSQL-backed HTTP 反向路径测试已经覆盖取消释放库存、支付后退款恢复库存、库存不足无副作用、错误 method 不触发状态变化、消费者访问商家接口、跨用户读取订单和跨商家读取 AI 任务。

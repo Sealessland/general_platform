@@ -71,6 +71,8 @@ RedCart Copilot 当前 MVP 的代码映射如下：
 
 HTTP 入口当前由 Gin 负责路由和 method gate，但 Gin 只停留在产品接口层；应用层和领域层不依赖 Gin 类型。AI 能力当前使用 Mock Provider，Redis 与 RabbitMQ 仍是规划中的适配目标，不是当前运行前置依赖。
 
+运行时性能分析当前支持可选的 Grafana Pyroscope Go push mode。接入点位于后端启动装配层，依赖环境变量启用，不向应用层或领域层泄漏供应商类型。
+
 ## 扩展方式
 
 - 新增用户能力时，优先在产品接口层暴露公共入口，再调用稳定的运行编排或领域契约。
