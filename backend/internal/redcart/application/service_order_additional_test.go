@@ -134,3 +134,93 @@ func TestOrderStateAndAuthorizationBoundaries(t *testing.T) {
 		t.Fatalf("expected cancelled order with released inventory, got %+v", cancelled)
 	}
 }
+
+func TestHighValueOrderActionsAreIdempotentAfterSuccess(t *testing.T) {
+	t.Parallel()
+
+	service := application.NewService(memory.NewRepository(), backendai.MockProvider{})
+	owner := application.Actor{UserID: 1, Role: domain.RoleConsumer}
+	merchant := application.Actor{UserID: 2, Role: domain.RoleMerchant, MerchantID: 1}
+
+	order, err := service.CreateOrder(context.Background(), owner, "idempotent-order-actions", application.CheckoutInput{
+		Items:           []application.OrderLineInput{{SKUID: 1, Quantity: 1}},
+		ReceiverName:    "Alice",
+		ReceiverPhone:   "13800000001",
+		ReceiverAddress: "Shanghai",
+	})
+	if err != nil {
+		t.Fatalf("create order: %v", err)
+	}
+
+	paid, err := service.PayOrder(context.Background(), owner, order.ID)
+	if err != nil {
+		t.Fatalf("pay order: %v", err)
+	}
+	paidAgain, err := service.PayOrder(context.Background(), owner, order.ID)
+	if err != nil {
+		t.Fatalf("repeat pay order: %v", err)
+	}
+	if paidAgain.Status != "PAID" || paidAgain.ID != paid.ID {
+		t.Fatalf("expected idempotent paid order view, got %+v", paidAgain)
+	}
+
+	shipped, err := service.MerchantShipOrder(context.Background(), merchant, order.ID, application.MerchantOrderShipInput{LogisticsNo: "SF123"})
+	if err != nil {
+		t.Fatalf("ship order: %v", err)
+	}
+	shippedAgain, err := service.MerchantShipOrder(context.Background(), merchant, order.ID, application.MerchantOrderShipInput{LogisticsNo: "SF123"})
+	if err != nil {
+		t.Fatalf("repeat ship order: %v", err)
+	}
+	if shippedAgain.Status != "SHIPPED" || shippedAgain.ID != shipped.ID {
+		t.Fatalf("expected idempotent shipped order view, got %+v", shippedAgain)
+	}
+
+	finished, err := service.FinishOrder(context.Background(), owner, order.ID)
+	if err != nil {
+		t.Fatalf("finish order: %v", err)
+	}
+	finishedAgain, err := service.FinishOrder(context.Background(), owner, order.ID)
+	if err != nil {
+		t.Fatalf("repeat finish order: %v", err)
+	}
+	if finishedAgain.Status != "FINISHED" || finishedAgain.ID != finished.ID {
+		t.Fatalf("expected idempotent finished order view, got %+v", finishedAgain)
+	}
+
+	refundOrder, err := service.CreateOrder(context.Background(), owner, "idempotent-refund-actions", application.CheckoutInput{
+		Items:           []application.OrderLineInput{{SKUID: 3, Quantity: 1}},
+		ReceiverName:    "Alice",
+		ReceiverPhone:   "13800000001",
+		ReceiverAddress: "Hangzhou",
+	})
+	if err != nil {
+		t.Fatalf("create refund order: %v", err)
+	}
+	if _, err := service.PayOrder(context.Background(), owner, refundOrder.ID); err != nil {
+		t.Fatalf("pay refund order: %v", err)
+	}
+	refunding, err := service.RequestRefund(context.Background(), owner, refundOrder.ID, application.RefundRequestInput{Reason: "size mismatch"})
+	if err != nil {
+		t.Fatalf("request refund: %v", err)
+	}
+	refundingAgain, err := service.RequestRefund(context.Background(), owner, refundOrder.ID, application.RefundRequestInput{Reason: "size mismatch"})
+	if err != nil {
+		t.Fatalf("repeat refund request: %v", err)
+	}
+	if refundingAgain.Status != "REFUNDING" || refundingAgain.ID != refunding.ID {
+		t.Fatalf("expected idempotent refunding order view, got %+v", refundingAgain)
+	}
+
+	refunded, err := service.MerchantApproveRefund(context.Background(), merchant, refundOrder.ID)
+	if err != nil {
+		t.Fatalf("approve refund: %v", err)
+	}
+	refundedAgain, err := service.MerchantApproveRefund(context.Background(), merchant, refundOrder.ID)
+	if err != nil {
+		t.Fatalf("repeat approve refund: %v", err)
+	}
+	if refundedAgain.Status != "REFUNDED" || refundedAgain.ID != refunded.ID {
+		t.Fatalf("expected idempotent refunded order view, got %+v", refundedAgain)
+	}
+}
