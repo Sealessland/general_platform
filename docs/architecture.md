@@ -67,9 +67,9 @@ RedCart Copilot 当前 MVP 的代码映射如下：
 - 领域能力层：`backend/internal/order/domain`、`backend/internal/redcart/domain`
 - 集成适配层：`backend/internal/redcart/infrastructure/postgres`、`backend/internal/redcart/infrastructure/memory`、`backend/internal/ai`
 
-当前运行时数据库是 PostgreSQL。后端启动必须提供 `POSTGRES_DSN`，并由 PostgreSQL 仓储适配器负责迁移、种子数据和数据访问。内存仓储保留为服务层、HTTP 层测试和契约对齐用适配器，不作为当前 Docker Compose MVP 的运行时数据源。
+当前运行时数据库是 PostgreSQL。后端启动必须提供 `POSTGRES_DSN`，并由 PostgreSQL 仓储适配器负责迁移、种子数据和数据访问。内存仓储保留为服务层、HTTP 层测试和契约对齐用适配器，不作为当前 Docker Compose MVP 的运行时数据源。若提供 `REDIS_ADDR`，运行时会在 PostgreSQL 仓储外包一层 Redis 读侧适配器：认证 token 以 Redis 为共享会话源并带本地热缓存，商品、SKU 和 SKU 列表读路径优先命中 Redis；订单、库存、购物车和业务真相仍以 PostgreSQL 为准。
 
-HTTP 入口当前由 Gin 负责路由和 method gate，但 Gin 只停留在产品接口层；应用层和领域层不依赖 Gin 类型。AI 能力当前使用 Mock Provider，Redis 与 RabbitMQ 仍是规划中的适配目标，不是当前运行前置依赖。
+HTTP 入口当前由 Gin 负责路由和 method gate，但 Gin 只停留在产品接口层；应用层和领域层不依赖 Gin 类型。AI 能力当前使用 Mock Provider，RabbitMQ 仍是规划中的适配目标，不是当前运行前置依赖。Redis 当前只落地 session 与 catalog 热读适配，不承载库存预扣、购物车、幂等真相或订单事件总线职责。
 
 运行时性能分析当前支持可选的 Grafana Pyroscope Go push mode。接入点位于后端启动装配层，依赖环境变量启用，不向应用层或领域层泄漏供应商类型。
 

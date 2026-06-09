@@ -496,3 +496,58 @@ rtk bash scripts/validate-workspace.sh
 
 - `BRANCH_STATUS.local.md` 中的 AI 更改大纲依赖本地 `codex exec` 可用；若本地 Codex 不可用或超时，脚本会回退到 Git 事实摘要，但细节会变粗。
 - `PostToolUse` 只在可能改变 Git/worktree 状态的 Bash 命令后刷新状态板；纯查看类命令不会触发同步。
+
+## 2026-06-08：Redis session 适配层接入
+
+### AI 参与范围
+
+- 按当前架构文档和运行边界，将 Redis 的第一刀收敛到认证 session/token 存储，不扩展到库存预扣、购物车、订单真相或幂等真相。
+- 新增 Redis session 仓储装饰器，包裹 PostgreSQL 仓储；在提供 `REDIS_ADDR` 时把 token 写入 Redis，并在鉴权路径从 Redis 读取 user/merchant session 信息。
+- 更新 Docker Compose、启动脚本、测试策略和运行说明，让本地 MVP 默认可以跑 Redis session 路径。
+
+### 人工或主代理修正
+
+- 避免 Redis 开启时继续双写基础仓储 session map，否则 TTL 失效后会被进程内存错误兜底成长期有效 token。
+- 为 Redis 不可用场景保留带 TTL 的进程内 fallback，只做单实例兜底，不把它宣传成跨实例 session 方案。
+- 明确 Redis 当前只负责 session；订单、库存、购物车和业务真相仍然在 PostgreSQL。
+
+### 验证证据
+
+```bash
+rtk env GOCACHE=/tmp/go-build-cache go test ./cmd/api ./internal/redcart/infrastructure/redis ./internal/redcart/interfaces/httpapi
+rtk env GOCACHE=/tmp/go-build-cache go test ./...
+rtk bash scripts/validate-workspace.sh
+```
+
+### 剩余风险
+
+- Redis session 当前不做持久化配置；Docker Compose 里的 Redis 采用无 AOF/无 RDB 的开发配置，重启后 session 会失效。
+- Redis session 适配层当前只缓存鉴权所需的 user/merchant 最小字段；如果未来 `UserView` 的会话依赖字段扩展，需要同步扩展 session payload。
+
+## 2026-06-09：Redis 读侧适配收敛为系统增益版本
+
+### AI 参与范围
+
+- 将 Redis 方案从“每次请求都走 Redis session 读取”收敛为“Redis 共享会话源 + 本地热缓存”，避免为写路径平白增加网络往返。
+- 新增商品、SKU 和 SKU 列表的 Redis 热读缓存与写后失效，直接针对 `OrderPreview` 读路径和下单前的商品/SKU 校验路径提速。
+- 基于 Redis on/off 的 PostgreSQL HTTP benchmark 对照，确认保留这条线的理由是读路径系统增益，而不是写路径吞吐幻想。
+
+### 人工或主代理修正
+
+- 保持订单、库存、购物车和幂等真相仍然在 PostgreSQL，不因为缓存命中就改变交易一致性边界。
+- 在 `SaveOrderWithInventoryLocks` 后显式失效涉及下单 SKU 的缓存，避免用读缓存掩盖库存变化。
+- 接受当前结论：Redis 对 `CreateOrder` 吞吐没有明显提升，但对 `OrderPreview` 已经有明确收益，因此将 Redis 定位为读侧增益而不是写侧增益。
+
+### 验证证据
+
+```bash
+rtk env GOCACHE=/tmp/go-build-cache go test ./cmd/api ./internal/redcart/infrastructure/redis ./internal/redcart/interfaces/httpapi
+rtk docker compose up -d postgres redis
+rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable RUN_POSTGRES_INTEGRATION=1 POSTGRES_BENCHTIME=3s GOCACHE=/tmp/go-build-cache go test ./internal/redcart/interfaces/httpapi -run '^$' -bench 'BenchmarkHTTPPostgres(OrderPreview|CreateOrder)$' -benchmem
+rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable REDIS_ADDR=127.0.0.1:6379 RUN_POSTGRES_INTEGRATION=1 POSTGRES_BENCHTIME=3s GOCACHE=/tmp/go-build-cache go test ./internal/redcart/interfaces/httpapi -run '^$' -bench 'BenchmarkHTTPPostgres(OrderPreview|CreateOrder)$' -benchmem
+```
+
+### 剩余风险
+
+- 当前 Redis 读侧适配主要提升的是商品/SKU 热读路径；如果未来 SKU 更新频率升高，需要继续审视 TTL 与失效策略。
+- `CreateOrder` 吞吐仍主要受 PostgreSQL 事务写路径支配；继续追写路径收益需要更重的 Redis 预占库存或幂等设计，而不是继续加只读缓存。

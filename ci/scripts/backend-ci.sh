@@ -21,7 +21,7 @@ go vet ./...
 
 POSTGRES_DSN="${POSTGRES_DSN:-postgres://postgres:postgres@127.0.0.1:5432/redcart_test?sslmode=disable}" \
   go test ./... -coverprofile=coverage.out | tee "$ARTIFACT_DIR/backend-test.txt"
-go build -o /tmp/redcart-backend-api ./cmd/api
+go build -buildvcs=false -o /tmp/redcart-backend-api ./cmd/api
 
 POSTGRES_DSN="${POSTGRES_DSN:-postgres://postgres:postgres@127.0.0.1:5432/redcart_test?sslmode=disable}" \
   RUN_POSTGRES_INTEGRATION="${RUN_POSTGRES_INTEGRATION:-0}" \

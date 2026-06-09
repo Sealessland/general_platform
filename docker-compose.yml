@@ -13,6 +13,16 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7
+    network_mode: host
+    command: ["redis-server", "--port", "6379", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6379", "PING"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   pyroscope:
     image: grafana/pyroscope:latest
     network_mode: host
@@ -24,6 +34,7 @@ services:
     environment:
       HTTP_PORT: 18080
       POSTGRES_DSN: postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable
+      REDIS_ADDR: 127.0.0.1:6379
       AI_PROVIDER: mock
       PYROSCOPE_SERVER_ADDRESS: ${PYROSCOPE_SERVER_ADDRESS-http://127.0.0.1:4040}
       PYROSCOPE_APPLICATION_NAME: ${PYROSCOPE_APPLICATION_NAME-redcart.backend}
@@ -34,6 +45,8 @@ services:
       PYROSCOPE_BLOCK_PROFILE_RATE: ${PYROSCOPE_BLOCK_PROFILE_RATE:-}
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       pyroscope:
         condition: service_started
