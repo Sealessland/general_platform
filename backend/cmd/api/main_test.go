@@ -16,7 +16,7 @@ func TestEnvOrDefault(t *testing.T) {
 
 func TestInitRepositoryRequiresPostgresDSN(t *testing.T) {
 	t.Setenv("POSTGRES_DSN", "")
-	repo, cleanup, err := initRepository()
+	repo, cleanup, err := initRepository(nil)
 	if err == nil {
 		t.Fatal("expected missing POSTGRES_DSN error")
 	}

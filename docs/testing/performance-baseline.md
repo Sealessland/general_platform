@@ -64,6 +64,41 @@
 - 单次请求分配字节下降约 `49%`，分配次数下降约 `44%`。
 - 这次收益主要来自适配层内部的数据库往返减少和 GORM 运行时包装开销减少，不涉及业务语义变化。
 
+## 2026-06-09 Redis 读侧适配复测
+
+优化边界：
+
+- 保持订单、库存、购物车和幂等真相在 PostgreSQL
+- Redis 只接管 session 共享与商品/SKU/SKU 列表热读缓存
+
+优化动作：
+
+- session 改为 Redis 共享会话源，并增加本地热缓存，避免同实例每个请求都打 Redis
+- 为 `GetProduct`、`GetSKU`、`ListSKUsByProduct` 增加 Redis 热读缓存
+- 在 `SaveSKU` 与 `SaveOrderWithInventoryLocks` 后失效相关 SKU 和 SKU 列表缓存
+
+复测环境：
+
+- CPU：11th Gen Intel(R) Core(TM) i7-1185G7 @ 3.00GHz
+- PostgreSQL：Docker Compose 中的 `postgres:16`，本地端口 `127.0.0.1:15432`
+- Redis：Docker Compose 中的 `redis:7`，本地端口 `127.0.0.1:6379`
+- 基准命令：
+  - 无 Redis：`rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable RUN_POSTGRES_INTEGRATION=1 POSTGRES_BENCHTIME=3s GOCACHE=/tmp/go-build-cache go test ./internal/redcart/interfaces/httpapi -run '^$' -bench 'BenchmarkHTTPPostgres(OrderPreview|CreateOrder)$' -benchmem`
+  - 有 Redis：`rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable REDIS_ADDR=127.0.0.1:6379 RUN_POSTGRES_INTEGRATION=1 POSTGRES_BENCHTIME=3s GOCACHE=/tmp/go-build-cache go test ./internal/redcart/interfaces/httpapi -run '^$' -bench 'BenchmarkHTTPPostgres(OrderPreview|CreateOrder)$' -benchmem`
+
+复测数据：
+
+| Benchmark | 无 Redis QPS | 有 Redis QPS | 无 Redis ns/op | 有 Redis ns/op | 无 Redis B/op | 有 Redis B/op | 无 Redis allocs/op | 有 Redis allocs/op |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `BenchmarkHTTPPostgresOrderPreview-8` | 2677.63 | 4482.11 | 373610 | 223114 | 17582 | 14205 | 269 | 184 |
+| `BenchmarkHTTPPostgresCreateOrder-8` | 39.32 | 39.18 | 25431545 | 25524961 | 35154 | 31776 | 609 | 525 |
+
+复测结论：
+
+- Redis 读侧适配对 `OrderPreview` 路径带来明显系统增益，QPS 提升约 `67%`
+- `CreateOrder` 吞吐基本持平，但分配字节和分配次数继续下降
+- 当前 Redis 方案已经证明读路径收益成立；如果要继续提升下单吞吐，需要进一步进入库存预占或幂等路径设计
+
 ## 评估结论
 
 - 本基线数据来自 Gin handler -> 应用层 -> PostgreSQL 仓储适配层 -> 本地 Docker Compose PostgreSQL 的真实运行路径。

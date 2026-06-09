@@ -15,6 +15,7 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 	"github.com/example/redcart-copilot/backend/internal/redcart/infrastructure/memory"
 	postgresrepo "github.com/example/redcart-copilot/backend/internal/redcart/infrastructure/postgres"
+	redisrepo "github.com/example/redcart-copilot/backend/internal/redcart/infrastructure/redis"
 )
 
 var testUniqueCounter atomic.Int64
@@ -38,10 +39,35 @@ func newPostgresTestHandler(t testing.TB) (http.Handler, func()) {
 	if err != nil {
 		t.Fatalf("new postgres repository: %v", err)
 	}
-	service := application.NewService(repo, backendai.MockProvider{})
+	wrapped, redisCleanup := wrapPostgresRepoWithRedisForTest(t, repo)
+	service := application.NewService(wrapped, backendai.MockProvider{})
 	return NewServer(service).Handler(), func() {
+		redisCleanup()
 		if err := repo.Close(); err != nil {
 			t.Fatalf("close postgres repository: %v", err)
+		}
+	}
+}
+
+func wrapPostgresRepoWithRedisForTest(t testing.TB, base application.Repository) (application.Repository, func()) {
+	t.Helper()
+	addr := os.Getenv("REDIS_ADDR")
+	if addr == "" {
+		return base, func() {}
+	}
+
+	client, err := redisrepo.NewClient(addr)
+	if err != nil {
+		t.Fatalf("new redis client: %v", err)
+	}
+	ttl, err := redisrepo.SessionTTLFromEnv(os.Getenv("REDIS_SESSION_TTL"))
+	if err != nil {
+		_ = client.Close()
+		t.Fatalf("parse redis session ttl: %v", err)
+	}
+	return redisrepo.NewSessionRepository(base, client, ttl), func() {
+		if err := client.Close(); err != nil {
+			t.Fatalf("close redis client: %v", err)
 		}
 	}
 }

@@ -7,6 +7,7 @@
 ### 优化
 
 - 将 `git worktree` 升级为项目默认协作工作流，并增加 `scripts/git-worktree.sh` 与自动生成的 `BRANCH_STATUS.local.md` 本地状态板；Codex hook 会在相关 Git 操作后同步 worktree 状态和 AI 更改大纲。
+- 新增 Redis 读侧适配层：在提供 `REDIS_ADDR` 时，认证 session 改为 Redis 真相源并带本地热缓存，同时为商品、SKU 和 SKU 列表增加 Redis 热读缓存与写后失效；`OrderPreview` 基准显著提升，而 `CreateOrder` 维持基本持平。
 - 仅在 PostgreSQL 适配层优化写路径：将运行时 SQL 调用切到 `database/sql`，用 `INSERT/UPDATE ... RETURNING` 取代写后回读，并让订单写入阶段直接回填 `order_items.id` 与时间戳，减少下单热路径的数据库往返和对象分配。
 - 将 PR 与 `main` push 的统一门禁收敛到 `.github/workflows/ci.yml`。
 - 将后端、前端、AI service、安全和 Docker 子 workflow 保留为复用与手动运行入口。
