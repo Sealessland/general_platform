@@ -48,6 +48,15 @@ def stop(reason: str, details: list[str]) -> None:
     emit({"decision": "block", "reason": message})
 
 
+def sync_branch_status(mode: str = "full") -> int:
+    script = ROOT / "scripts" / "update-branch-status.py"
+    ok, output = run(rtk_args(["python3", str(script), mode]), cwd=ROOT)
+    if not ok:
+        print(output, file=sys.stderr)
+        return 1
+    return 0
+
+
 def command_text(data: dict[str, object]) -> str:
     tool_input = data.get("tool_input")
     if not isinstance(tool_input, dict):
@@ -90,6 +99,35 @@ def check_pre_tool_use(data: dict[str, object]) -> int:
         deny("RedCart workspace commands must be prefixed with `rtk` per AGENTS.md.")
         return 0
 
+    return 0
+
+
+def check_post_tool_use(data: dict[str, object]) -> int:
+    if data.get("tool_name") != "Bash":
+        return 0
+    command = command_text(data).strip()
+    if not command:
+        return 0
+    full_sync_tokens = (
+        "git commit",
+        "git push",
+    )
+    fast_sync_tokens = (
+        "git stash",
+        "git worktree",
+        "git branch",
+        "git switch",
+        "git checkout",
+        "git merge",
+        "git rebase",
+        "git cherry-pick",
+        "git pull",
+        "scripts/git-worktree.sh",
+    )
+    if any(token in command for token in full_sync_tokens):
+        return sync_branch_status("full")
+    if any(token in command for token in fast_sync_tokens):
+        return sync_branch_status("fast")
     return 0
 
 
@@ -237,6 +275,7 @@ def check_stop(mode: str) -> int:
 
     if failures:
         stop("RedCart project hook found unfinished handoff work.", failures)
+    sync_branch_status("full")
     return 0
 
 
@@ -261,10 +300,13 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", choices=("quick", "full"), default="quick")
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--sync-branch-status", action="store_true")
     args = parser.parse_args()
 
     if args.self_test:
         return self_test()
+    if args.sync_branch_status:
+        return sync_branch_status("full")
 
     raw = sys.stdin.read().strip()
     data: dict[str, object] = {}
@@ -280,6 +322,8 @@ def main() -> int:
     event = data.get("hook_event_name")
     if event == "PreToolUse":
         return check_pre_tool_use(data)
+    if event == "PostToolUse":
+        return check_post_tool_use(data)
     if event == "Stop" or not raw:
         return check_stop(args.mode)
     return 0

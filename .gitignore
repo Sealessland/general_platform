@@ -22,6 +22,7 @@ __pycache__/
 # Go
 bin/
 backend/api
+BRANCH_STATUS.local.md
 
 # OS/editor
 .DS_Store
