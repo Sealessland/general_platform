@@ -11,6 +11,7 @@ For recurring tasks, load only the matching workflow under `docs/workflows/`:
 
 - Feature work: `docs/workflows/add-feature.md`
 - Integration work: `docs/workflows/add-integration.md`
+- Git worktree coordination: `docs/workflows/git-worktree.md`
 - Debugging: `docs/workflows/debug.md`
 - Handoff validation: `docs/workflows/validate.md`
 

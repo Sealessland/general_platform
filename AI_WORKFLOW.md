@@ -469,3 +469,30 @@ rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmod
 
 - 这次优化依赖 PostgreSQL `RETURNING` 回填当前真正会变化的字段；如果后续在数据库侧新增会改写更多业务字段的 trigger 或规则，需要扩大 `RETURNING` 列表或恢复针对性回读。
 - 当前收益主要来自减少往返和分配，`CreateOrder` 仍然是多 SQL 事务写路径，若后续还要继续提吞吐，应直接分析 `SaveOrderWithInventoryLocks` 的 SQL 往返数和事件写入阶段耗时。
+
+## 2026-06-09：Git Worktree 工作流与本地分支状态板
+
+### AI 参与范围
+
+- 将 `git worktree` 提升为项目默认协作工作流，新增 `docs/workflows/git-worktree.md` 和 `scripts/git-worktree.sh`，让功能开发、性能 spike 和文档修订默认走独立 worktree。
+- 在项目本地 Codex hook 中增加分支状态同步能力：相关 Git 操作后的 `PostToolUse` 以及 `Stop` 阶段自动刷新主工作区根目录下的 `BRANCH_STATUS.local.md`。
+- 为状态板增加 AI 生成的“更改大纲”，让主工作区能快速看到各活跃 worktree 的意图、关键文件、行为变化、验证状态和风险阻塞。
+
+### 人工或主代理修正
+
+- 将 `BRANCH_STATUS.local.md` 设计为本地生成文件并加入 `.gitignore`，避免动态状态污染仓库历史。
+- 不让 hook 直接内联复杂摘要逻辑，而是调用独立脚本 `scripts/update-branch-status.py`；hook 只负责触发，脚本负责状态收集与 AI 摘要。
+- 为 AI 摘要调用增加 `--disable hooks`、只读 sandbox 和超时回退，避免递归触发 hook 或因为摘要生成拖死交付流程。
+
+### 验证证据
+
+```bash
+rtk bash scripts/git-worktree.sh list
+rtk python3 scripts/update-branch-status.py
+rtk bash scripts/validate-workspace.sh
+```
+
+### 剩余风险
+
+- `BRANCH_STATUS.local.md` 中的 AI 更改大纲依赖本地 `codex exec` 可用；若本地 Codex 不可用或超时，脚本会回退到 Git 事实摘要，但细节会变粗。
+- `PostToolUse` 只在可能改变 Git/worktree 状态的 Bash 命令后刷新状态板；纯查看类命令不会触发同步。

@@ -118,12 +118,22 @@ python3 -m http.server 4173 --bind 127.0.0.1
 
 ## 工程规则
 
-- 默认从 `main` 拉功能分支开发，不直接把功能改动推到主干。
+- 默认从 `main` 或当前稳定开发分支拉任务分支，并为每条工作线创建独立 `git worktree`。
+- 主工作区保持干净；性能 spike、中间件试验、QPS 对照和流程文档修改放到独立 worktree。
 - 订单、库存、金额、权限、数据库结构相关改动必须带测试。
 - 数据库结构变化必须更新 `backend/migrations/`。
 - API 行为变化必须同步更新 `docs/api/openapi.yaml`。
 - 架构边界变化必须同步 `docs/architecture.md` 或相关 ADR。
 - AI 参与的设计、实现或修正过程必须记录到 `AI_WORKFLOW.md` 或 PR 描述中。
+
+常用命令：
+
+```bash
+rtk bash scripts/git-worktree.sh create feature/my-task
+rtk bash scripts/git-worktree.sh list
+```
+
+主工作区根目录会自动生成 `BRANCH_STATUS.local.md`，记录当前 worktree 状态和 AI 生成的更改大纲；这是本地状态板，不提交进仓库。
 
 ## 验证要求
 
