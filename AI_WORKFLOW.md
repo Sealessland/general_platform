@@ -469,3 +469,113 @@ rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmod
 
 - 这次优化依赖 PostgreSQL `RETURNING` 回填当前真正会变化的字段；如果后续在数据库侧新增会改写更多业务字段的 trigger 或规则，需要扩大 `RETURNING` 列表或恢复针对性回读。
 - 当前收益主要来自减少往返和分配，`CreateOrder` 仍然是多 SQL 事务写路径，若后续还要继续提吞吐，应直接分析 `SaveOrderWithInventoryLocks` 的 SQL 往返数和事件写入阶段耗时。
+
+## 2026-06-09：Git Worktree 工作流与本地分支状态板
+
+### AI 参与范围
+
+- 将 `git worktree` 提升为项目默认协作工作流，新增 `docs/workflows/git-worktree.md` 和 `scripts/git-worktree.sh`，让功能开发、性能 spike 和文档修订默认走独立 worktree。
+- 在项目本地 Codex hook 中增加分支状态同步能力：相关 Git 操作后的 `PostToolUse` 以及 `Stop` 阶段自动刷新主工作区根目录下的 `BRANCH_STATUS.local.md`。
+- 为状态板增加 AI 生成的“更改大纲”，让主工作区能快速看到各活跃 worktree 的意图、关键文件、行为变化、验证状态和风险阻塞。
+
+### 人工或主代理修正
+
+- 将 `BRANCH_STATUS.local.md` 设计为本地生成文件并加入 `.gitignore`，避免动态状态污染仓库历史。
+- 不让 hook 直接内联复杂摘要逻辑，而是调用独立脚本 `scripts/update-branch-status.py`；hook 只负责触发，脚本负责状态收集与 AI 摘要。
+- 为 AI 摘要调用增加 `--disable hooks`、只读 sandbox 和超时回退，避免递归触发 hook 或因为摘要生成拖死交付流程。
+
+### 验证证据
+
+```bash
+rtk bash scripts/git-worktree.sh list
+rtk python3 scripts/update-branch-status.py
+rtk bash scripts/validate-workspace.sh
+```
+
+### 剩余风险
+
+- `BRANCH_STATUS.local.md` 中的 AI 更改大纲依赖本地 `codex exec` 可用；若本地 Codex 不可用或超时，脚本会回退到 Git 事实摘要，但细节会变粗。
+- `PostToolUse` 只在可能改变 Git/worktree 状态的 Bash 命令后刷新状态板；纯查看类命令不会触发同步。
+
+## 2026-06-08：Redis session 适配层接入
+
+### AI 参与范围
+
+- 按当前架构文档和运行边界，将 Redis 的第一刀收敛到认证 session/token 存储，不扩展到库存预扣、购物车、订单真相或幂等真相。
+- 新增 Redis session 仓储装饰器，包裹 PostgreSQL 仓储；在提供 `REDIS_ADDR` 时把 token 写入 Redis，并在鉴权路径从 Redis 读取 user/merchant session 信息。
+- 更新 Docker Compose、启动脚本、测试策略和运行说明，让本地 MVP 默认可以跑 Redis session 路径。
+
+### 人工或主代理修正
+
+- 避免 Redis 开启时继续双写基础仓储 session map，否则 TTL 失效后会被进程内存错误兜底成长期有效 token。
+- 为 Redis 不可用场景保留带 TTL 的进程内 fallback，只做单实例兜底，不把它宣传成跨实例 session 方案。
+- 明确 Redis 当前只负责 session；订单、库存、购物车和业务真相仍然在 PostgreSQL。
+
+### 验证证据
+
+```bash
+rtk env GOCACHE=/tmp/go-build-cache go test ./cmd/api ./internal/redcart/infrastructure/redis ./internal/redcart/interfaces/httpapi
+rtk env GOCACHE=/tmp/go-build-cache go test ./...
+rtk bash scripts/validate-workspace.sh
+```
+
+### 剩余风险
+
+- Redis session 当前不做持久化配置；Docker Compose 里的 Redis 采用无 AOF/无 RDB 的开发配置，重启后 session 会失效。
+- Redis session 适配层当前只缓存鉴权所需的 user/merchant 最小字段；如果未来 `UserView` 的会话依赖字段扩展，需要同步扩展 session payload。
+
+## 2026-06-09：Redis 读侧适配收敛为系统增益版本
+
+### AI 参与范围
+
+- 将 Redis 方案从“每次请求都走 Redis session 读取”收敛为“Redis 共享会话源 + 本地热缓存”，避免为写路径平白增加网络往返。
+- 新增商品、SKU 和 SKU 列表的 Redis 热读缓存与写后失效，直接针对 `OrderPreview` 读路径和下单前的商品/SKU 校验路径提速。
+- 基于 Redis on/off 的 PostgreSQL HTTP benchmark 对照，确认保留这条线的理由是读路径系统增益，而不是写路径吞吐幻想。
+
+### 人工或主代理修正
+
+- 保持订单、库存、购物车和幂等真相仍然在 PostgreSQL，不因为缓存命中就改变交易一致性边界。
+- 在 `SaveOrderWithInventoryLocks` 后显式失效涉及下单 SKU 的缓存，避免用读缓存掩盖库存变化。
+- 接受当前结论：Redis 对 `CreateOrder` 吞吐没有明显提升，但对 `OrderPreview` 已经有明确收益，因此将 Redis 定位为读侧增益而不是写侧增益。
+
+### 验证证据
+
+```bash
+rtk env GOCACHE=/tmp/go-build-cache go test ./cmd/api ./internal/redcart/infrastructure/redis ./internal/redcart/interfaces/httpapi
+rtk docker compose up -d postgres redis
+rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable RUN_POSTGRES_INTEGRATION=1 POSTGRES_BENCHTIME=3s GOCACHE=/tmp/go-build-cache go test ./internal/redcart/interfaces/httpapi -run '^$' -bench 'BenchmarkHTTPPostgres(OrderPreview|CreateOrder)$' -benchmem
+rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable REDIS_ADDR=127.0.0.1:6379 RUN_POSTGRES_INTEGRATION=1 POSTGRES_BENCHTIME=3s GOCACHE=/tmp/go-build-cache go test ./internal/redcart/interfaces/httpapi -run '^$' -bench 'BenchmarkHTTPPostgres(OrderPreview|CreateOrder)$' -benchmem
+```
+
+### 剩余风险
+
+- 当前 Redis 读侧适配主要提升的是商品/SKU 热读路径；如果未来 SKU 更新频率升高，需要继续审视 TTL 与失效策略。
+- `CreateOrder` 吞吐仍主要受 PostgreSQL 事务写路径支配；继续追写路径收益需要更重的 Redis 预占库存或幂等设计，而不是继续加只读缓存。
+
+## 2026-06-10：CreateOrder 关键路径响应组装优化
+
+### AI 参与范围
+
+- 分析 `CreateOrder` 成功路径的应用层和 PostgreSQL 仓储调用，定位首次成功返回时对 `order_events` 和 `inventory_locks` 的冗余回查。
+- 起草最小优化方案：复用刚写出的订单创建事件和库存锁，避免再次查询；同时识别显式传入 `items` 的直接购买路径上无意义的购物车删除。
+- 生成回归测试点，确保优化只影响关键路径性能，不改变订单创建返回结构和副作用语义。
+
+### 人工或主代理修正
+
+- 保持库存预锁、订单事务、幂等语义和 HTTP 返回字段不变，不把优化扩展到支付、退款、Redis 或 schema 调整。
+- 只让显式传入 `items` 的直接购买路径跳过 `DeleteSelectedCartItems`；当 `items` 为空、实际从已选购物车结算时，仍保留原有清理行为。
+- 要求仓储在 `SaveOrderWithInventoryLocks` 内把库存锁 `ID/OrderID` 回填给调用方，避免应用层为了响应拼装再次读仓储。
+
+### 验证证据
+
+```bash
+rtk env GOCACHE=/tmp/go-build-cache go test ./internal/redcart/application -run 'TestCreateOrderReturnsFreshMetadataWithoutRequeryingEventsOrLocks|TestCreateOrderWithExplicitItemsKeepsSelectedCartUntouched' -count=1
+rtk env GOCACHE=/tmp/go-build-cache go test ./... -count=1
+rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable RUN_POSTGRES_INTEGRATION=1 GOCACHE=/tmp/go-build-cache go test ./internal/redcart/interfaces/httpapi -run '^$' -bench BenchmarkHTTPPostgresCreateOrder -benchmem -count=1 -benchtime=2s
+rtk python3 .codex/hooks/redcart_project_hook.py --mode full
+```
+
+### 剩余风险
+
+- 当前收益只覆盖 `CreateOrder` 首次成功创建路径；支付确认、退款审批等后续写路径仍需单独 benchmark 和针对性优化。
+- 本次 benchmark 是单机本地 PostgreSQL 路径的复测结果，能说明相对收益，但不替代更高并发下的系统压测。

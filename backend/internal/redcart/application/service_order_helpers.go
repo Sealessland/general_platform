@@ -109,8 +109,8 @@ func buildInventoryLocks(items []domain.OrderItem, now time.Time) []domain.Inven
 	return locks
 }
 
-func (s *Service) recordOrderCreated(order domain.Order, actor Actor, now time.Time) {
-	_, _ = s.repo.AppendOrderEvent(domain.OrderEvent{
+func (s *Service) appendOrderCreatedEvent(order domain.Order, actor Actor, now time.Time) domain.OrderEvent {
+	event, _ := s.repo.AppendOrderEvent(domain.OrderEvent{
 		OrderID:      order.ID,
 		FromStatus:   "",
 		ToStatus:     string(orderdomain.StatusCreated),
@@ -120,6 +120,10 @@ func (s *Service) recordOrderCreated(order domain.Order, actor Actor, now time.T
 		Remark:       "order created",
 		CreatedAt:    now,
 	})
+	return event
+}
+
+func (s *Service) recordOrderCreateBehavior(order domain.Order, actor Actor, now time.Time) {
 	_, _ = s.repo.AppendBehaviorEvent(domain.BehaviorEvent{
 		UserID:     actor.UserID,
 		EventType:  domain.BehaviorOrderCreate,
@@ -127,6 +131,65 @@ func (s *Service) recordOrderCreated(order domain.Order, actor Actor, now time.T
 		MerchantID: order.MerchantID,
 		CreatedAt:  now,
 	})
+}
+
+func freshCreatedOrderView(order domain.Order, event domain.OrderEvent, locks []domain.InventoryLock) OrderView {
+	view := OrderView{
+		ID:                 order.ID,
+		OrderNo:            order.OrderNo,
+		UserID:             order.UserID,
+		MerchantID:         order.MerchantID,
+		Status:             string(order.Status),
+		TotalAmountCent:    order.TotalAmountCent,
+		PayAmountCent:      order.PayAmountCent,
+		DiscountAmountCent: order.DiscountAmountCent,
+		ReceiverName:       order.ReceiverName,
+		ReceiverPhone:      order.ReceiverPhone,
+		ReceiverAddress:    order.ReceiverAddress,
+		PaidAt:             order.PaidAt,
+		CancelledAt:        order.CancelledAt,
+		ShippedAt:          order.ShippedAt,
+		FinishedAt:         order.FinishedAt,
+		CreatedAt:          order.CreatedAt,
+		UpdatedAt:          order.UpdatedAt,
+		Items:              make([]OrderItemView, 0, len(order.Items)),
+		Events:             make([]OrderEventView, 0, 1),
+		InventoryLocks:     make([]InventoryLockView, 0, len(locks)),
+	}
+	for _, item := range order.Items {
+		view.Items = append(view.Items, OrderItemView{
+			ID:              item.ID,
+			ProductID:       item.ProductID,
+			SKUID:           item.SKUID,
+			ProductTitle:    item.ProductTitleSnapshot,
+			SKUName:         item.SKUNameSnapshot,
+			PriceCent:       item.PriceCentSnapshot,
+			Quantity:        item.Quantity,
+			TotalAmountCent: item.TotalAmountCent,
+		})
+	}
+	view.Events = append(view.Events, OrderEventView{
+		ID:           event.ID,
+		FromStatus:   event.FromStatus,
+		ToStatus:     event.ToStatus,
+		EventType:    event.EventType,
+		OperatorID:   event.OperatorID,
+		OperatorRole: event.OperatorRole,
+		Remark:       event.Remark,
+		CreatedAt:    event.CreatedAt,
+	})
+	for _, lock := range locks {
+		view.InventoryLocks = append(view.InventoryLocks, InventoryLockView{
+			ID:          lock.ID,
+			SKUID:       lock.SKUID,
+			Quantity:    lock.Quantity,
+			Status:      lock.Status,
+			LockedAt:    lock.LockedAt,
+			ConfirmedAt: lock.ConfirmedAt,
+			ReleasedAt:  lock.ReleasedAt,
+		})
+	}
+	return view
 }
 
 func (s *Service) buildOrderPreview(lines []checkoutLine) (*OrderPreview, error) {

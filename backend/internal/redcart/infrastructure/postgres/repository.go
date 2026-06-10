@@ -739,14 +739,17 @@ func (r *Repository) SaveOrderWithInventoryLocks(order domain.Order, locks []dom
 		}
 	}
 
-	for _, lock := range locks {
-		if _, err := tx.Exec(
+	for i := range locks {
+		lock := &locks[i]
+		if err := tx.QueryRow(
 			`INSERT INTO inventory_locks (order_id, sku_id, quantity, status, locked_at, confirmed_at, released_at, created_at, updated_at)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,COALESCE($8, CURRENT_TIMESTAMP),COALESCE($9, CURRENT_TIMESTAMP))`,
+			VALUES ($1,$2,$3,$4,$5,$6,$7,COALESCE($8, CURRENT_TIMESTAMP),COALESCE($9, CURRENT_TIMESTAMP))
+			RETURNING id, created_at, updated_at`,
 			order.ID, lock.SKUID, lock.Quantity, lock.Status, lock.LockedAt, lock.ConfirmedAt, lock.ReleasedAt, nullTime(lock.CreatedAt), nullTime(lock.UpdatedAt),
-		); err != nil {
+		).Scan(&lock.ID, &lock.CreatedAt, &lock.UpdatedAt); err != nil {
 			return domain.Order{}, err
 		}
+		lock.OrderID = order.ID
 	}
 
 	if err := tx.Commit(); err != nil {
