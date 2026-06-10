@@ -27,6 +27,44 @@
 | `BenchmarkHTTPPostgresOrderPreview-8` | 6962.58 | 143625 | Gin -> 应用层 -> PostgreSQL 读多查询路径 |
 | `BenchmarkHTTPPostgresCreateOrder-8` | 70.96 | 14091653 | Gin -> 应用层 -> PostgreSQL 写路径，覆盖幂等下单、事务、库存条件更新、订单明细和库存锁写入 |
 
+## 2026-06-10 CreateOrder 关键路径响应组装优化
+
+优化边界：
+
+- 仅修改 `backend/internal/redcart/application/service_order.go`
+- `backend/internal/redcart/application/service_order_helpers.go`
+- `backend/internal/redcart/infrastructure/{memory,postgres}/repository.go`
+- 不调整 OpenAPI、schema、库存规则、支付/退款状态机或 Redis 读侧
+
+优化原因：
+
+- `CreateOrder` 首次成功返回时，会额外调用 `ListOrderEvents(order.ID)` 和 `ListInventoryLocksByOrder(order.ID)`，只是为了把刚写入的事件和库存锁重新读一遍再返回给 HTTP。
+- 当请求体显式提供 `items` 时，这条路径仍会无条件执行一次 `DeleteSelectedCartItems(actor.UserID)`，而 benchmark 场景并不依赖购物车结算。
+
+优化动作：
+
+- 将订单创建成功响应改为直接复用刚写出的订单项、`ORDER_CREATED` 事件和库存锁，不再为这两部分做额外仓储回查。
+- 让内存仓储和 PostgreSQL 仓储在 `SaveOrderWithInventoryLocks` 内把库存锁 `ID/OrderID` 回填到调用方传入切片，保证应用层可直接构造返回值。
+- 仅在 `CreateOrder` 实际从“已选购物车项”结算时，才执行 `DeleteSelectedCartItems`；显式传入 `items` 的直接购买路径不再做无意义删除。
+
+复测环境：
+
+- CPU：11th Gen Intel(R) Core(TM) i7-1185G7 @ 3.00GHz
+- PostgreSQL：本地 `postgres:16`，端口 `127.0.0.1:15432`
+- 基准命令：`rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable RUN_POSTGRES_INTEGRATION=1 GOCACHE=/tmp/go-build-cache go test ./internal/redcart/interfaces/httpapi -run '^$' -bench BenchmarkHTTPPostgresCreateOrder -benchmem -count=1 -benchtime=2s`
+
+复测数据：
+
+| Benchmark | 优化前 QPS | 优化后 QPS | 优化前 ns/op | 优化后 ns/op | 优化前 B/op | 优化后 B/op | 优化前 allocs/op | 优化后 allocs/op |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `BenchmarkHTTPPostgresCreateOrder-8` | 59.46 | 73.16 | 16816738 | 13667673 | 34890 | 31426 | 587 | 495 |
+
+复测结论：
+
+- `CreateOrder` 关键路径 QPS 提升约 `23.0%`。
+- 单次请求分配字节下降约 `9.9%`，分配次数下降约 `15.7%`。
+- 收益主要来自减少首次成功创建订单响应里的冗余回查，以及避开显式下单路径上的无意义购物车删除。
+
 ## 2026-06-08 PostgreSQL 写路径适配层优化复测
 
 优化边界：

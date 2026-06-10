@@ -551,3 +551,31 @@ rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmod
 
 - 当前 Redis 读侧适配主要提升的是商品/SKU 热读路径；如果未来 SKU 更新频率升高，需要继续审视 TTL 与失效策略。
 - `CreateOrder` 吞吐仍主要受 PostgreSQL 事务写路径支配；继续追写路径收益需要更重的 Redis 预占库存或幂等设计，而不是继续加只读缓存。
+
+## 2026-06-10：CreateOrder 关键路径响应组装优化
+
+### AI 参与范围
+
+- 分析 `CreateOrder` 成功路径的应用层和 PostgreSQL 仓储调用，定位首次成功返回时对 `order_events` 和 `inventory_locks` 的冗余回查。
+- 起草最小优化方案：复用刚写出的订单创建事件和库存锁，避免再次查询；同时识别显式传入 `items` 的直接购买路径上无意义的购物车删除。
+- 生成回归测试点，确保优化只影响关键路径性能，不改变订单创建返回结构和副作用语义。
+
+### 人工或主代理修正
+
+- 保持库存预锁、订单事务、幂等语义和 HTTP 返回字段不变，不把优化扩展到支付、退款、Redis 或 schema 调整。
+- 只让显式传入 `items` 的直接购买路径跳过 `DeleteSelectedCartItems`；当 `items` 为空、实际从已选购物车结算时，仍保留原有清理行为。
+- 要求仓储在 `SaveOrderWithInventoryLocks` 内把库存锁 `ID/OrderID` 回填给调用方，避免应用层为了响应拼装再次读仓储。
+
+### 验证证据
+
+```bash
+rtk env GOCACHE=/tmp/go-build-cache go test ./internal/redcart/application -run 'TestCreateOrderReturnsFreshMetadataWithoutRequeryingEventsOrLocks|TestCreateOrderWithExplicitItemsKeepsSelectedCartUntouched' -count=1
+rtk env GOCACHE=/tmp/go-build-cache go test ./... -count=1
+rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable RUN_POSTGRES_INTEGRATION=1 GOCACHE=/tmp/go-build-cache go test ./internal/redcart/interfaces/httpapi -run '^$' -bench BenchmarkHTTPPostgresCreateOrder -benchmem -count=1 -benchtime=2s
+rtk python3 .codex/hooks/redcart_project_hook.py --mode full
+```
+
+### 剩余风险
+
+- 当前收益只覆盖 `CreateOrder` 首次成功创建路径；支付确认、退款审批等后续写路径仍需单独 benchmark 和针对性优化。
+- 本次 benchmark 是单机本地 PostgreSQL 路径的复测结果，能说明相对收益，但不替代更高并发下的系统压测。
