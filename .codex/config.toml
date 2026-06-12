@@ -10,6 +10,15 @@ command = '/usr/bin/python3 "$(git rev-parse --show-toplevel)/.codex/hooks/redca
 timeout = 10
 statusMessage = "Checking RedCart shell policy"
 
+[[hooks.PostToolUse]]
+matcher = "^Bash$"
+
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = '/usr/bin/python3 "$(git rev-parse --show-toplevel)/.codex/hooks/redcart_project_hook.py"'
+timeout = 20
+statusMessage = "Syncing branch status"
+
 [[hooks.Stop]]
 
 [[hooks.Stop.hooks]]

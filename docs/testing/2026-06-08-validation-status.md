@@ -45,12 +45,14 @@ rtk docker build -t redcart-ai-service:ci ai-service
 当前 hook 行为：
 
 - `PreToolUse`：拦截 Codex Bash 调用，要求本仓库 shell 命令使用 `rtk` 前缀，并阻止明显高风险的破坏性命令。
+- `PostToolUse`：在相关 Git/worktree/stash 操作后刷新主工作区根目录的 `BRANCH_STATUS.local.md`，同步 worktree 状态与 AI 更改大纲。
 - `Stop`：在 Codex 准备结束交付时运行 quick handoff gate，检查空白、OpenAPI、workspace 结构、测试入口未丢失，并按变更范围运行相关测试。
 
 手动验证命令：
 
 ```bash
 rtk python3 .codex/hooks/redcart_project_hook.py --self-test
+rtk python3 scripts/update-branch-status.py
 rtk python3 .codex/hooks/redcart_project_hook.py --mode quick
 rtk python3 .codex/hooks/redcart_project_hook.py --mode full
 ```
@@ -58,5 +60,6 @@ rtk python3 .codex/hooks/redcart_project_hook.py --mode full
 ## 剩余边界
 
 - `Stop` hook 默认使用 quick 模式，适合交付前兜底；完整 PostgreSQL 集成、benchmark、前端、AI service 和安全门禁仍应在高风险改动后手动运行 full 模式或对应 CI 脚本。
+- `BRANCH_STATUS.local.md` 是本地状态板，不提交进仓库；其 AI 更改大纲会在本地 Codex 不可用或超时时回退到 Git 事实摘要。
 - 项目本地 hook 需要在 Codex 的 `/hooks` 面板中被信任后才会自动运行；脚本修改后需要重新信任。
 - 前端仍未引入浏览器级 E2E 自动化；当前前端门禁是源码守卫、类型检查、lint 和构建。

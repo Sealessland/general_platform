@@ -34,6 +34,7 @@ required_files=(
   "docs/testing/2026-06-08-validation-status.md"
   "docs/workflows/add-feature.md"
   "docs/workflows/add-integration.md"
+  "docs/workflows/git-worktree.md"
   "docs/workflows/debug.md"
   "docs/workflows/validate.md"
   "docs/checklists/agent-native-completion.md"
@@ -74,7 +75,9 @@ required_files=(
   "ai-service/app/provider.py"
   "ai-service/app/check_prompts.py"
   "scripts/check-openapi.sh"
+  "scripts/git-worktree.sh"
   "scripts/scan-secrets.sh"
+  "scripts/update-branch-status.py"
   "scripts/validate-workspace.sh"
 )
 
@@ -103,11 +106,16 @@ grep -q "idempotency_key" backend/migrations/0001_init_schema.sql
 grep -q "AIProvider interface" backend/internal/ai/provider.go
 grep -q "完成证据" docs/workflows/add-feature.md
 grep -q "完成证据" docs/workflows/add-integration.md
+grep -q "git worktree" docs/workflows/git-worktree.md
 grep -q "完成证据" docs/workflows/debug.md
 grep -q "CHANGELOG.md" docs/workflows/validate.md
 grep -q "bash scripts/validate-workspace.sh" README.md
+grep -q "scripts/git-worktree.sh" README.md
+grep -q "BRANCH_STATUS.local.md" README.md
+grep -q "BRANCH_STATUS.local.md" docs/workflows/git-worktree.md
 grep -q "docs/index.md" AGENTS.md
 grep -q "redcart_project_hook.py" .codex/config.toml
+grep -q "PostToolUse" .codex/config.toml
 grep -q "Project-scoped Codex hook" .codex/hooks/redcart_project_hook.py
 grep -q "项目专用 Codex Hook" docs/testing/2026-06-08-validation-status.md
 

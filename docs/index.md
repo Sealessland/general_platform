@@ -19,6 +19,7 @@
 - AI Native 开发工作流：`../AI_WORKFLOW.md`
 - 新增或修改功能：`workflows/add-feature.md`
 - 新增集成或适配器：`workflows/add-integration.md`
+- Git worktree 协作：`workflows/git-worktree.md`
 - 排查故障：`workflows/debug.md`
 - 交付前验证：`workflows/validate.md`
 
@@ -36,5 +37,6 @@
 - 本地 agent 注册：`../.agents/README.md`
 - Codex 技能入口：`../.codex/skills/agent-native-shop/SKILL.md`
 - 项目 Codex hook：`../.codex/config.toml`、`../.codex/hooks/redcart_project_hook.py`
+- 本地状态板：`../BRANCH_STATUS.local.md`（自动生成，不提交）
 
 面向 agent 的文件只负责路由，不重复维护业务事实；稳定事实统一落到 `docs/`。
