@@ -23,6 +23,7 @@ __pycache__/
 bin/
 backend/api
 BRANCH_STATUS.local.md
+.aidev-local/
 
 # OS/editor
 .DS_Store
