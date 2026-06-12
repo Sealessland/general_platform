@@ -4,10 +4,11 @@
 
 - 领域层测试：订单状态机、金额规则、库存规则
 - 应用层测试：注册登录、购物车选择结算、下单、幂等重试、支付、取消、退款、库存恢复、商家商品/SKU、dashboard、AI 任务状态
-- 集成测试：PostgreSQL 迁移、Redis 库存锁、事件链路
+- 集成测试：PostgreSQL 迁移、Redis session/catalog 读侧适配器、事件链路
 - 契约测试：OpenAPI 与 AI Provider 契约，AI Provider 覆盖商品卖点和经营复盘 mock 输出与非法输入
 - HTTP 测试：认证、目录、购物车、结算、商家商品/SKU、商家订单、dashboard、AI 任务接口、非法输入和非法状态流转
 - PostgreSQL-backed HTTP 测试：在 `RUN_POSTGRES_INTEGRATION=1` 时验证 Gin -> 应用层 -> PostgreSQL/GORM 的真实运行路径，包括主链路、并发库存、库存补偿、错误 method、越权和库存不足无副作用
+- Redis 读侧测试：验证 session token 写入 Redis、TTL 解析、商品/SKU 缓存命中、跨实例 Redis 读取和写后失效
 - 前端测试：类型检查、lint、构建与源码守卫，覆盖金额格式、库存计算、幂等键、购物车、dashboard 和 AI API 调用入口
 
 ## 质量门禁
@@ -69,6 +70,7 @@
 - `backend/internal/redcart/infrastructure/memory/repository_test.go` 覆盖内存仓储的种子数据、clone 边界、用户/session/商家、目录读取、购物车、订单库存锁、事件列表和 AI task 基础路径。
 - `backend/internal/redcart/infrastructure/postgres/repository_helpers_test.go` 覆盖 PostgreSQL 仓储适配器的 row scanner、nullable helper、迁移文件解析和 GORM result 适配，不依赖真实数据库。
 - `backend/internal/redcart/infrastructure/postgres/repository_integration_test.go` 在 `RUN_POSTGRES_INTEGRATION=1` 时覆盖真实 PostgreSQL 下的用户/商家、笔记更新、商品/SKU、购物车、订单保存与列表、库存锁、行为事件和 AI task 读写。
+- `backend/internal/redcart/infrastructure/redis/session_repository_test.go` 与 `catalog_cache_repository_test.go` 覆盖 Redis session token 存取、TTL 解析、商品/SKU 热缓存、跨实例 Redis 读取和写后失效行为。
 - `backend/internal/redcart/application/service_test.go` 以及 `service_auth_additional_test.go`、`service_checkout_additional_test.go`、`service_order_additional_test.go`、`service_merchant_dashboard_additional_test.go`、`service_ai_additional_test.go` 覆盖幂等下单、退款库存恢复、注册/登录、内容/商品读取、购物车选择结算、checkout 校验、订单权限边界、非法状态流转、商家商品/SKU、dashboard、AI 任务成功/失败落库。
 - `backend/internal/redcart/interfaces/httpapi/server_test.go`、`server_cart_test.go`、`server_orders_test.go`、`server_merchant_test.go`、`server_ai_test.go`、`server_postgres_test.go`、`server_benchmark_test.go` 和 `server_test_helpers_test.go` 覆盖消费者主链路、退款与 AI 生成、写操作 method gate、未登录拒绝、基础路由/CORS/404、认证和目录负向、购物车增删改、订单列表/详情、订单非法输入和状态冲突、商家商品/SKU、dashboard、AI business review、任务读取边界、PostgreSQL-backed HTTP 集成路径和 HTTP benchmark。
 - PostgreSQL-backed HTTP 测试在 `RUN_POSTGRES_INTEGRATION=1` 时覆盖真实 Gin -> 应用层 -> PostgreSQL/GORM 路径，包括主链路、并发库存、库存补偿、库存不足无副作用、错误 method 和越权。
