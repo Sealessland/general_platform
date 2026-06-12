@@ -29,6 +29,7 @@ required_files=(
   "docs/adr/0002-order-state-machine.md"
   "docs/adr/0003-inventory-lock-strategy.md"
   "docs/adr/0004-ai-provider-abstraction.md"
+  "docs/adr/0005-service-boundaries-and-rpc.md"
   "docs/testing/test-strategy.md"
   "docs/testing/e2e-cases.md"
   "docs/testing/2026-06-08-validation-status.md"

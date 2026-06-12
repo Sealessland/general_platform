@@ -31,6 +31,14 @@
 - 已确认风险归档：`testing/2026-06-05-risk-audit.md`
 - 当前验证状态：`testing/2026-06-08-validation-status.md`
 
+## 架构决策
+
+- 使用 monorepo：`adr/0001-use-monorepo.md`
+- 订单状态机：`adr/0002-order-state-machine.md`
+- 库存锁策略：`adr/0003-inventory-lock-strategy.md`
+- AI Provider 抽象：`adr/0004-ai-provider-abstraction.md`
+- 服务边界与 RPC 使用场景：`adr/0005-service-boundaries-and-rpc.md`
+
 ## 关键行为
 
 - 订单状态变更幂等：`architecture/order-action-idempotency.md`
