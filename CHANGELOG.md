@@ -28,6 +28,13 @@
 - 增加项目专用 Codex hook，在本仓库交付前检查 `rtk` 命令约束、测试入口保留、OpenAPI 和 workspace 门禁。
 - 归档 2026-06-08 本地全量验证状态，记录后端、前端、AI service、安全、OpenAPI、workspace 和 Docker build 通过证据。
 
+### 新增
+
+- 按 ADR 0005 把 AI Copilot 接入 gRPC：新增 `api/proto/ai/v1/ai.proto`、生成 Go/Python stub、`backend/internal/ai/grpc` 客户端、`ai-service/app/grpc_server.py` 服务端，以及 `scripts/generate-ai-grpc.sh` 生成脚本。
+- 后端通过 `AI_PROVIDER=grpc` 与 `AI_GRPC_ADDR` 调用独立 `ai-service`；默认 Docker Compose 启动带 gRPC 端口的 `ai-service` 容器。
+- 新增 gRPC 客户端与服务端单元测试；扫描脚本排除 `*/.venv/*` 以避免本地 Python 虚拟环境触发密钥误报。
+- 更新 `docs/architecture.md`，记录 AI 服务作为内部 gRPC 边界。
+
 ## [0.1.0] - 2026-06-05
 
 ### 新增
