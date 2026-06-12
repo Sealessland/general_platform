@@ -99,6 +99,9 @@ func (s *Service) PayOrder(ctx context.Context, actor Actor, orderID int64) (*Or
 	if !ok || order.UserID != actor.UserID {
 		return nil, newError(ErrorNotFound, "order not found")
 	}
+	if payAlreadyApplied(order) {
+		return s.currentOrderView(order)
+	}
 	if err := orderdomain.Transition(order.Status, orderdomain.StatusPaid); err != nil {
 		return nil, newError(ErrorConflict, err.Error())
 	}
@@ -159,6 +162,9 @@ func (s *Service) CancelOrder(ctx context.Context, actor Actor, orderID int64) (
 	if !ok || order.UserID != actor.UserID {
 		return nil, newError(ErrorNotFound, "order not found")
 	}
+	if cancelAlreadyApplied(order) {
+		return s.currentOrderView(order)
+	}
 	if err := orderdomain.Transition(order.Status, orderdomain.StatusCancelled); err != nil {
 		return nil, newError(ErrorConflict, err.Error())
 	}
@@ -203,6 +209,9 @@ func (s *Service) FinishOrder(ctx context.Context, actor Actor, orderID int64) (
 	if !ok || order.UserID != actor.UserID {
 		return nil, newError(ErrorNotFound, "order not found")
 	}
+	if finishAlreadyApplied(order) {
+		return s.currentOrderView(order)
+	}
 	if err := orderdomain.Transition(order.Status, orderdomain.StatusFinished); err != nil {
 		return nil, newError(ErrorConflict, err.Error())
 	}
@@ -236,6 +245,9 @@ func (s *Service) RequestRefund(ctx context.Context, actor Actor, orderID int64,
 	order, ok := s.repo.GetOrder(orderID)
 	if !ok || order.UserID != actor.UserID {
 		return nil, newError(ErrorNotFound, "order not found")
+	}
+	if refundAlreadyApplied(order) {
+		return s.currentOrderView(order)
 	}
 	if err := orderdomain.Transition(order.Status, orderdomain.StatusRefunding); err != nil {
 		return nil, newError(ErrorConflict, err.Error())

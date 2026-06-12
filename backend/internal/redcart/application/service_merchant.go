@@ -174,6 +174,9 @@ func (s *Service) MerchantShipOrder(ctx context.Context, actor Actor, orderID in
 	if !ok || order.MerchantID != actor.MerchantID {
 		return nil, newError(ErrorNotFound, "order not found")
 	}
+	if shipAlreadyApplied(order) {
+		return s.currentOrderView(order)
+	}
 	if err := orderdomain.Transition(order.Status, orderdomain.StatusShipped); err != nil {
 		return nil, newError(ErrorConflict, err.Error())
 	}
@@ -207,6 +210,9 @@ func (s *Service) MerchantApproveRefund(ctx context.Context, actor Actor, orderI
 	order, ok := s.repo.GetOrder(orderID)
 	if !ok || order.MerchantID != actor.MerchantID {
 		return nil, newError(ErrorNotFound, "order not found")
+	}
+	if refundApproveAlreadyApplied(order) {
+		return s.currentOrderView(order)
 	}
 	if err := orderdomain.Transition(order.Status, orderdomain.StatusRefunded); err != nil {
 		return nil, newError(ErrorConflict, err.Error())

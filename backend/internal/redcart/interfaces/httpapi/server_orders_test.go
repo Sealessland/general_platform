@@ -180,3 +180,67 @@ func TestOrderHTTPValidationAndStateConflicts(t *testing.T) {
 		"reason": "too late",
 	}, http.StatusConflict)
 }
+
+func TestOrderActionHTTPReturnsCurrentViewOnRepeatSuccess(t *testing.T) {
+	handler := newTestHandler()
+	consumerToken := loginAndGetToken(t, handler, map[string]any{
+		"phone":    "13800000001",
+		"password": "consumer-demo",
+	})
+	merchantToken := loginAndGetToken(t, handler, map[string]any{
+		"phone":    "13800000002",
+		"password": "merchant-demo",
+	})
+
+	order := requestJSON(t, handler, http.MethodPost, "/api/orders", consumerToken, map[string]any{
+		"items": []map[string]any{
+			{"sku_id": 1, "quantity": 1},
+		},
+		"receiver_name":    "Alice",
+		"receiver_phone":   "13800000001",
+		"receiver_address": "Shanghai",
+	}, http.StatusCreated, headerKV{"Idempotency-Key", "repeat-success-order-001"})
+	orderID := int(order["id"].(float64))
+
+	paid := requestJSON(t, handler, http.MethodPost, pathf("/api/orders/%d/pay", orderID), consumerToken, nil, http.StatusOK)
+	paidAgain := requestJSON(t, handler, http.MethodPost, pathf("/api/orders/%d/pay", orderID), consumerToken, nil, http.StatusOK)
+	if paidAgain["status"].(string) != "PAID" || int(paidAgain["id"].(float64)) != int(paid["id"].(float64)) {
+		t.Fatalf("expected idempotent paid response, got %+v", paidAgain)
+	}
+
+	shipped := requestJSON(t, handler, http.MethodPost, pathf("/api/merchant/orders/%d/ship", orderID), merchantToken, map[string]any{
+		"logistics_no": "SF123456",
+	}, http.StatusOK)
+	shippedAgain := requestJSON(t, handler, http.MethodPost, pathf("/api/merchant/orders/%d/ship", orderID), merchantToken, map[string]any{
+		"logistics_no": "SF123456",
+	}, http.StatusOK)
+	if shippedAgain["status"].(string) != "SHIPPED" || int(shippedAgain["id"].(float64)) != int(shipped["id"].(float64)) {
+		t.Fatalf("expected idempotent shipped response, got %+v", shippedAgain)
+	}
+
+	finished := requestJSON(t, handler, http.MethodPost, pathf("/api/orders/%d/finish", orderID), consumerToken, nil, http.StatusOK)
+	finishedAgain := requestJSON(t, handler, http.MethodPost, pathf("/api/orders/%d/finish", orderID), consumerToken, nil, http.StatusOK)
+	if finishedAgain["status"].(string) != "FINISHED" || int(finishedAgain["id"].(float64)) != int(finished["id"].(float64)) {
+		t.Fatalf("expected idempotent finished response, got %+v", finishedAgain)
+	}
+
+	refundOrder := requestJSON(t, handler, http.MethodPost, "/api/orders", consumerToken, map[string]any{
+		"items": []map[string]any{
+			{"sku_id": 3, "quantity": 1},
+		},
+		"receiver_name":    "Alice",
+		"receiver_phone":   "13800000001",
+		"receiver_address": "Hangzhou",
+	}, http.StatusCreated, headerKV{"Idempotency-Key", "repeat-success-order-002"})
+	refundOrderID := int(refundOrder["id"].(float64))
+	_ = requestJSON(t, handler, http.MethodPost, pathf("/api/orders/%d/pay", refundOrderID), consumerToken, nil, http.StatusOK)
+	refunding := requestJSON(t, handler, http.MethodPost, pathf("/api/orders/%d/refund", refundOrderID), consumerToken, map[string]any{
+		"reason": "size mismatch",
+	}, http.StatusAccepted)
+	refundingAgain := requestJSON(t, handler, http.MethodPost, pathf("/api/orders/%d/refund", refundOrderID), consumerToken, map[string]any{
+		"reason": "size mismatch",
+	}, http.StatusAccepted)
+	if refundingAgain["status"].(string) != "REFUNDING" || int(refundingAgain["id"].(float64)) != int(refunding["id"].(float64)) {
+		t.Fatalf("expected idempotent refund response, got %+v", refundingAgain)
+	}
+}

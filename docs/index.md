@@ -31,6 +31,10 @@
 - 已确认风险归档：`testing/2026-06-05-risk-audit.md`
 - 当前验证状态：`testing/2026-06-08-validation-status.md`
 
+## 关键行为
+
+- 订单状态变更幂等：`architecture/order-action-idempotency.md`
+
 ## Agent 路由
 
 - 仓库级说明：`../AGENTS.md`

@@ -67,3 +67,35 @@ func TestMerchantProductSKUAndDashboardHTTP(t *testing.T) {
 	_ = requestJSON(t, handler, http.MethodGet, "/api/merchant/dashboard/products", merchantToken, nil, http.StatusOK)
 	_ = requestJSON(t, handler, http.MethodGet, "/api/merchant/dashboard/summary", merchantToken, nil, http.StatusOK)
 }
+
+func TestMerchantRefundApproveReturnsCurrentViewOnRepeatSuccess(t *testing.T) {
+	handler := newTestHandler()
+	consumerToken := loginAndGetToken(t, handler, map[string]any{
+		"phone":    "13800000001",
+		"password": "consumer-demo",
+	})
+	merchantToken := loginAndGetToken(t, handler, map[string]any{
+		"phone":    "13800000002",
+		"password": "merchant-demo",
+	})
+
+	order := requestJSON(t, handler, http.MethodPost, "/api/orders", consumerToken, map[string]any{
+		"items": []map[string]any{
+			{"sku_id": 3, "quantity": 1},
+		},
+		"receiver_name":    "Alice",
+		"receiver_phone":   "13800000001",
+		"receiver_address": "Hangzhou",
+	}, http.StatusCreated, headerKV{"Idempotency-Key", "merchant-refund-repeat-001"})
+	orderID := int(order["id"].(float64))
+	_ = requestJSON(t, handler, http.MethodPost, pathf("/api/orders/%d/pay", orderID), consumerToken, nil, http.StatusOK)
+	_ = requestJSON(t, handler, http.MethodPost, pathf("/api/orders/%d/refund", orderID), consumerToken, map[string]any{
+		"reason": "size mismatch",
+	}, http.StatusAccepted)
+
+	refunded := requestJSON(t, handler, http.MethodPost, pathf("/api/merchant/orders/%d/refund/approve", orderID), merchantToken, nil, http.StatusOK)
+	refundedAgain := requestJSON(t, handler, http.MethodPost, pathf("/api/merchant/orders/%d/refund/approve", orderID), merchantToken, nil, http.StatusOK)
+	if refundedAgain["status"].(string) != "REFUNDED" || int(refundedAgain["id"].(float64)) != int(refunded["id"].(float64)) {
+		t.Fatalf("expected idempotent refunded response, got %+v", refundedAgain)
+	}
+}
