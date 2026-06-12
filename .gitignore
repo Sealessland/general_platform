@@ -22,6 +22,7 @@ __pycache__/
 # Go
 bin/
 backend/api
+backend/.bin/
 BRANCH_STATUS.local.md
 .aidev-local/
 

@@ -43,7 +43,8 @@ while IFS= read -r file; do
 done < <(find . -type f \
   -not -path './.git/*' \
   -not -path './frontend/node_modules/*' \
-  -not -path './frontend/dist/*')
+  -not -path './frontend/dist/*' \
+  -not -path '*/.venv/*')
 
 rm -f /tmp/redcart-secret-match
 
