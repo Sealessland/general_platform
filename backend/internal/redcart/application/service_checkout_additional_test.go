@@ -10,6 +10,22 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/infrastructure/memory"
 )
 
+type createOrderProbeRepo struct {
+	application.Repository
+	listOrderEventsCalls    int
+	listInventoryLocksCalls int
+}
+
+func (r *createOrderProbeRepo) ListOrderEvents(orderID int64) []domain.OrderEvent {
+	r.listOrderEventsCalls++
+	return r.Repository.ListOrderEvents(orderID)
+}
+
+func (r *createOrderProbeRepo) ListInventoryLocksByOrder(orderID int64) []domain.InventoryLock {
+	r.listInventoryLocksCalls++
+	return r.Repository.ListInventoryLocksByOrder(orderID)
+}
+
 func TestCartSelectionAndCheckoutFromSelectedItems(t *testing.T) {
 	t.Parallel()
 
@@ -138,5 +154,69 @@ func TestCreateOrderPersistsCreationSideEffects(t *testing.T) {
 	}
 	if !foundBehaviorEvent {
 		t.Fatalf("expected order create behavior event for order %d", order.ID)
+	}
+}
+
+func TestCreateOrderReturnsFreshMetadataWithoutRequeryingEventsOrLocks(t *testing.T) {
+	t.Parallel()
+
+	repo := &createOrderProbeRepo{Repository: memory.NewRepository()}
+	service := application.NewService(repo, backendai.MockProvider{})
+	actor := application.Actor{UserID: 1, Role: domain.RoleConsumer}
+
+	order, err := service.CreateOrder(context.Background(), actor, "no-requery-create-order", application.CheckoutInput{
+		Items:           []application.OrderLineInput{{SKUID: 1, Quantity: 1}},
+		ReceiverName:    "Alice",
+		ReceiverPhone:   "13800000001",
+		ReceiverAddress: "Shanghai",
+	})
+	if err != nil {
+		t.Fatalf("create order: %v", err)
+	}
+	if len(order.Events) != 1 || order.Events[0].EventType != "ORDER_CREATED" {
+		t.Fatalf("expected created order event in response, got %+v", order.Events)
+	}
+	if len(order.InventoryLocks) != 1 || order.InventoryLocks[0].Status != domain.InventoryLockStatusLocked {
+		t.Fatalf("expected locked inventory in response, got %+v", order.InventoryLocks)
+	}
+	if repo.listOrderEventsCalls != 0 {
+		t.Fatalf("expected no ListOrderEvents requery on fresh create response, got %d", repo.listOrderEventsCalls)
+	}
+	if repo.listInventoryLocksCalls != 0 {
+		t.Fatalf("expected no ListInventoryLocksByOrder requery on fresh create response, got %d", repo.listInventoryLocksCalls)
+	}
+}
+
+func TestCreateOrderWithExplicitItemsKeepsSelectedCartUntouched(t *testing.T) {
+	t.Parallel()
+
+	repo := memory.NewRepository()
+	service := application.NewService(repo, backendai.MockProvider{})
+	actor := application.Actor{UserID: 1, Role: domain.RoleConsumer}
+
+	before, err := service.GetCart(context.Background(), actor)
+	if err != nil {
+		t.Fatalf("get cart before create order: %v", err)
+	}
+	if len(before.Items) == 0 {
+		t.Fatal("expected seeded selected cart item")
+	}
+
+	_, err = service.CreateOrder(context.Background(), actor, "explicit-items-no-cart-delete", application.CheckoutInput{
+		Items:           []application.OrderLineInput{{SKUID: 3, Quantity: 1}},
+		ReceiverName:    "Alice",
+		ReceiverPhone:   "13800000001",
+		ReceiverAddress: "Shanghai",
+	})
+	if err != nil {
+		t.Fatalf("create order with explicit items: %v", err)
+	}
+
+	after, err := service.GetCart(context.Background(), actor)
+	if err != nil {
+		t.Fatalf("get cart after create order: %v", err)
+	}
+	if len(after.Items) != len(before.Items) || after.Items[0].ID != before.Items[0].ID {
+		t.Fatalf("expected explicit-item create order to keep cart unchanged, before=%+v after=%+v", before.Items, after.Items)
 	}
 }

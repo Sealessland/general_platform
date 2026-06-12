@@ -28,6 +28,7 @@ func (s *Service) CreateOrder(ctx context.Context, actor Actor, idempotencyKey s
 	if idempotencyKey == "" {
 		return nil, newError(ErrorInvalidArgument, "idempotency key is required")
 	}
+	clearSelectedCartItems := len(input.Items) == 0
 	if existing, ok := s.repo.FindOrderByUserAndIdempotency(actor.UserID, idempotencyKey); ok {
 		view, err := s.enrichOrderView(existing)
 		if err != nil {
@@ -56,12 +57,12 @@ func (s *Service) CreateOrder(ctx context.Context, actor Actor, idempotencyKey s
 		}
 		return nil, err
 	}
-	s.recordOrderCreated(saved, actor, now)
-	_ = s.repo.DeleteSelectedCartItems(actor.UserID)
-	view, err := s.enrichOrderView(saved)
-	if err != nil {
-		return nil, err
+	event := s.appendOrderCreatedEvent(saved, actor, now)
+	s.recordOrderCreateBehavior(saved, actor, now)
+	if clearSelectedCartItems {
+		_ = s.repo.DeleteSelectedCartItems(actor.UserID)
 	}
+	view := freshCreatedOrderView(saved, event, locks)
 	return &view, nil
 }
 

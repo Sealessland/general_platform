@@ -29,11 +29,11 @@ type Repository struct {
 }
 
 type gormSQL struct {
-	db *gorm.DB
+	db *sql.DB
 }
 
 type gormTx struct {
-	db *gorm.DB
+	tx *sql.Tx
 }
 
 type gormResult struct {
@@ -41,44 +41,39 @@ type gormResult struct {
 }
 
 func (g *gormSQL) QueryRow(query string, args ...any) *sql.Row {
-	return g.db.Raw(query, args...).Row()
+	return g.db.QueryRow(query, args...)
 }
 
 func (g *gormSQL) Query(query string, args ...any) (*sql.Rows, error) {
-	return g.db.Raw(query, args...).Rows()
+	return g.db.Query(query, args...)
 }
 
 func (g *gormSQL) Exec(query string, args ...any) (sql.Result, error) {
-	result := g.db.Exec(query, args...)
-	if result.Error != nil {
-		return nil, result.Error
-	}
-	return gormResult{rowsAffected: result.RowsAffected}, nil
+	return g.db.Exec(query, args...)
 }
 
 func (g *gormSQL) Begin() (*gormTx, error) {
-	tx := g.db.Begin()
-	return &gormTx{db: tx}, tx.Error
+	tx, err := g.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	return &gormTx{tx: tx}, nil
 }
 
 func (tx *gormTx) QueryRow(query string, args ...any) *sql.Row {
-	return tx.db.Raw(query, args...).Row()
+	return tx.tx.QueryRow(query, args...)
 }
 
 func (tx *gormTx) Exec(query string, args ...any) (sql.Result, error) {
-	result := tx.db.Exec(query, args...)
-	if result.Error != nil {
-		return nil, result.Error
-	}
-	return gormResult{rowsAffected: result.RowsAffected}, nil
+	return tx.tx.Exec(query, args...)
 }
 
 func (tx *gormTx) Commit() error {
-	return tx.db.Commit().Error
+	return tx.tx.Commit()
 }
 
 func (tx *gormTx) Rollback() error {
-	return tx.db.Rollback().Error
+	return tx.tx.Rollback()
 }
 
 func (r gormResult) LastInsertId() (int64, error) {
@@ -112,7 +107,7 @@ func NewRepository(dsn string) (*Repository, error) {
 	}
 
 	repo := &Repository{
-		db:       &gormSQL{db: db},
+		db:       &gormSQL{db: sqlDB},
 		gormDB:   db,
 		sqlDB:    sqlDB,
 		sessions: make(map[string]int64),
@@ -451,18 +446,19 @@ RETURNING id, created_at, updated_at`
 		}
 		return product, nil
 	}
-	_, err = r.db.Exec(
-		`UPDATE products SET merchant_id = $1, title = $2, description = $3, cover_url = $4, category_id = $5, status = $6, selling_points = $7::jsonb WHERE id = $8`,
+	err = r.db.QueryRow(
+		`UPDATE products SET merchant_id = $1, title = $2, description = $3, cover_url = $4, category_id = $5, status = $6, selling_points = $7::jsonb
+		WHERE id = $8
+		RETURNING created_at, updated_at`,
 		product.MerchantID, product.Title, product.Description, product.CoverURL, product.CategoryID, product.Status, string(payload), product.ID,
-	)
+	).Scan(&product.CreatedAt, &product.UpdatedAt)
+	if err == sql.ErrNoRows {
+		return domain.Product{}, fmt.Errorf("product not found after update")
+	}
 	if err != nil {
 		return domain.Product{}, err
 	}
-	updated, ok := r.GetProduct(product.ID)
-	if !ok {
-		return domain.Product{}, fmt.Errorf("product not found after update")
-	}
-	return updated, nil
+	return product, nil
 }
 
 func (r *Repository) ListSKUsByProduct(productID int64) []domain.SKU {
@@ -510,18 +506,19 @@ RETURNING id, created_at, updated_at`
 		}
 		return sku, nil
 	}
-	_, err = r.db.Exec(
-		`UPDATE product_skus SET product_id = $1, sku_name = $2, sku_attrs_json = $3::jsonb, price_cent = $4, stock = $5, locked_stock = $6, status = $7 WHERE id = $8`,
+	err = r.db.QueryRow(
+		`UPDATE product_skus SET product_id = $1, sku_name = $2, sku_attrs_json = $3::jsonb, price_cent = $4, stock = $5, locked_stock = $6, status = $7
+		WHERE id = $8
+		RETURNING created_at, updated_at`,
 		sku.ProductID, sku.SKUName, string(attrs), sku.PriceCent, sku.Stock, sku.LockedStock, sku.Status, sku.ID,
-	)
+	).Scan(&sku.CreatedAt, &sku.UpdatedAt)
+	if err == sql.ErrNoRows {
+		return domain.SKU{}, fmt.Errorf("sku not found after update")
+	}
 	if err != nil {
 		return domain.SKU{}, err
 	}
-	updated, ok := r.GetSKU(sku.ID)
-	if !ok {
-		return domain.SKU{}, fmt.Errorf("sku not found after update")
-	}
-	return updated, nil
+	return sku, nil
 }
 
 func (r *Repository) ListCartItems(userID int64) []domain.CartItem {
@@ -563,18 +560,19 @@ RETURNING id, created_at, updated_at`
 		}
 		return item, nil
 	}
-	_, err := r.db.Exec(
-		`UPDATE cart_items SET user_id = $1, product_id = $2, sku_id = $3, quantity = $4, selected = $5 WHERE id = $6`,
+	err := r.db.QueryRow(
+		`UPDATE cart_items SET user_id = $1, product_id = $2, sku_id = $3, quantity = $4, selected = $5
+		WHERE id = $6
+		RETURNING created_at, updated_at`,
 		item.UserID, item.ProductID, item.SKUID, item.Quantity, item.Selected, item.ID,
-	)
+	).Scan(&item.CreatedAt, &item.UpdatedAt)
+	if err == sql.ErrNoRows {
+		return domain.CartItem{}, fmt.Errorf("cart item not found after update")
+	}
 	if err != nil {
 		return domain.CartItem{}, err
 	}
-	updated, ok := r.GetCartItem(item.UserID, item.ID)
-	if !ok {
-		return domain.CartItem{}, fmt.Errorf("cart item not found after update")
-	}
-	return updated, nil
+	return item, nil
 }
 
 func (r *Repository) DeleteCartItem(userID, itemID int64) error {
@@ -643,31 +641,42 @@ func (r *Repository) SaveOrder(order domain.Order) (domain.Order, error) {
 			return domain.Order{}, err
 		}
 
-		for _, item := range order.Items {
-			if _, err := tx.Exec(
+		for i := range order.Items {
+			item := &order.Items[i]
+			item.OrderID = order.ID
+			if err := tx.QueryRow(
 				`INSERT INTO order_items (order_id, product_id, sku_id, product_title_snapshot, sku_name_snapshot, price_cent_snapshot, quantity, total_amount_cent, created_at, updated_at)
-				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,COALESCE($9, CURRENT_TIMESTAMP),COALESCE($10, CURRENT_TIMESTAMP))`,
-				order.ID, item.ProductID, item.SKUID, item.ProductTitleSnapshot, item.SKUNameSnapshot, item.PriceCentSnapshot, item.Quantity, item.TotalAmountCent,
+				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,COALESCE($9, CURRENT_TIMESTAMP),COALESCE($10, CURRENT_TIMESTAMP))
+				RETURNING id, created_at, updated_at`,
+				item.OrderID, item.ProductID, item.SKUID, item.ProductTitleSnapshot, item.SKUNameSnapshot, item.PriceCentSnapshot, item.Quantity, item.TotalAmountCent,
 				nullTime(item.CreatedAt), nullTime(item.UpdatedAt),
-			); err != nil {
+			).Scan(&item.ID, &item.CreatedAt, &item.UpdatedAt); err != nil {
 				return domain.Order{}, err
 			}
 		}
 		if err := tx.Commit(); err != nil {
 			return domain.Order{}, err
 		}
-		return mustGetOrder(r, order.ID)
+		return order, nil
 	}
 
-	_, err := r.db.Exec(
-		`UPDATE orders SET order_no = $1, user_id = $2, merchant_id = $3, status = $4, total_amount_cent = $5, pay_amount_cent = $6, discount_amount_cent = $7, idempotency_key = $8, receiver_name = $9, receiver_phone = $10, receiver_address = $11, paid_at = $12, cancelled_at = $13, shipped_at = $14, finished_at = $15 WHERE id = $16`,
+	err := r.db.QueryRow(
+		`UPDATE orders SET order_no = $1, user_id = $2, merchant_id = $3, status = $4, total_amount_cent = $5, pay_amount_cent = $6, discount_amount_cent = $7, idempotency_key = $8, receiver_name = $9, receiver_phone = $10, receiver_address = $11, paid_at = $12, cancelled_at = $13, shipped_at = $14, finished_at = $15
+		WHERE id = $16
+		RETURNING created_at, updated_at`,
 		order.OrderNo, order.UserID, order.MerchantID, string(order.Status), order.TotalAmountCent, order.PayAmountCent, order.DiscountAmountCent, order.IdempotencyKey,
 		order.ReceiverName, order.ReceiverPhone, order.ReceiverAddress, order.PaidAt, order.CancelledAt, order.ShippedAt, order.FinishedAt, order.ID,
-	)
+	).Scan(&order.CreatedAt, &order.UpdatedAt)
+	if err == sql.ErrNoRows {
+		return domain.Order{}, fmt.Errorf("order %d not found", order.ID)
+	}
 	if err != nil {
 		return domain.Order{}, err
 	}
-	return mustGetOrder(r, order.ID)
+	if len(order.Items) == 0 {
+		order.Items = r.loadOrderItems(order.ID)
+	}
+	return order, nil
 }
 
 func (r *Repository) SaveOrderWithInventoryLocks(order domain.Order, locks []domain.InventoryLock) (domain.Order, error) {
@@ -680,8 +689,11 @@ func (r *Repository) SaveOrderWithInventoryLocks(order domain.Order, locks []dom
 	}
 	defer tx.Rollback()
 
-	orderedLocks := append([]domain.InventoryLock(nil), locks...)
-	sort.Slice(orderedLocks, func(i, j int) bool { return orderedLocks[i].SKUID < orderedLocks[j].SKUID })
+	orderedLocks := locks
+	if len(locks) > 1 {
+		orderedLocks = append([]domain.InventoryLock(nil), locks...)
+		sort.Slice(orderedLocks, func(i, j int) bool { return orderedLocks[i].SKUID < orderedLocks[j].SKUID })
+	}
 	for _, lock := range orderedLocks {
 		result, err := tx.Exec(
 			`UPDATE product_skus
@@ -713,31 +725,37 @@ func (r *Repository) SaveOrderWithInventoryLocks(order domain.Order, locks []dom
 		return domain.Order{}, err
 	}
 
-	for _, item := range order.Items {
-		if _, err := tx.Exec(
+	for i := range order.Items {
+		item := &order.Items[i]
+		item.OrderID = order.ID
+		if err := tx.QueryRow(
 			`INSERT INTO order_items (order_id, product_id, sku_id, product_title_snapshot, sku_name_snapshot, price_cent_snapshot, quantity, total_amount_cent, created_at, updated_at)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,COALESCE($9, CURRENT_TIMESTAMP),COALESCE($10, CURRENT_TIMESTAMP))`,
-			order.ID, item.ProductID, item.SKUID, item.ProductTitleSnapshot, item.SKUNameSnapshot, item.PriceCentSnapshot, item.Quantity, item.TotalAmountCent,
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,COALESCE($9, CURRENT_TIMESTAMP),COALESCE($10, CURRENT_TIMESTAMP))
+			RETURNING id, created_at, updated_at`,
+			item.OrderID, item.ProductID, item.SKUID, item.ProductTitleSnapshot, item.SKUNameSnapshot, item.PriceCentSnapshot, item.Quantity, item.TotalAmountCent,
 			nullTime(item.CreatedAt), nullTime(item.UpdatedAt),
-		); err != nil {
+		).Scan(&item.ID, &item.CreatedAt, &item.UpdatedAt); err != nil {
 			return domain.Order{}, err
 		}
 	}
 
-	for _, lock := range locks {
-		if _, err := tx.Exec(
+	for i := range locks {
+		lock := &locks[i]
+		if err := tx.QueryRow(
 			`INSERT INTO inventory_locks (order_id, sku_id, quantity, status, locked_at, confirmed_at, released_at, created_at, updated_at)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,COALESCE($8, CURRENT_TIMESTAMP),COALESCE($9, CURRENT_TIMESTAMP))`,
+			VALUES ($1,$2,$3,$4,$5,$6,$7,COALESCE($8, CURRENT_TIMESTAMP),COALESCE($9, CURRENT_TIMESTAMP))
+			RETURNING id, created_at, updated_at`,
 			order.ID, lock.SKUID, lock.Quantity, lock.Status, lock.LockedAt, lock.ConfirmedAt, lock.ReleasedAt, nullTime(lock.CreatedAt), nullTime(lock.UpdatedAt),
-		); err != nil {
+		).Scan(&lock.ID, &lock.CreatedAt, &lock.UpdatedAt); err != nil {
 			return domain.Order{}, err
 		}
+		lock.OrderID = order.ID
 	}
 
 	if err := tx.Commit(); err != nil {
 		return domain.Order{}, err
 	}
-	return mustGetOrder(r, order.ID)
+	return order, nil
 }
 
 func (r *Repository) ListOrderEvents(orderID int64) []domain.OrderEvent {
@@ -1113,14 +1131,6 @@ func nullableJSON(payload []byte) any {
 		return nil
 	}
 	return string(payload)
-}
-
-func mustGetOrder(repo *Repository, orderID int64) (domain.Order, error) {
-	order, ok := repo.GetOrder(orderID)
-	if !ok {
-		return domain.Order{}, fmt.Errorf("order %d not found", orderID)
-	}
-	return order, nil
 }
 
 func seededPasswordHash(password string) string {

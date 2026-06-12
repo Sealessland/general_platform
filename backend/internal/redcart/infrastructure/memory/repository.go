@@ -725,7 +725,8 @@ func (r *Repository) SaveOrderWithInventoryLocks(order domain.Order, locks []dom
 		}
 	}
 	saved := r.saveOrderLocked(order)
-	for _, lock := range locks {
+	for i := range locks {
+		lock := &locks[i]
 		sku := r.skus[lock.SKUID]
 		sku.LockedStock += lock.Quantity
 		sku.UpdatedAt = time.Now().UTC()
@@ -737,7 +738,7 @@ func (r *Repository) SaveOrderWithInventoryLocks(order domain.Order, locks []dom
 			lock.CreatedAt = time.Now().UTC()
 		}
 		lock.UpdatedAt = time.Now().UTC()
-		r.locksByOrder[saved.ID] = append(r.locksByOrder[saved.ID], cloneInventoryLock(lock))
+		r.locksByOrder[saved.ID] = append(r.locksByOrder[saved.ID], cloneInventoryLock(*lock))
 	}
 	return cloneOrder(saved), nil
 }
