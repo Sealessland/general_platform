@@ -1661,11 +1661,11 @@ function merchantOrderDetailView(id) {
 
 function a2uiView() {
   const wrap = node("div");
-  wrap.appendChild(titleBar("A2UI 演示", "Agent-to-UI：AI 生成声明式 UI，前端按 A2UI v0.9 协议渲染。"));
+  wrap.appendChild(titleBar("A2UI 智能导购", "Agent-to-UI：输入场景与预算，AI 生成可交互的购物专题页。"));
 
   const panel = node("section", { class: "panel" });
-  const intentInput = node("input", { type: "text", value: "帮我生成一个欢迎卡片" });
-  const contextInput = node("input", { type: "text", value: "{\"product_id\": 1}" });
+  const intentInput = node("input", { type: "text", value: "布置 10 平米宿舍书桌，预算 300" });
+  const contextInput = node("input", { type: "text", value: "{\"budget\": 30000, \"scene\": \"dorm_desk\"}" });
   const message = node("div", { class: "error", style: "display:none" });
   const output = node("div");
 
@@ -1673,7 +1673,7 @@ function a2uiView() {
   panel.appendChild(formRow("上下文 JSON", contextInput));
   panel.appendChild(message);
 
-  const run = node("button", { class: "btn primary", text: "生成 A2UI" });
+  const run = node("button", { class: "btn primary", text: "生成导购页" });
   run.onclick = async () => {
     message.style.display = "none";
     run.disabled = true;
@@ -1683,7 +1683,7 @@ function a2uiView() {
       const result = await request("/api/ai/a2ui", {
         method: "POST",
         body: JSON.stringify({
-          surface_id: "demo_surface_" + Date.now(),
+          surface_id: "guide_surface_" + Date.now(),
           user_intent: intentInput.value,
           context_json: contextInput.value,
         }),
@@ -1710,7 +1710,7 @@ function a2uiRenderPanel(surfaceId, a2uiJSON) {
   const host = node("div", { class: "a2ui-surface" });
   panel.appendChild(host);
 
-  const surfaces = new Map();
+  const surface = { surfaceId, components: new Map(), dataModel: {} };
   const lines = String(a2uiJSON || "").split("\n").filter(Boolean);
   lines.forEach((line) => {
     let envelope;
@@ -1721,19 +1721,12 @@ function a2uiRenderPanel(surfaceId, a2uiJSON) {
       return;
     }
     if (envelope.createSurface) {
-      surfaces.set(envelope.createSurface.surfaceId, { components: new Map(), dataModel: {} });
-    } else if (envelope.updateComponents && surfaces.has(envelope.updateComponents.surfaceId)) {
-      const surface = surfaces.get(envelope.updateComponents.surfaceId);
+      surface.dataModel = {};
+    } else if (envelope.updateComponents) {
       (envelope.updateComponents.components || []).forEach((component) => {
         surface.components.set(component.id, component);
       });
-      const root = surface.components.get("root");
-      if (root) {
-        host.innerHTML = "";
-        host.appendChild(a2uiRenderComponent(surface, root));
-      }
-    } else if (envelope.updateDataModel && surfaces.has(envelope.updateDataModel.surfaceId)) {
-      const surface = surfaces.get(envelope.updateDataModel.surfaceId);
+    } else if (envelope.updateDataModel) {
       const path = envelope.updateDataModel.path || "/";
       const parts = path.split("/").filter(Boolean);
       let target = surface.dataModel;
@@ -1748,14 +1741,24 @@ function a2uiRenderPanel(surfaceId, a2uiJSON) {
       }
     }
   });
+
+  function refresh() {
+    host.innerHTML = "";
+    const root = surface.components.get("root");
+    if (root) {
+      host.appendChild(a2uiRenderComponent(surface, root, surface.dataModel));
+    }
+  }
+  surface.refresh = refresh;
+  refresh();
   return panel;
 }
 
-function a2uiRenderComponent(surface, component) {
+function a2uiRenderComponent(surface, component, scope) {
   if (!component) return node("span");
   const type = component.component;
-  const children = a2uiResolveChildren(surface, component);
-  const text = a2uiResolveValue(component.text, surface.dataModel);
+  const dataModel = scope || surface.dataModel;
+  const children = a2uiResolveChildren(surface, component, dataModel);
 
   if (type === "Card") {
     const card = node("section", { class: "card a2ui-card" });
@@ -1773,14 +1776,69 @@ function a2uiRenderComponent(surface, component) {
     children.forEach((child) => row.appendChild(child));
     return row;
   }
+  if (type === "List") {
+    const list = node("div", { class: "a2ui-list" });
+    const childDesc = component.children;
+    if (childDesc && typeof childDesc === "object" && childDesc.path && childDesc.componentId) {
+      const items = a2uiResolvePath(dataModel, childDesc.path) || [];
+      const template = surface.components.get(childDesc.componentId);
+      items.forEach((item) => {
+        const itemScope = { __parent: dataModel, ...item };
+        const rendered = a2uiRenderComponent(surface, template, itemScope);
+        if (rendered) list.appendChild(rendered);
+      });
+    } else if (Array.isArray(childDesc)) {
+      children.forEach((child) => list.appendChild(child));
+    }
+    return list;
+  }
   if (type === "Text") {
+    const text = a2uiResolveValue(component.text, dataModel);
     return node("div", { class: "a2ui-text " + (component.variant || ""), text });
   }
+  if (type === "Image") {
+    const url = a2uiResolveValue(component.url, dataModel);
+    const alt = a2uiResolveValue(component.alt, dataModel);
+    const img = node("img", { class: "a2ui-image", src: url, alt: alt });
+    img.onerror = () => {
+      img.style.display = "none";
+    };
+    return img;
+  }
+  if (type === "Slider") {
+    const wrap = node("div", { class: "a2ui-slider-wrap" });
+    const slider = node("input", { type: "range", min: String(component.min || 0), max: String(component.max || 100), value: String(a2uiResolveValue(component.value, dataModel) || component.max || 100) });
+    const label = node("span", { class: "a2ui-slider-label", text: slider.value });
+    slider.oninput = () => {
+      label.textContent = slider.value;
+      if (component.value && component.value.path) {
+        const parts = String(component.value.path).split("/").filter(Boolean);
+        let target = surface.dataModel;
+        parts.slice(0, -1).forEach((part) => {
+          if (!target[part]) target[part] = {};
+          target = target[part];
+        });
+        if (parts.length > 0) {
+          target[parts[parts.length - 1]] = Number(slider.value);
+        }
+      }
+    };
+    wrap.appendChild(slider);
+    wrap.appendChild(label);
+    return wrap;
+  }
   if (type === "Button") {
+    const text = a2uiResolveValue(component.text, dataModel);
     const btn = node("button", { class: "btn " + (component.variant === "primary" ? "primary" : ""), text });
     if (component.action && component.action.event) {
-      btn.onclick = () => {
-        setNotice("A2UI action: " + component.action.event.name, "info");
+      const eventName = component.action.event.name;
+      const context = a2uiResolveActionContext(component.action.event.context, dataModel);
+      btn.onclick = async () => {
+        if (eventName === "add_to_cart") {
+          await a2uiAddToCart(context);
+        } else {
+          setNotice("A2UI action: " + eventName, "info");
+        }
       };
     }
     return btn;
@@ -1788,30 +1846,75 @@ function a2uiRenderComponent(surface, component) {
   return node("div", { class: "a2ui-unknown", text: "未知组件: " + type });
 }
 
-function a2uiResolveChildren(surface, component) {
+async function a2uiAddToCart(context) {
+  const skuID = Number(context.sku_id);
+  if (!skuID) {
+    setNotice("缺少 sku_id", "error");
+    return;
+  }
+  try {
+    await request("/api/cart/items", {
+      method: "POST",
+      body: JSON.stringify({ sku_id: skuID, quantity: 1 }),
+    });
+    setNotice("已加入购物车", "ok");
+  } catch (err) {
+    setNotice(err.message || "加购失败", "error");
+  }
+}
+
+function a2uiResolveChildren(surface, component, dataModel) {
   if (!component.children) return [];
   if (Array.isArray(component.children)) {
-    return component.children.map((id) => a2uiRenderComponent(surface, surface.components.get(id))).filter(Boolean);
+    return component.children.map((id) => a2uiRenderComponent(surface, surface.components.get(id), dataModel)).filter(Boolean);
   }
   if (component.child) {
-    const child = a2uiRenderComponent(surface, surface.components.get(component.child));
+    const child = a2uiRenderComponent(surface, surface.components.get(component.child), dataModel);
     return child ? [child] : [];
   }
   return [];
 }
 
+function a2uiResolvePath(dataModel, path) {
+  if (path == null) return dataModel;
+  const parts = String(path).split("/").filter(Boolean);
+  let target = dataModel;
+  for (const part of parts) {
+    if (target == null || typeof target !== "object") return undefined;
+    target = target[part];
+  }
+  return target;
+}
+
 function a2uiResolveValue(value, dataModel) {
   if (value == null) return "";
-  if (typeof value === "object" && value.path) {
-    const parts = String(value.path).split("/").filter(Boolean);
-    let target = dataModel;
-    for (const part of parts) {
-      if (target == null || typeof target !== "object") return "";
-      target = target[part];
+  if (typeof value === "object") {
+    if (value.path) {
+      const resolved = a2uiResolvePath(dataModel, value.path);
+      return resolved == null ? "" : String(resolved);
     }
-    return target == null ? "" : String(target);
+    if (value.call === "formatString" && value.args && value.args.value) {
+      let template = String(value.args.value);
+      template = template.replace(/\$\{([^}]+)\}/g, (_, expr) => {
+        if (expr.startsWith("/")) {
+          const resolved = a2uiResolvePath(dataModel, expr);
+          return resolved == null ? "" : String(resolved);
+        }
+        return "";
+      });
+      return template;
+    }
   }
   return String(value);
+}
+
+function a2uiResolveActionContext(context, dataModel) {
+  if (!context || typeof context !== "object") return {};
+  const out = {};
+  Object.keys(context).forEach((key) => {
+    out[key] = a2uiResolveValue(context[key], dataModel);
+  });
+  return out;
 }
 
 function aiView() {

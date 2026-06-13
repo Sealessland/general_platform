@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -76,6 +77,27 @@ func TestAIHTTPA2UISurface(t *testing.T) {
 	a2uiJSON, ok := result["a2ui_json"].(string)
 	if !ok || a2uiJSON == "" {
 		t.Fatalf("expected non-empty a2ui_json, got %+v", result)
+	}
+}
+
+func TestAIHTTPA2UIShoppingGuide(t *testing.T) {
+	handler := newTestHandler()
+	consumerToken := loginAndGetToken(t, handler, map[string]any{
+		"phone":    "13800000001",
+		"password": "consumer-demo",
+	})
+
+	result := requestJSON(t, handler, http.MethodPost, "/api/ai/a2ui", consumerToken, map[string]any{
+		"surface_id":   "guide_test_surface",
+		"user_intent":  "布置宿舍书桌，预算 500",
+		"context_json": "{\"budget\": 50000, \"scene\": \"dorm_desk\"}",
+	}, http.StatusOK)
+	a2uiJSON, ok := result["a2ui_json"].(string)
+	if !ok || a2uiJSON == "" {
+		t.Fatalf("expected non-empty a2ui_json, got %+v", result)
+	}
+	if !strings.Contains(a2uiJSON, "createSurface") || !strings.Contains(a2uiJSON, "product_card_template") {
+		t.Fatalf("expected shopping guide surface with product cards, got %s", a2uiJSON)
 	}
 }
 

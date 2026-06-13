@@ -51,6 +51,10 @@ class MockAIProvider:
         if not request.user_intent:
             raise ValueError("user_intent is required")
         import json
+        context = json.loads(request.context_json or "{}")
+        products = context.get("products", [])
+        if products:
+            return self._generate_shopping_guide(request, context, products)
         lines = [
             json.dumps({"version": "v0.9", "createSurface": {"surfaceId": request.surface_id, "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json", "theme": {"primaryColor": "#00BFFF"}, "sendDataModel": False}}),
             json.dumps({"version": "v0.9", "updateComponents": {"surfaceId": request.surface_id, "components": [
@@ -61,5 +65,56 @@ class MockAIProvider:
                 {"id": "action_button", "component": "Button", "text": "OK", "variant": "primary", "action": {"event": {"name": "a2ui_ack", "context": {"surface_id": request.surface_id}}}},
             ]}}),
             json.dumps({"version": "v0.9", "updateDataModel": {"surfaceId": request.surface_id, "path": "/", "value": {"acknowledged": False}}}),
+        ]
+        return {"surface_id": request.surface_id, "a2ui_json": "\n".join(lines)}
+
+    def _generate_shopping_guide(self, request: A2UISurfaceRequest, context: dict, products: list) -> dict[str, str]:
+        import json
+        budget = context.get("budget", 0)
+        scene = context.get("scene", "智能导购专题")
+        components = [
+            {"id": "root", "component": "Column", "children": ["header_card", "budget_row", "product_list"]},
+            {"id": "header_card", "component": "Card", "child": "header_col"},
+            {"id": "header_col", "component": "Column", "children": ["scene_title", "scene_desc"]},
+            {"id": "scene_title", "component": "Text", "text": scene, "variant": "h2"},
+            {"id": "scene_desc", "component": "Text", "text": f"预算 ¥{budget/100:.2f}，已为你筛选 {len(products)} 件好物"},
+        ]
+        if budget > 0:
+            components.extend([
+                {"id": "budget_row", "component": "Row", "children": ["budget_label", "budget_slider"]},
+                {"id": "budget_label", "component": "Text", "text": f"预算: ¥{budget/100:.2f}"},
+                {"id": "budget_slider", "component": "Slider", "min": 0, "max": budget, "value": {"path": "/budget"}},
+            ])
+        else:
+            components.extend([
+                {"id": "budget_row", "component": "Row", "children": ["budget_label"]},
+                {"id": "budget_label", "component": "Text", "text": "预算不限"},
+            ])
+        components.append({"id": "product_list", "component": "List", "children": {"path": "/products", "componentId": "product_card_template"}})
+        components.extend([
+            {"id": "product_card_template", "component": "Card", "child": "product_col"},
+            {"id": "product_col", "component": "Column", "children": ["product_image", "product_title", "product_price", "product_points", "add_to_cart_btn"]},
+            {"id": "product_image", "component": "Image", "url": {"path": "cover_url"}, "alt": {"path": "title"}},
+            {"id": "product_title", "component": "Text", "text": {"path": "title"}, "variant": "h3"},
+            {"id": "product_price", "component": "Text", "text": {"call": "formatString", "args": {"value": "¥${price_yuan}"}}},
+            {"id": "product_points", "component": "Text", "text": {"path": "selling_points"}},
+            {"id": "add_to_cart_btn", "component": "Button", "text": "加入购物车", "variant": "primary", "action": {"event": {"name": "add_to_cart", "context": {"product_id": {"path": "id"}, "sku_id": {"path": "sku_id"}}}}},
+        ])
+        normalized = []
+        for product in products:
+            price = product.get("min_price_cent", 0)
+            points_arr = product.get("selling_points", []) or []
+            normalized.append({
+                "id": product.get("id"),
+                "title": product.get("title"),
+                "cover_url": product.get("cover_url"),
+                "price_yuan": f"{price/100:.2f}",
+                "selling_points": " · ".join(points_arr),
+                "sku_id": product.get("id"),
+            })
+        lines = [
+            json.dumps({"version": "v0.9", "createSurface": {"surfaceId": request.surface_id, "catalogId": "https://redcart.example/a2ui/catalog/v1", "theme": {"primaryColor": "#00BFFF"}, "sendDataModel": True}}),
+            json.dumps({"version": "v0.9", "updateComponents": {"surfaceId": request.surface_id, "components": components}}),
+            json.dumps({"version": "v0.9", "updateDataModel": {"surfaceId": request.surface_id, "path": "/", "value": {"budget": budget, "products": normalized}}}),
         ]
         return {"surface_id": request.surface_id, "a2ui_json": "\n".join(lines)}

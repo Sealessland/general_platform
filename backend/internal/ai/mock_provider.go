@@ -2,7 +2,9 @@ package ai
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 type MockProvider struct{}
@@ -36,19 +38,140 @@ func (MockProvider) GenerateBusinessReview(ctx context.Context, req BusinessRevi
 	}, nil
 }
 
-func (MockProvider) GenerateA2UISurface(ctx context.Context, req A2UISurfaceRequest) (*A2UISurfaceResult, error) {
+func (m MockProvider) GenerateA2UISurface(ctx context.Context, req A2UISurfaceRequest) (*A2UISurfaceResult, error) {
 	if req.SurfaceID == "" {
 		return nil, fmt.Errorf("surface_id is required")
 	}
 	if req.UserIntent == "" {
 		return nil, fmt.Errorf("user_intent is required")
 	}
-	// Minimal A2UI v0.9 surface: a card greeting the user and echoing intent.
+	contextMap := map[string]any{}
+	if req.ContextJSON != "" {
+		_ = json.Unmarshal([]byte(req.ContextJSON), &contextMap)
+	}
+	if products, ok := contextMap["products"].([]any); ok && len(products) > 0 {
+		return m.generateShoppingGuideSurface(req, contextMap)
+	}
+	return m.generateGreetingSurface(req)
+}
+
+func (MockProvider) generateGreetingSurface(req A2UISurfaceRequest) (*A2UISurfaceResult, error) {
+	safeIntent := strings.ReplaceAll(req.UserIntent, `"`, `\"`)
 	a2uiJSON := `{"version":"v0.9","createSurface":{"surfaceId":"` + req.SurfaceID + `","catalogId":"https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json","theme":{"primaryColor":"#00BFFF"},"sendDataModel":false}}` + "\n" +
-		`{"version":"v0.9","updateComponents":{"surfaceId":"` + req.SurfaceID + `","components":[{"id":"root","component":"Card","child":"content_col"},{"id":"content_col","component":"Column","children":["title_text","intent_text","action_button"]},{"id":"title_text","component":"Text","text":"AI 生成界面","variant":"h2"},{"id":"intent_text","component":"Text","text":"收到意图：` + req.UserIntent + `"},{"id":"action_button","component":"Button","text":"好的","variant":"primary","action":{"event":{"name":"a2ui_ack","context":{"surface_id":"` + req.SurfaceID + `"}}}}]}}` + "\n" +
+		`{"version":"v0.9","updateComponents":{"surfaceId":"` + req.SurfaceID + `","components":[{"id":"root","component":"Card","child":"content_col"},{"id":"content_col","component":"Column","children":["title_text","intent_text","action_button"]},{"id":"title_text","component":"Text","text":"AI 生成界面","variant":"h2"},{"id":"intent_text","component":"Text","text":"收到意图：` + safeIntent + `"},{"id":"action_button","component":"Button","text":"好的","variant":"primary","action":{"event":{"name":"a2ui_ack","context":{"surface_id":"` + req.SurfaceID + `"}}}}]}}` + "\n" +
 		`{"version":"v0.9","updateDataModel":{"surfaceId":"` + req.SurfaceID + `","path":"/","value":{"acknowledged":false}}}`
 	return &A2UISurfaceResult{
 		SurfaceID: req.SurfaceID,
 		A2UIJSON:  a2uiJSON,
 	}, nil
+}
+
+func (m MockProvider) generateShoppingGuideSurface(req A2UISurfaceRequest, contextMap map[string]any) (*A2UISurfaceResult, error) {
+	budget := int64(0)
+	if b, ok := contextMap["budget"]; ok {
+		switch v := b.(type) {
+		case float64:
+			budget = int64(v)
+		case int64:
+			budget = v
+		case int:
+			budget = int64(v)
+		}
+	}
+	scene := "智能导购专题"
+	if s, ok := contextMap["scene"].(string); ok && s != "" {
+		scene = s
+	}
+
+	components := []map[string]any{
+		{"id": "root", "component": "Column", "children": []string{"header_card", "budget_row", "product_list"}},
+		{"id": "header_card", "component": "Card", "child": "header_col"},
+		{"id": "header_col", "component": "Column", "children": []string{"scene_title", "scene_desc"}},
+		{"id": "scene_title", "component": "Text", "text": scene, "variant": "h2"},
+		{"id": "scene_desc", "component": "Text", "text": fmt.Sprintf("预算 ¥%.2f，已为你筛选 %d 件好物", float64(budget)/100, len(contextMap["products"].([]any)))},
+	}
+	if budget > 0 {
+		components = append(components,
+			map[string]any{"id": "budget_row", "component": "Row", "children": []string{"budget_label", "budget_slider"}},
+			map[string]any{"id": "budget_label", "component": "Text", "text": fmt.Sprintf("预算: ¥%.2f", float64(budget)/100)},
+			map[string]any{"id": "budget_slider", "component": "Slider", "min": 0, "max": budget, "value": map[string]any{"path": "/budget"}},
+		)
+	} else {
+		components = append(components, map[string]any{"id": "budget_row", "component": "Row", "children": []string{"budget_label"}})
+		components = append(components, map[string]any{"id": "budget_label", "component": "Text", "text": "预算不限"})
+	}
+	components = append(components, map[string]any{"id": "product_list", "component": "List", "children": map[string]any{"path": "/products", "componentId": "product_card_template"}})
+
+	products := contextMap["products"].([]any)
+
+	components = append(components, map[string]any{"id": "product_card_template", "component": "Card", "child": "product_col"})
+	components = append(components, map[string]any{"id": "product_col", "component": "Column", "children": []string{"product_image", "product_title", "product_price", "product_points", "add_to_cart_btn"}})
+	components = append(components, map[string]any{"id": "product_image", "component": "Image", "url": map[string]any{"path": "cover_url"}, "alt": map[string]any{"path": "title"}})
+	components = append(components, map[string]any{"id": "product_title", "component": "Text", "text": map[string]any{"path": "title"}, "variant": "h3"})
+	components = append(components, map[string]any{"id": "product_price", "component": "Text", "text": map[string]any{"call": "formatString", "args": map[string]any{"value": "¥${price_yuan}"}}})
+	components = append(components, map[string]any{"id": "product_points", "component": "Text", "text": map[string]any{"path": "selling_points"}})
+	components = append(components, map[string]any{"id": "add_to_cart_btn", "component": "Button", "text": "加入购物车", "variant": "primary", "action": map[string]any{"event": map[string]any{"name": "add_to_cart", "context": map[string]any{"product_id": map[string]any{"path": "id"}, "sku_id": map[string]any{"path": "sku_id"}}}}})
+
+	envelope1 := map[string]any{"version": "v0.9", "createSurface": map[string]any{"surfaceId": req.SurfaceID, "catalogId": "https://redcart.example/a2ui/catalog/v1", "theme": map[string]any{"primaryColor": "#00BFFF"}, "sendDataModel": true}}
+	envelope2 := map[string]any{"version": "v0.9", "updateComponents": map[string]any{"surfaceId": req.SurfaceID, "components": components}}
+	envelope3 := map[string]any{"version": "v0.9", "updateDataModel": map[string]any{"surfaceId": req.SurfaceID, "path": "/", "value": map[string]any{"budget": budget, "products": m.normalizeProducts(products)}}}
+
+	lines := []string{
+		mustJSON(envelope1),
+		mustJSON(envelope2),
+		mustJSON(envelope3),
+	}
+	return &A2UISurfaceResult{
+		SurfaceID: req.SurfaceID,
+		A2UIJSON:  strings.Join(lines, "\n"),
+	}, nil
+}
+
+func (MockProvider) normalizeProducts(products []any) []any {
+	out := make([]any, 0, len(products))
+	for _, p := range products {
+		product, ok := p.(map[string]any)
+		if !ok {
+			continue
+		}
+		priceCent := int64(0)
+		if v, ok := product["min_price_cent"].(float64); ok {
+			priceCent = int64(v)
+		} else if v, ok := product["min_price_cent"].(int64); ok {
+			priceCent = v
+		}
+		skuID := int64(0)
+		if v, ok := product["id"].(float64); ok {
+			skuID = int64(v)
+		} else if v, ok := product["id"].(int64); ok {
+			skuID = v
+		}
+		points := ""
+		if arr, ok := product["selling_points"].([]any); ok {
+			parts := make([]string, 0, len(arr))
+			for _, item := range arr {
+				if s, ok := item.(string); ok {
+					parts = append(parts, s)
+				}
+			}
+			points = strings.Join(parts, " · ")
+		}
+		out = append(out, map[string]any{
+			"id":            product["id"],
+			"title":         product["title"],
+			"cover_url":     product["cover_url"],
+			"price_yuan":    fmt.Sprintf("%.2f", float64(priceCent)/100),
+			"selling_points": points,
+			"sku_id":        skuID,
+		})
+	}
+	return out
+}
+
+func mustJSON(v any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
 }
