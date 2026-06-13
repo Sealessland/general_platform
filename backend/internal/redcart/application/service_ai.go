@@ -2,7 +2,11 @@ package application
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
 
 	backendai "github.com/example/redcart-copilot/backend/internal/ai"
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
@@ -107,10 +111,14 @@ func (s *Service) GenerateBusinessReview(ctx context.Context, actor Actor, input
 
 func (s *Service) GenerateA2UISurface(ctx context.Context, actor Actor, input A2UISurfaceInput) (*A2UISurfaceView, error) {
 	_ = actor
+	enrichedContext, err := s.enrichA2UIContext(ctx, input)
+	if err != nil {
+		return nil, err
+	}
 	result, err := s.aiProvider.GenerateA2UISurface(ctx, backendai.A2UISurfaceRequest{
 		SurfaceID:   input.SurfaceID,
 		UserIntent:  input.UserIntent,
-		ContextJSON: input.ContextJSON,
+		ContextJSON: enrichedContext,
 	})
 	if err != nil {
 		return nil, err
@@ -119,6 +127,95 @@ func (s *Service) GenerateA2UISurface(ctx context.Context, actor Actor, input A2
 		SurfaceID: result.SurfaceID,
 		A2UIJSON:  result.A2UIJSON,
 	}, nil
+}
+
+func (s *Service) enrichA2UIContext(ctx context.Context, input A2UISurfaceInput) (string, error) {
+	contextMap := map[string]any{}
+	if input.ContextJSON != "" {
+		if err := json.Unmarshal([]byte(input.ContextJSON), &contextMap); err != nil {
+			return "", newError(ErrorInvalidArgument, "invalid context_json")
+		}
+	}
+
+	// Detect shopping-guide intent: intent mentions budget or context has budget/scene.
+	budget := parseBudgetFromIntent(input.UserIntent)
+	if b, ok := contextMap["budget"]; ok {
+		switch v := b.(type) {
+		case float64:
+			budget = int64(v)
+		case int:
+			budget = int64(v)
+		case int64:
+			budget = v
+		case string:
+			if parsed, err := strconv.ParseInt(v, 10, 64); err == nil {
+				budget = parsed
+			}
+		}
+	}
+	if budget <= 0 {
+		// Fallback: keep original context if no shopping guide signal detected.
+		if input.ContextJSON == "" {
+			return "{}", nil
+		}
+		return input.ContextJSON, nil
+	}
+
+	products, err := s.ListProducts(ctx)
+	if err != nil {
+		return "", err
+	}
+	filtered := make([]ProductCard, 0, len(products))
+	for _, product := range products {
+		if product.MinPriceCent > 0 && product.MinPriceCent <= budget {
+			filtered = append(filtered, product)
+		}
+	}
+
+	contextMap["budget"] = budget
+	contextMap["products"] = filtered
+	if _, ok := contextMap["scene"]; !ok {
+		contextMap["scene"] = inferSceneFromIntent(input.UserIntent)
+	}
+
+	out, err := json.Marshal(contextMap)
+	if err != nil {
+		return "", fmt.Errorf("marshal a2ui context: %w", err)
+	}
+	return string(out), nil
+}
+
+var budgetRegex = regexp.MustCompile(`(?i)(\d+)\s*(百|元|块|rmb|yuan)?`)
+
+func parseBudgetFromIntent(intent string) int64 {
+	intent = strings.ToLower(intent)
+	matches := budgetRegex.FindStringSubmatch(intent)
+	if len(matches) < 2 {
+		return 0
+	}
+	num, err := strconv.ParseInt(matches[1], 10, 64)
+	if err != nil {
+		return 0
+	}
+	// Heuristic: "300块" => 30000 分; "300元" => 30000 分; plain "300" in budget context treated as yuan.
+	if strings.Contains(intent, "百") {
+		return num * 100 * 100
+	}
+	return num * 100
+}
+
+func inferSceneFromIntent(intent string) string {
+	intent = strings.ToLower(intent)
+	if strings.Contains(intent, "宿舍") {
+		return "dorm_desk"
+	}
+	if strings.Contains(intent, "通勤") || strings.Contains(intent, "办公") {
+		return "office_desk"
+	}
+	if strings.Contains(intent, "出行") || strings.Contains(intent, "旅行") {
+		return "travel"
+	}
+	return "general"
 }
 
 func (s *Service) GetAITask(ctx context.Context, actor Actor, taskID int64) (*AITaskView, error) {

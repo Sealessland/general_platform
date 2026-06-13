@@ -124,6 +124,42 @@ func (r *Repository) seed() {
 		UpdatedAt:     now,
 	})
 
+	productThree, _ := r.SaveProduct(domain.Product{
+		MerchantID:    merchant.ID,
+		Title:         "LED Desk Lamp",
+		Description:   "Dimmable LED desk lamp with warm/cold light modes for small desk setups.",
+		CoverURL:      "https://images.example.com/desk-lamp.jpg",
+		CategoryID:    103,
+		Status:        domain.ProductStatusOnline,
+		SellingPoints: []string{"3 color temperatures", "USB powered", "Space saving"},
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	})
+
+	productFour, _ := r.SaveProduct(domain.Product{
+		MerchantID:    merchant.ID,
+		Title:         "Desk Storage Box Set",
+		Description:   "Multi-size storage boxes for stationery, cables, and daily desk items.",
+		CoverURL:      "https://images.example.com/storage-box.jpg",
+		CategoryID:    104,
+		Status:        domain.ProductStatusOnline,
+		SellingPoints: []string{"Stackable", "See-through lid", "Cable hole design"},
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	})
+
+	productFive, _ := r.SaveProduct(domain.Product{
+		MerchantID:    merchant.ID,
+		Title:         "USB Power Strip",
+		Description:   "Compact power strip with USB-C and USB-A ports for dorm desk electronics.",
+		CoverURL:      "https://images.example.com/power-strip.jpg",
+		CategoryID:    105,
+		Status:        domain.ProductStatusOnline,
+		SellingPoints: []string{"3 AC + 3 USB", "Overload protection", "1.8m cord"},
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	})
+
 	skuOne, _ := r.SaveSKU(domain.SKU{
 		ProductID:   productOne.ID,
 		SKUName:     "Cherry Set",
@@ -160,6 +196,42 @@ func (r *Repository) seed() {
 		UpdatedAt:   now,
 	})
 
+	skuFour, _ := r.SaveSKU(domain.SKU{
+		ProductID:   productThree.ID,
+		SKUName:     "White",
+		SKUAttrs:    map[string]string{"color": "white", "size": "standard"},
+		PriceCent:   7900,
+		Stock:       50,
+		LockedStock: 0,
+		Status:      domain.SKUStatusActive,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	})
+
+	skuFive, _ := r.SaveSKU(domain.SKU{
+		ProductID:   productFour.ID,
+		SKUName:     "3-Piece Set",
+		SKUAttrs:    map[string]string{"color": "clear", "size": "3pcs"},
+		PriceCent:   4900,
+		Stock:       60,
+		LockedStock: 0,
+		Status:      domain.SKUStatusActive,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	})
+
+	skuSix, _ := r.SaveSKU(domain.SKU{
+		ProductID:   productFive.ID,
+		SKUName:     "Standard",
+		SKUAttrs:    map[string]string{"color": "white", "size": "standard"},
+		PriceCent:   5900,
+		Stock:       45,
+		LockedStock: 0,
+		Status:      domain.SKUStatusActive,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	})
+
 	_, _ = r.SaveCartItem(domain.CartItem{
 		UserID:    consumer.ID,
 		ProductID: productOne.ID,
@@ -171,6 +243,9 @@ func (r *Repository) seed() {
 	})
 
 	_ = skuTwo
+	_ = skuFour
+	_ = skuFive
+	_ = skuSix
 
 	noteOne := domain.Note{
 		ID:         r.nextID(&r.nextNoteID),

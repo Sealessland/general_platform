@@ -232,8 +232,15 @@ const html = `<!DOCTYPE html>
   .a2ui-surface { padding: 12px; }
   .a2ui-column { display: flex; flex-direction: column; gap: 10px; }
   .a2ui-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .a2ui-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
   .a2ui-text { color: var(--text); }
   .a2ui-text.h2 { font-size: 20px; font-weight: 700; }
+  .a2ui-text.h3 { font-size: 15px; font-weight: 700; }
+  .a2ui-image { width: 100%; height: 140px; object-fit: cover; border-radius: var(--radius); background: var(--bg); }
+  .a2ui-slider-wrap { display: flex; align-items: center; gap: 10px; flex: 1; }
+  .a2ui-slider-wrap input[type="range"] { flex: 1; }
+  .a2ui-slider-label { min-width: 50px; text-align: right; color: var(--muted); font-size: 12px; }
+  .a2ui-card .a2ui-column { gap: 8px; }
   .a2ui-unknown { color: var(--danger); font-family: monospace; font-size: 12px; }
   @media (max-width: 980px) {
     .grid.cols-2, .grid.cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }

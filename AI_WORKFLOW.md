@@ -713,3 +713,36 @@ rtk bash scripts/validate-workspace.sh
 - 前端 A2UI 渲染器仅覆盖基础目录组件，复杂组件（List/Tabs/Modal/输入组件/函数调用）尚未实现。
 - A2UI surface 当前由 Mock Provider 按固定模板生成，未接入真实 LLM；真实接入时需要按 A2UI v0.9 目录构造 prompt 并做 JSON schema 校验。
 - gRPC 仍使用 insecure 传输，跨网络部署需补充 TLS。
+
+## 2026-06-13：A2UI 智能导购专题页
+
+### AI 参与范围
+
+- 在 `backend/internal/redcart/application/service_ai.go` 增加 A2UI 上下文增强逻辑：解析用户意图中的预算与场景，调用 `ListProducts` 查询在线商品，筛选预算内商品后注入 `context_json`。
+- 升级 `backend/internal/ai/mock_provider.go` 与 `ai-service/app/provider.py`，当上下文包含 `products` 时生成智能导购专题 surface（Header、预算 Slider、商品 List + Card、加购 Button）。
+- 扩展前端 A2UI 渲染器，新增 `List`/`Image`/`Slider` 组件支持、`formatString` 函数调用解析、列表项子作用域、Slider 双向绑定与 `add_to_cart` action 处理。
+- 新增宿舍书桌场景演示商品（LED Desk Lamp、Desk Storage Box Set、USB Power Strip）及 SKU，同步更新内存与 PostgreSQL 种子数据。
+- 新增 `TestAIHTTPA2UIShoppingGuide` HTTP 集成测试。
+
+### 人工或主代理修正
+
+- 保持 A2UI 契约不变，将导购逻辑收敛到应用层与 Provider 模板生成，不修改 proto 与 gRPC 接口。
+- 预算解析采用简单正则 + 上下文显式值的 fallback，不引入 NLP 库；真实场景可替换为 LLM 意图解析。
+- 前端 List 模板渲染只实现相对路径的子作用域，复杂函数调用与输入双向绑定仍按最小可用实现。
+
+### 验证证据
+
+```bash
+rtk env GOCACHE=/tmp/go-build-cache go test ./...
+rtk env GOCACHE=/tmp/go-build-cache go test ./internal/redcart/interfaces/httpapi -run TestAIHTTP -v
+rtk bash -c "cd ai-service && .venv/bin/python -m unittest discover -s tests -v"
+rtk cd frontend && npm run lint && npm run typecheck && npm run build && npm test
+rtk bash scripts/check-openapi.sh
+rtk bash scripts/validate-workspace.sh
+```
+
+### 剩余风险
+
+- 导购页仍使用固定模板，未接入真实 LLM 做商品匹配与页面布局决策。
+- 预算 Slider 仅做前端展示与本地数据模型更新，未真正回传后端重新筛选商品。
+- 商品图片使用示例 URL，本地无真实图片资源。

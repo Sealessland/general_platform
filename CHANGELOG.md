@@ -40,7 +40,10 @@
 - 更新 `docs/architecture.md`，记录 AI 服务作为内部 gRPC 边界。
 - 新增 A2UI（Agent-to-UI）RPC：`api/proto/ai/v1/ai.proto` 增加 `A2UIService.GenerateA2UISurface`，按 A2UI v0.9 返回声明式 UI surface JSON；生成 Go/Python stub，后端 `AIProvider` 契约、`MockProvider`、`backend/internal/ai/grpc` 客户端、`ai-service/app/provider.py` 与 `ai-service/app/grpc_server.py` 均实现对应方法。
 - 后端新增 `/api/ai/a2ui` HTTP 入口，登录用户可调用；前端新增 `/a2ui` 演示页与基础 A2UI 组件渲染器（Card/Column/Row/Text/Button）。
-- 同步更新 `docs/api/openapi.yaml`、`docs/api/endpoint-table.md`、`docs/architecture.md` 与 `AI_WORKFLOW.md`。
+- 升级 A2UI 为智能导购专题页：应用层解析用户意图中的预算与场景，查询在线商品并筛选预算内商品，注入上下文后由 AI Provider 生成购物专题 surface；前端支持 `List`/`Image`/`Slider` 组件与加购 action。
+- 新增宿舍书桌相关演示商品（LED 台灯、桌面收纳盒、USB 插线板）及 SKU，补充内存与 PostgreSQL 种子数据。
+- 新增 `TestAIHTTPA2UIShoppingGuide` 验证导购页生成链路。
+- 同步更新 `docs/api/openapi.yaml`、`docs/api/endpoint-table.md`、`docs/architecture.md`、`AI_WORKFLOW.md`。
 
 ## [0.1.0] - 2026-06-05
 

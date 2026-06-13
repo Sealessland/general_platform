@@ -198,13 +198,19 @@ ON CONFLICT DO NOTHING;
 
 INSERT INTO products (id, merchant_id, title, description, cover_url, category_id, status, selling_points) VALUES
   (1, 1, 'Velvet Lip Mud Set', 'Matte lip set for commute, campus, and quick content shoots.', 'https://images.example.com/lip-mud.jpg', 101, 'online', '["Soft matte finish","Pocket-size touch-up","Daily shade bundle"]'::jsonb),
-  (2, 1, 'Travel Makeup Organizer', 'Portable makeup storage for dorm, travel, and desk organization.', 'https://images.example.com/makeup-organizer.jpg', 102, 'online', '["Compartment layout","Portable and lightweight","Easy to clean"]'::jsonb)
+  (2, 1, 'Travel Makeup Organizer', 'Portable makeup storage for dorm, travel, and desk organization.', 'https://images.example.com/makeup-organizer.jpg', 102, 'online', '["Compartment layout","Portable and lightweight","Easy to clean"]'::jsonb),
+  (3, 1, 'LED Desk Lamp', 'Dimmable LED desk lamp with warm/cold light modes for small desk setups.', 'https://images.example.com/desk-lamp.jpg', 103, 'online', '["3 color temperatures","USB powered","Space saving"]'::jsonb),
+  (4, 1, 'Desk Storage Box Set', 'Multi-size storage boxes for stationery, cables, and daily desk items.', 'https://images.example.com/storage-box.jpg', 104, 'online', '["Stackable","See-through lid","Cable hole design"]'::jsonb),
+  (5, 1, 'USB Power Strip', 'Compact power strip with USB-C and USB-A ports for dorm desk electronics.', 'https://images.example.com/power-strip.jpg', 105, 'online', '["3 AC + 3 USB","Overload protection","1.8m cord"]'::jsonb)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO product_skus (id, product_id, sku_name, sku_attrs_json, price_cent, stock, locked_stock, status) VALUES
   (1, 1, 'Cherry Set', '{"shade":"cherry","pack":"3pcs"}'::jsonb, 12900, 29, 1, 'active'),
   (2, 1, 'Rose Set', '{"shade":"rose","pack":"3pcs"}'::jsonb, 13900, 18, 1, 'active'),
-  (3, 2, 'Cream White', '{"color":"cream","size":"standard"}'::jsonb, 8900, 38, 0, 'active')
+  (3, 2, 'Cream White', '{"color":"cream","size":"standard"}'::jsonb, 8900, 38, 0, 'active'),
+  (4, 3, 'White', '{"color":"white","size":"standard"}'::jsonb, 7900, 50, 0, 'active'),
+  (5, 4, '3-Piece Set', '{"color":"clear","size":"3pcs"}'::jsonb, 4900, 60, 0, 'active'),
+  (6, 5, 'Standard', '{"color":"white","size":"standard"}'::jsonb, 5900, 45, 0, 'active')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO notes (id, author_id, title, content, cover_url, status, view_count, like_count) VALUES
