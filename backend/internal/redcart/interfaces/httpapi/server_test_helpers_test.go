@@ -53,7 +53,7 @@ func wrapPostgresRepoWithRedisForTest(t testing.TB, base application.Repository)
 	t.Helper()
 	addr := os.Getenv("REDIS_ADDR")
 	if addr == "" {
-		return base, func() {}
+		t.Fatalf("REDIS_ADDR is required for postgres integration tests")
 	}
 
 	client, err := redisrepo.NewClient(addr)

@@ -16,7 +16,10 @@
 - 仅在 PostgreSQL 适配层优化写路径：将运行时 SQL 调用切到 `database/sql`，用 `INSERT/UPDATE ... RETURNING` 取代写后回读，并让订单写入阶段直接回填 `order_items.id` 与时间戳，减少下单热路径的数据库往返和对象分配。
 - 将 PR 与 `main` push 的统一门禁收敛到 `.github/workflows/ci.yml`。
 - 将后端、前端、AI service、安全和 Docker 子 workflow 保留为复用与手动运行入口。
-- 移除后端 CI 中未使用的 Redis service，保留当前 PostgreSQL 运行时依赖。
+- 将 Redis 从可选读侧适配提升为运行时必需依赖：后端启动缺少 `REDIS_ADDR` 直接失败；PostgreSQL HTTP 集成测试强制要求 `REDIS_ADDR`；同步更新 README、架构文档、项目约束、CI 说明与性能基线口径。
+- 新增 PostgreSQL 极端并发稳定性测试：覆盖脏读、非重复读、幻读、死锁、丢失更新与写偏斜；测试暴露 Pay/Cancel/Finish/Refund 等状态转换存在丢失更新风险。
+- 修复订单状态转换竞争：新增 `application.Repository.UpdateOrderStatus` 原子方法，PostgreSQL 实现通过 `SELECT ... FOR UPDATE` + `UPDATE ... WHERE status = 原状态` 保证并发状态迁移只有一个胜出；所有订单状态变更服务方法迁移到该方法，失败时返回幂等视图。
+- 进一步把状态迁移与库存副作用收敛到同一事务：新增 `application.OrderTx` 接口并扩展 `UpdateOrderStatus` 支持事务内副作用回调；`PayOrder`、`CancelOrder`、`MerchantApproveRefund` 的库存确认/释放与订单事件写入全部在状态迁移同一事务中完成；新增 `TestPayOrderInventoryFailureRollsBackStatus` 验证副作用失败时状态回滚。
 - 将 `ai-service` 的 Dependabot 扫描从不存在的 Python manifest 改为 Dockerfile 依赖面。
 - 明确每个 commit 都应同步更新 `CHANGELOG.md`，并把例外说明纳入交付验证工作流。
 - 回退 README 和 CHANGELOG 中的本地 PNG 图片资产与引用。

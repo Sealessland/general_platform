@@ -109,11 +109,11 @@ python3 -m http.server 4173 --bind 127.0.0.1
 
 ## 当前实现说明
 
-当前 MVP 运行时采用纯 PostgreSQL 环境：
+当前 MVP 运行时采用 PostgreSQL + Redis 环境：
 
-- 后端启动时必须提供 `POSTGRES_DSN`
+- 后端启动时必须提供 `POSTGRES_DSN` 与 `REDIS_ADDR`
 - 后端连接 PostgreSQL 后会自动执行初始化迁移与演示种子数据
-- 如果提供 `REDIS_ADDR`，运行时会启用 Redis 读侧适配：认证 session 以 Redis 为真相源并带本地热缓存，商品/SKU/SKU 列表读路径会优先命中 Redis 缓存
+- Redis 读侧适配默认启用：认证 session 以 Redis 为真相源并带本地热缓存，商品/SKU/SKU 列表读路径会优先命中 Redis 缓存
 - AI 能力使用可重复的 Mock Provider
 - RabbitMQ 暂不作为运行时前置依赖
 

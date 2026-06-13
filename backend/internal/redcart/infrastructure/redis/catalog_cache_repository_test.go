@@ -33,9 +33,19 @@ func (r *countingRepo) ListSKUsByProduct(productID int64) []domain.SKU {
 	return r.Repository.ListSKUsByProduct(productID)
 }
 
+func newCatalogCacheRepoWithMiniredis(t *testing.T, base application.Repository) (*CatalogCacheRepository, func()) {
+	t.Helper()
+	server := miniredis.RunT(t)
+	client := goredis.NewClient(&goredis.Options{Addr: server.Addr()})
+	cleanup := func() { _ = client.Close() }
+	repo := NewCatalogCacheRepository(base, client, time.Hour)
+	return repo, cleanup
+}
+
 func TestCatalogCacheRepositoryUsesLocalCacheAfterFirstRead(t *testing.T) {
 	base := &countingRepo{Repository: memory.NewRepository()}
-	repo := NewCatalogCacheRepository(base, nil, time.Hour)
+	repo, cleanup := newCatalogCacheRepoWithMiniredis(t, base)
+	defer cleanup()
 
 	if _, ok := repo.GetProduct(1); !ok {
 		t.Fatal("expected seeded product")
@@ -96,7 +106,8 @@ func TestCatalogCacheRepositoryReadsFromRedisAcrossInstances(t *testing.T) {
 
 func TestCatalogCacheRepositoryInvalidatesSKUListOnSaveSKU(t *testing.T) {
 	base := &countingRepo{Repository: memory.NewRepository()}
-	repo := NewCatalogCacheRepository(base, nil, time.Hour)
+	repo, cleanup := newCatalogCacheRepoWithMiniredis(t, base)
+	defer cleanup()
 
 	skus := repo.ListSKUsByProduct(1)
 	if len(skus) == 0 {
@@ -115,7 +126,8 @@ func TestCatalogCacheRepositoryInvalidatesSKUListOnSaveSKU(t *testing.T) {
 
 func TestCatalogCacheRepositoryInvalidatesOrderSKUsAfterSaveOrderWithInventoryLocks(t *testing.T) {
 	base := &countingRepo{Repository: memory.NewRepository()}
-	repo := NewCatalogCacheRepository(base, nil, time.Hour)
+	repo, cleanup := newCatalogCacheRepoWithMiniredis(t, base)
+	defer cleanup()
 
 	sku, ok := repo.GetSKU(1)
 	if !ok {

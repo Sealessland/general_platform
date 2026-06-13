@@ -181,12 +181,17 @@ func (s *Service) MerchantShipOrder(ctx context.Context, actor Actor, orderID in
 		return nil, newError(ErrorConflict, err.Error())
 	}
 	now := s.now()
-	order.Status = orderdomain.StatusShipped
-	order.ShippedAt = &now
-	order.UpdatedAt = now
-	saved, err := s.repo.SaveOrder(order)
+	saved, err := s.repo.UpdateOrderStatus(order.ID, string(orderdomain.StatusPaid), string(orderdomain.StatusShipped), func(o *domain.Order) error {
+		o.ShippedAt = &now
+		o.UpdatedAt = now
+		return nil
+	}, nil)
 	if err != nil {
-		return nil, err
+		current, ok := s.repo.GetOrder(order.ID)
+		if ok && shipAlreadyApplied(current) {
+			return s.currentOrderView(current)
+		}
+		return nil, newError(ErrorConflict, err.Error())
 	}
 	_, _ = s.repo.AppendOrderEvent(domain.OrderEvent{
 		OrderID:      saved.ID,
@@ -218,25 +223,32 @@ func (s *Service) MerchantApproveRefund(ctx context.Context, actor Actor, orderI
 		return nil, newError(ErrorConflict, err.Error())
 	}
 	now := s.now()
-	order.Status = orderdomain.StatusRefunded
-	order.UpdatedAt = now
-	saved, err := s.repo.SaveOrder(order)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.releaseInventory(saved.ID, false); err != nil {
-		return nil, err
-	}
-	_, _ = s.repo.AppendOrderEvent(domain.OrderEvent{
-		OrderID:      saved.ID,
-		FromStatus:   string(orderdomain.StatusRefunding),
-		ToStatus:     string(orderdomain.StatusRefunded),
-		EventType:    "ORDER_REFUNDED",
-		OperatorID:   actor.UserID,
-		OperatorRole: actor.Role,
-		Remark:       "merchant approved refund",
-		CreatedAt:    now,
+	saved, err := s.repo.UpdateOrderStatus(order.ID, string(orderdomain.StatusRefunding), string(orderdomain.StatusRefunded), func(o *domain.Order) error {
+		o.UpdatedAt = now
+		return nil
+	}, func(tx OrderTx, o domain.Order) error {
+		if err := s.releaseInventory(tx, o.ID, false); err != nil {
+			return err
+		}
+		_, _ = tx.AppendOrderEvent(domain.OrderEvent{
+			OrderID:      o.ID,
+			FromStatus:   string(orderdomain.StatusRefunding),
+			ToStatus:     string(orderdomain.StatusRefunded),
+			EventType:    "ORDER_REFUNDED",
+			OperatorID:   actor.UserID,
+			OperatorRole: actor.Role,
+			Remark:       "merchant approved refund",
+			CreatedAt:    now,
+		})
+		return nil
 	})
+	if err != nil {
+		current, ok := s.repo.GetOrder(order.ID)
+		if ok && refundApproveAlreadyApplied(current) {
+			return s.currentOrderView(current)
+		}
+		return nil, newError(ErrorConflict, err.Error())
+	}
 	_, _ = s.repo.AppendBehaviorEvent(domain.BehaviorEvent{
 		EventType:  domain.BehaviorOrderRefund,
 		OrderID:    saved.ID,

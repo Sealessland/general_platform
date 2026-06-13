@@ -219,10 +219,10 @@ func (s *Service) buildOrderPreview(lines []checkoutLine) (*OrderPreview, error)
 	return preview, nil
 }
 
-func (s *Service) releaseInventory(orderID int64, fromLocked bool) error {
+func (s *Service) releaseInventory(tx OrderTx, orderID int64, fromLocked bool) error {
 	now := s.now()
-	for _, lock := range s.repo.ListInventoryLocksByOrder(orderID) {
-		sku, ok := s.repo.GetSKU(lock.SKUID)
+	for _, lock := range tx.ListInventoryLocksByOrder(orderID) {
+		sku, ok := tx.GetSKU(lock.SKUID)
 		if !ok {
 			return newError(ErrorNotFound, "sku not found for inventory release")
 		}
@@ -235,12 +235,12 @@ func (s *Service) releaseInventory(orderID int64, fromLocked bool) error {
 		if sku.LockedStock < 0 || sku.Stock < 0 {
 			return newError(ErrorConflict, "inventory underflow detected")
 		}
-		if _, err := s.repo.SaveSKU(sku); err != nil {
+		if _, err := tx.SaveSKU(sku); err != nil {
 			return err
 		}
 		lock.Status = domain.InventoryLockStatusReleased
 		lock.ReleasedAt = &now
-		if err := s.repo.UpdateInventoryLock(lock); err != nil {
+		if err := tx.UpdateInventoryLock(lock); err != nil {
 			return err
 		}
 	}

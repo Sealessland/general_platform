@@ -104,6 +104,8 @@
 
 ## 2026-06-09 Redis 读侧适配复测
 
+> 说明：Redis 已成为运行时必须依赖，以下“无 Redis / 有 Redis”对照是历史复测数据，仅用于说明读侧适配收益；当前环境不再支持无 Redis 启动。
+
 优化边界：
 
 - 保持订单、库存、购物车和幂等真相在 PostgreSQL
@@ -121,10 +123,9 @@
 - PostgreSQL：Docker Compose 中的 `postgres:16`，本地端口 `127.0.0.1:15432`
 - Redis：Docker Compose 中的 `redis:7`，本地端口 `127.0.0.1:6379`
 - 基准命令：
-  - 无 Redis：`rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable RUN_POSTGRES_INTEGRATION=1 POSTGRES_BENCHTIME=3s GOCACHE=/tmp/go-build-cache go test ./internal/redcart/interfaces/httpapi -run '^$' -bench 'BenchmarkHTTPPostgres(OrderPreview|CreateOrder)$' -benchmem`
-  - 有 Redis：`rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable REDIS_ADDR=127.0.0.1:6379 RUN_POSTGRES_INTEGRATION=1 POSTGRES_BENCHTIME=3s GOCACHE=/tmp/go-build-cache go test ./internal/redcart/interfaces/httpapi -run '^$' -bench 'BenchmarkHTTPPostgres(OrderPreview|CreateOrder)$' -benchmem`
+  `rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable REDIS_ADDR=127.0.0.1:6379 RUN_POSTGRES_INTEGRATION=1 POSTGRES_BENCHTIME=3s GOCACHE=/tmp/go-build-cache go test ./internal/redcart/interfaces/httpapi -run '^$' -bench 'BenchmarkHTTPPostgres(OrderPreview|CreateOrder)$' -benchmem`
 
-复测数据：
+历史对照数据：
 
 | Benchmark | 无 Redis QPS | 有 Redis QPS | 无 Redis ns/op | 有 Redis ns/op | 无 Redis B/op | 有 Redis B/op | 无 Redis allocs/op | 有 Redis allocs/op |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|

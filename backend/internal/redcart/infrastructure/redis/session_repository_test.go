@@ -40,28 +40,6 @@ func TestSessionRepositoryRoundTrip(t *testing.T) {
 	}
 }
 
-func TestSessionRepositoryFallsBackToBaseStore(t *testing.T) {
-	base := memory.NewRepository()
-	repo := NewSessionRepository(base, nil, time.Hour)
-	service := application.NewService(repo, backendai.MockProvider{})
-
-	session, err := service.Login(t.Context(), application.LoginInput{
-		Phone:    "13800000002",
-		Password: "merchant-demo",
-	})
-	if err != nil {
-		t.Fatalf("login: %v", err)
-	}
-
-	user, ok := repo.GetUserByToken(session.Token)
-	if !ok {
-		t.Fatal("expected fallback session lookup")
-	}
-	if user.ID != session.User.ID || user.Role != session.User.Role {
-		t.Fatalf("unexpected fallback user: %+v", user)
-	}
-}
-
 func TestSessionTTLFromEnv(t *testing.T) {
 	ttl, err := SessionTTLFromEnv("")
 	if err != nil {

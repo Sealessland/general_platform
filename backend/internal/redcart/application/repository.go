@@ -8,6 +8,18 @@ import (
 
 var ErrInsufficientStock = errors.New("stock is insufficient")
 
+// OrderTx exposes repository operations that can be performed inside the
+// transaction scoped to an order status transition. It is passed to the
+// sideEffect callback of UpdateOrderStatus so that inventory changes and
+// event writes are committed atomically with the status change.
+type OrderTx interface {
+	GetSKU(id int64) (domain.SKU, bool)
+	SaveSKU(sku domain.SKU) (domain.SKU, error)
+	ListInventoryLocksByOrder(orderID int64) []domain.InventoryLock
+	UpdateInventoryLock(lock domain.InventoryLock) error
+	AppendOrderEvent(event domain.OrderEvent) (domain.OrderEvent, error)
+}
+
 type Repository interface {
 	CreateUser(user domain.User) (domain.User, error)
 	FindUserByPhone(phone string) (domain.User, bool)
@@ -42,6 +54,7 @@ type Repository interface {
 	GetOrder(id int64) (domain.Order, bool)
 	SaveOrder(order domain.Order) (domain.Order, error)
 	SaveOrderWithInventoryLocks(order domain.Order, locks []domain.InventoryLock) (domain.Order, error)
+	UpdateOrderStatus(orderID int64, fromStatus, toStatus string, mutator func(*domain.Order) error, sideEffect func(OrderTx, domain.Order) error) (domain.Order, error)
 
 	ListOrderEvents(orderID int64) []domain.OrderEvent
 	AppendOrderEvent(event domain.OrderEvent) (domain.OrderEvent, error)

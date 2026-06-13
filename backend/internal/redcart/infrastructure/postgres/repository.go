@@ -40,6 +40,15 @@ type gormResult struct {
 	rowsAffected int64
 }
 
+type dbQuerier interface {
+	QueryRow(query string, args ...any) *sql.Row
+	Query(query string, args ...any) (*sql.Rows, error)
+	Exec(query string, args ...any) (sql.Result, error)
+}
+
+var _ dbQuerier = (*gormSQL)(nil)
+var _ dbQuerier = (*gormTx)(nil)
+
 func (g *gormSQL) QueryRow(query string, args ...any) *sql.Row {
 	return g.db.QueryRow(query, args...)
 }
@@ -62,6 +71,10 @@ func (g *gormSQL) Begin() (*gormTx, error) {
 
 func (tx *gormTx) QueryRow(query string, args ...any) *sql.Row {
 	return tx.tx.QueryRow(query, args...)
+}
+
+func (tx *gormTx) Query(query string, args ...any) (*sql.Rows, error) {
+	return tx.tx.Query(query, args...)
 }
 
 func (tx *gormTx) Exec(query string, args ...any) (sql.Result, error) {
@@ -479,7 +492,11 @@ func (r *Repository) ListSKUsByProduct(productID int64) []domain.SKU {
 }
 
 func (r *Repository) GetSKU(id int64) (domain.SKU, bool) {
-	row := r.db.QueryRow(`SELECT id, product_id, sku_name, sku_attrs_json, price_cent, stock, locked_stock, status, created_at, updated_at FROM product_skus WHERE id = $1`, id)
+	return getSKU(r.db, id)
+}
+
+func getSKU(q dbQuerier, id int64) (domain.SKU, bool) {
+	row := q.QueryRow(`SELECT id, product_id, sku_name, sku_attrs_json, price_cent, stock, locked_stock, status, created_at, updated_at FROM product_skus WHERE id = $1`, id)
 	sku, err := scanSKU(row)
 	if err == sql.ErrNoRows {
 		return domain.SKU{}, false
@@ -488,6 +505,10 @@ func (r *Repository) GetSKU(id int64) (domain.SKU, bool) {
 }
 
 func (r *Repository) SaveSKU(sku domain.SKU) (domain.SKU, error) {
+	return saveSKU(r.db, sku)
+}
+
+func saveSKU(q dbQuerier, sku domain.SKU) (domain.SKU, error) {
 	attrs, err := json.Marshal(sku.SKUAttrs)
 	if err != nil {
 		return domain.SKU{}, err
@@ -497,7 +518,7 @@ func (r *Repository) SaveSKU(sku domain.SKU) (domain.SKU, error) {
 INSERT INTO product_skus (product_id, sku_name, sku_attrs_json, price_cent, stock, locked_stock, status, created_at, updated_at)
 VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, COALESCE($8, CURRENT_TIMESTAMP), COALESCE($9, CURRENT_TIMESTAMP))
 RETURNING id, created_at, updated_at`
-		if err := r.db.QueryRow(
+		if err := q.QueryRow(
 			query,
 			sku.ProductID, sku.SKUName, string(attrs), sku.PriceCent, sku.Stock, sku.LockedStock, sku.Status,
 			nullTime(sku.CreatedAt), nullTime(sku.UpdatedAt),
@@ -506,7 +527,7 @@ RETURNING id, created_at, updated_at`
 		}
 		return sku, nil
 	}
-	err = r.db.QueryRow(
+	err = q.QueryRow(
 		`UPDATE product_skus SET product_id = $1, sku_name = $2, sku_attrs_json = $3::jsonb, price_cent = $4, stock = $5, locked_stock = $6, status = $7
 		WHERE id = $8
 		RETURNING created_at, updated_at`,
@@ -758,6 +779,102 @@ func (r *Repository) SaveOrderWithInventoryLocks(order domain.Order, locks []dom
 	return order, nil
 }
 
+type pgOrderTx struct {
+	tx *gormTx
+}
+
+func (t *pgOrderTx) GetSKU(id int64) (domain.SKU, bool) {
+	return getSKU(t.tx, id)
+}
+
+func (t *pgOrderTx) SaveSKU(sku domain.SKU) (domain.SKU, error) {
+	return saveSKU(t.tx, sku)
+}
+
+func (t *pgOrderTx) ListInventoryLocksByOrder(orderID int64) []domain.InventoryLock {
+	return listInventoryLocksByOrder(t.tx, orderID)
+}
+
+func (t *pgOrderTx) UpdateInventoryLock(lock domain.InventoryLock) error {
+	return updateInventoryLock(t.tx, lock)
+}
+
+func (t *pgOrderTx) AppendOrderEvent(event domain.OrderEvent) (domain.OrderEvent, error) {
+	return appendOrderEvent(t.tx, event)
+}
+
+func (r *Repository) UpdateOrderStatus(orderID int64, fromStatus, toStatus string, mutator func(*domain.Order) error, sideEffect func(application.OrderTx, domain.Order) error) (domain.Order, error) {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return domain.Order{}, err
+	}
+	defer tx.Rollback()
+
+	row := tx.QueryRow(
+		`SELECT id, order_no, user_id, merchant_id, status, total_amount_cent, pay_amount_cent, discount_amount_cent, idempotency_key, receiver_name, receiver_phone, receiver_address, paid_at, cancelled_at, shipped_at, finished_at, created_at, updated_at
+		FROM orders
+		WHERE id = $1
+		FOR UPDATE`,
+		orderID,
+	)
+	order, err := scanOrder(row)
+	if err == sql.ErrNoRows {
+		return domain.Order{}, fmt.Errorf("order %d not found", orderID)
+	}
+	if err != nil {
+		return domain.Order{}, err
+	}
+	if string(order.Status) != fromStatus {
+		return domain.Order{}, fmt.Errorf("order %d status is %s, expected %s", orderID, order.Status, fromStatus)
+	}
+
+	if mutator != nil {
+		if err := mutator(&order); err != nil {
+			return domain.Order{}, err
+		}
+	}
+	order.Status = orderdomain.OrderStatus(toStatus)
+	order.UpdatedAt = time.Now().UTC()
+
+	result, err := tx.Exec(
+		`UPDATE orders SET status = $1, total_amount_cent = $2, pay_amount_cent = $3, discount_amount_cent = $4, receiver_name = $5, receiver_phone = $6, receiver_address = $7, paid_at = $8, cancelled_at = $9, shipped_at = $10, finished_at = $11, updated_at = $12
+		WHERE id = $13 AND status = $14`,
+		order.Status, order.TotalAmountCent, order.PayAmountCent, order.DiscountAmountCent,
+		order.ReceiverName, order.ReceiverPhone, order.ReceiverAddress,
+		nullTimeValue(order.PaidAt), nullTimeValue(order.CancelledAt), nullTimeValue(order.ShippedAt), nullTimeValue(order.FinishedAt),
+		order.UpdatedAt, order.ID, fromStatus,
+	)
+	if err != nil {
+		return domain.Order{}, err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return domain.Order{}, err
+	}
+	if affected == 0 {
+		return domain.Order{}, fmt.Errorf("order %d was concurrently modified", orderID)
+	}
+
+	if sideEffect != nil {
+		if err := sideEffect(&pgOrderTx{tx: tx}, order); err != nil {
+			return domain.Order{}, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return domain.Order{}, err
+	}
+	order.Items = r.loadOrderItems(order.ID)
+	return order, nil
+}
+
+func nullTimeValue(t *time.Time) sql.NullTime {
+	if t == nil {
+		return sql.NullTime{}
+	}
+	return sql.NullTime{Time: *t, Valid: true}
+}
+
 func (r *Repository) ListOrderEvents(orderID int64) []domain.OrderEvent {
 	rows, err := r.db.Query(`SELECT id, order_id, from_status, to_status, event_type, operator_id, operator_role, remark, created_at FROM order_events WHERE order_id = $1 ORDER BY id`, orderID)
 	if err != nil {
@@ -776,7 +893,11 @@ func (r *Repository) ListOrderEvents(orderID int64) []domain.OrderEvent {
 }
 
 func (r *Repository) AppendOrderEvent(event domain.OrderEvent) (domain.OrderEvent, error) {
-	err := r.db.QueryRow(
+	return appendOrderEvent(r.db, event)
+}
+
+func appendOrderEvent(q dbQuerier, event domain.OrderEvent) (domain.OrderEvent, error) {
+	err := q.QueryRow(
 		`INSERT INTO order_events (order_id, from_status, to_status, event_type, operator_id, operator_role, remark, created_at)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,COALESCE($8, CURRENT_TIMESTAMP))
 		RETURNING id, created_at`,
@@ -789,7 +910,11 @@ func (r *Repository) AppendOrderEvent(event domain.OrderEvent) (domain.OrderEven
 }
 
 func (r *Repository) ListInventoryLocksByOrder(orderID int64) []domain.InventoryLock {
-	rows, err := r.db.Query(`SELECT id, order_id, sku_id, quantity, status, locked_at, confirmed_at, released_at, created_at, updated_at FROM inventory_locks WHERE order_id = $1 ORDER BY id`, orderID)
+	return listInventoryLocksByOrder(r.db, orderID)
+}
+
+func listInventoryLocksByOrder(q dbQuerier, orderID int64) []domain.InventoryLock {
+	rows, err := q.Query(`SELECT id, order_id, sku_id, quantity, status, locked_at, confirmed_at, released_at, created_at, updated_at FROM inventory_locks WHERE order_id = $1 ORDER BY id`, orderID)
 	if err != nil {
 		return nil
 	}
@@ -819,7 +944,11 @@ func (r *Repository) SaveInventoryLock(lock domain.InventoryLock) (domain.Invent
 }
 
 func (r *Repository) UpdateInventoryLock(lock domain.InventoryLock) error {
-	_, err := r.db.Exec(
+	return updateInventoryLock(r.db, lock)
+}
+
+func updateInventoryLock(q dbQuerier, lock domain.InventoryLock) error {
+	_, err := q.Exec(
 		`UPDATE inventory_locks SET status = $1, locked_at = $2, confirmed_at = $3, released_at = $4 WHERE id = $5`,
 		lock.Status, lock.LockedAt, lock.ConfirmedAt, lock.ReleasedAt, lock.ID,
 	)

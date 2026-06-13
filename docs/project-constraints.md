@@ -23,8 +23,8 @@
 ## 3. 运行时约束
 
 - 当前 MVP 运行环境以 **Docker Compose** 为准。
-- 运行时数据库为 **PostgreSQL**。
-- 后端启动时必须显式提供 `POSTGRES_DSN`。
+- 运行时数据库为 **PostgreSQL**，运行时缓存/会话源为 **Redis**。
+- 后端启动时必须显式提供 `POSTGRES_DSN` 与 `REDIS_ADDR`。
 - 本地推荐入口：
 
 ```bash

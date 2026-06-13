@@ -37,7 +37,7 @@
 - `.github/workflows/ci.yml` 是 PR 和 `main` push 的统一门禁入口
 - `backend-test.yml`、`frontend-test.yml`、`ai-service-test.yml`、`security-test.yml` 和 `docker-build.yml` 只保留 `workflow_call` 与 `workflow_dispatch`
 - 子 workflow 可被顶层 CI 复用，也可手动单独运行；不再直接监听 PR 或 `main` push，避免同一事件重复执行
-- 后端 CI 只启动当前运行时依赖 PostgreSQL；Redis 仍是规划中的适配目标，不作为 CI 前置服务
+- 后端 CI 需要同时启动当前运行时依赖 PostgreSQL 与 Redis；两者都是 MVP 运行前置服务
 - Dependabot 只配置真实存在的依赖面：Go module、npm、Dockerfile 和 GitHub Actions
 - Pyroscope profile 查询不进入 GitHub Actions 门禁；CI 只覆盖 profiling 配置单测和常规后端门禁，profile 数据保留为本地人工/界面复核
 

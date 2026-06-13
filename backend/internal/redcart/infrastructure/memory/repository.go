@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	orderdomain "github.com/example/redcart-copilot/backend/internal/order/domain"
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 )
@@ -556,6 +557,10 @@ func (r *Repository) ListSKUsByProduct(productID int64) []domain.SKU {
 func (r *Repository) GetSKU(id int64) (domain.SKU, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	return r.getSKULocked(id)
+}
+
+func (r *Repository) getSKULocked(id int64) (domain.SKU, bool) {
 	sku, ok := r.skus[id]
 	return cloneSKU(sku), ok
 }
@@ -563,6 +568,10 @@ func (r *Repository) GetSKU(id int64) (domain.SKU, bool) {
 func (r *Repository) SaveSKU(sku domain.SKU) (domain.SKU, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	return r.saveSKULocked(sku)
+}
+
+func (r *Repository) saveSKULocked(sku domain.SKU) (domain.SKU, error) {
 	if sku.ID == 0 {
 		sku.ID = r.nextID(&r.nextSKUID)
 		if sku.CreatedAt.IsZero() {
@@ -712,6 +721,60 @@ func (r *Repository) saveOrderLocked(order domain.Order) domain.Order {
 	return cloneOrder(order)
 }
 
+type memOrderTx struct {
+	r *Repository
+}
+
+func (t *memOrderTx) GetSKU(id int64) (domain.SKU, bool) {
+	return t.r.getSKULocked(id)
+}
+
+func (t *memOrderTx) SaveSKU(sku domain.SKU) (domain.SKU, error) {
+	return t.r.saveSKULocked(sku)
+}
+
+func (t *memOrderTx) ListInventoryLocksByOrder(orderID int64) []domain.InventoryLock {
+	return t.r.listInventoryLocksByOrderLocked(orderID)
+}
+
+func (t *memOrderTx) UpdateInventoryLock(lock domain.InventoryLock) error {
+	return t.r.updateInventoryLockLocked(lock)
+}
+
+func (t *memOrderTx) AppendOrderEvent(event domain.OrderEvent) (domain.OrderEvent, error) {
+	return t.r.appendOrderEventLocked(event)
+}
+
+func (r *Repository) UpdateOrderStatus(orderID int64, fromStatus, toStatus string, mutator func(*domain.Order) error, sideEffect func(application.OrderTx, domain.Order) error) (domain.Order, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	order, ok := r.orders[orderID]
+	if !ok {
+		return domain.Order{}, fmt.Errorf("order %d not found", orderID)
+	}
+	if order.Status != orderdomain.OrderStatus(fromStatus) {
+		return domain.Order{}, fmt.Errorf("order %d status is %s, expected %s", orderID, order.Status, fromStatus)
+	}
+	if mutator != nil {
+		if err := mutator(&order); err != nil {
+			return domain.Order{}, err
+		}
+	}
+	order.Status = orderdomain.OrderStatus(toStatus)
+	order.UpdatedAt = time.Now().UTC()
+	r.orders[orderID] = cloneOrder(order)
+	if sideEffect != nil {
+		if err := sideEffect(&memOrderTx{r: r}, order); err != nil {
+			// Rollback the status change on side effect failure to keep the
+			// in-memory contract consistent with the PostgreSQL transaction.
+			order.Status = orderdomain.OrderStatus(fromStatus)
+			r.orders[orderID] = cloneOrder(order)
+			return domain.Order{}, err
+		}
+	}
+	return cloneOrder(order), nil
+}
+
 func (r *Repository) SaveOrderWithInventoryLocks(order domain.Order, locks []domain.InventoryLock) (domain.Order, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -757,6 +820,10 @@ func (r *Repository) ListOrderEvents(orderID int64) []domain.OrderEvent {
 func (r *Repository) AppendOrderEvent(event domain.OrderEvent) (domain.OrderEvent, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	return r.appendOrderEventLocked(event)
+}
+
+func (r *Repository) appendOrderEventLocked(event domain.OrderEvent) (domain.OrderEvent, error) {
 	event.ID = r.nextID(&r.nextOrderEventID)
 	if event.CreatedAt.IsZero() {
 		event.CreatedAt = time.Now().UTC()
@@ -768,6 +835,10 @@ func (r *Repository) AppendOrderEvent(event domain.OrderEvent) (domain.OrderEven
 func (r *Repository) ListInventoryLocksByOrder(orderID int64) []domain.InventoryLock {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	return r.listInventoryLocksByOrderLocked(orderID)
+}
+
+func (r *Repository) listInventoryLocksByOrderLocked(orderID int64) []domain.InventoryLock {
 	locks := r.locksByOrder[orderID]
 	out := make([]domain.InventoryLock, len(locks))
 	for i, lock := range locks {
@@ -779,6 +850,10 @@ func (r *Repository) ListInventoryLocksByOrder(orderID int64) []domain.Inventory
 func (r *Repository) SaveInventoryLock(lock domain.InventoryLock) (domain.InventoryLock, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	return r.saveInventoryLockLocked(lock)
+}
+
+func (r *Repository) saveInventoryLockLocked(lock domain.InventoryLock) (domain.InventoryLock, error) {
 	lock.ID = r.nextID(&r.nextInventoryLockID)
 	if lock.CreatedAt.IsZero() {
 		lock.CreatedAt = time.Now().UTC()
@@ -791,6 +866,10 @@ func (r *Repository) SaveInventoryLock(lock domain.InventoryLock) (domain.Invent
 func (r *Repository) UpdateInventoryLock(lock domain.InventoryLock) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	return r.updateInventoryLockLocked(lock)
+}
+
+func (r *Repository) updateInventoryLockLocked(lock domain.InventoryLock) error {
 	locks := r.locksByOrder[lock.OrderID]
 	for i := range locks {
 		if locks[i].ID == lock.ID {

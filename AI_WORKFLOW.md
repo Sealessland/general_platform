@@ -551,3 +551,99 @@ rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmod
 
 - 当前 Redis 读侧适配主要提升的是商品/SKU 热读路径；如果未来 SKU 更新频率升高，需要继续审视 TTL 与失效策略。
 - `CreateOrder` 吞吐仍主要受 PostgreSQL 事务写路径支配；继续追写路径收益需要更重的 Redis 预占库存或幂等设计，而不是继续加只读缓存。
+
+## 2026-06-12：Redis 从可选改为运行时必需依赖
+
+### AI 参与范围
+
+- 按用户要求将 Redis 从“可选读侧加速”改为“运行时必需依赖”。
+- 修改后端装配层 `backend/cmd/api/repository_factory.go`，缺少 `REDIS_ADDR` 时直接返回错误。
+- 调整装配层测试、Redis session/catalog 测试与 PostgreSQL HTTP 集成测试 helper，不再依赖无 Redis 的 fallback 路径。
+- 同步更新 README、架构文档、项目约束、CI 说明、性能基线口径、CHANGELOG 与 AI 工作流记录。
+
+### 人工或主代理修正
+
+- 保留 `SessionRepository` 与 `CatalogCacheRepository` 内部的 `client == nil` 防御检查，仅作为最后一道防线，不再测试该路径。
+- 历史性能基线中的“无 Redis”数据保留为对照说明，但明确标注 Redis 已是运行必需。
+
+### 验证证据
+
+```bash
+rtk env GOCACHE=/tmp/go-build-cache go test ./cmd/api ./internal/redcart/infrastructure/redis ./internal/redcart/interfaces/httpapi
+rtk env GOCACHE=/tmp/go-build-cache go test ./...
+rtk bash scripts/validate-workspace.sh
+rtk bash scripts/check-openapi.sh
+```
+
+### 剩余风险
+
+- 本地仅启动 PostgreSQL 而未启动 Redis 的开发习惯会失败；需通过 `bash scripts/local-dev.sh` 或手动启动 Redis。
+- 若 GitHub Actions 后端 workflow 未配置 Redis service，CI 会失败；已同步更新 `ci/README.md` 说明。
+
+## 2026-06-12：极端并发稳定性测试与状态转换竞争修复
+
+### AI 参与范围
+
+- 按用户要求制造极端并发用例，覆盖脏读、幻读、非重复读、死锁、活锁、丢失更新与写偏斜等稳定性风险。
+- 新增 `backend/internal/redcart/infrastructure/postgres/repository_stability_test.go`，包含：
+  - `TestReadCommittedNoDirtyRead`：验证 READ COMMITTED 下不存在脏读。
+  - `TestNonRepeatableReadInventory`、`TestPhantomInventoryLocks`：文档化 READ COMMITTED 下非重复读与幻读的预期行为。
+  - `TestConcurrentPayOrderNoDoubleConfirm`：并发支付同一订单，检测库存重复确认（丢失更新）。
+  - `TestConcurrentPayAndCancelNoInventoryCorruption`：并发支付与取消，检测写偏斜。
+  - `TestConcurrentRefundAndFinishNoInventoryCorruption`：并发退款审批与确认收货，检测写偏斜。
+  - `TestMassConcurrentStockReservation`：200 并发抢 50 库存，验证库存不超卖。
+  - `TestCyclicSKUAccessNoDeadlock`：循环 SKU 访问模式，检测死锁。
+- 测试运行后发现真实缺陷：并发 PayOrder 会出现多次成功并重复扣减库存；并发 Pay/Cancel 会同时成功导致库存不一致。
+
+### 人工或主代理修正
+
+- 定位根因：所有订单状态转换服务方法（Pay/Cancel/Finish/RequestRefund/Ship/ApproveRefund）都先 `GetOrder` 再 `SaveOrder`，`SaveOrder` 的 UPDATE 没有 `WHERE status = 原状态` 保护，导致丢失更新。
+- 在 `application.Repository` 新增 `UpdateOrderStatus(orderID, fromStatus, toStatus, mutator)` 原子方法：PostgreSQL 实现使用 `SELECT ... FOR UPDATE` 并在 `UPDATE` 中追加 `AND status = fromStatus`，确保只有一个并发调用能完成状态迁移；内存实现同样做状态校验。
+- 将所有订单状态转换服务方法迁移到 `UpdateOrderStatus`，失败后重读订单并返回幂等视图。
+- 同步更新 `CHANGELOG.md` 与 `AI_WORKFLOW.md`。
+
+### 验证证据
+
+```bash
+rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable REDIS_ADDR=127.0.0.1:6379 RUN_POSTGRES_INTEGRATION=1 GOCACHE=/tmp/go-build-cache go test ./internal/redcart/infrastructure/postgres -run 'TestReadCommittedNoDirtyRead|TestNonRepeatableReadInventory|TestPhantomInventoryLocks|TestConcurrentPayOrderNoDoubleConfirm|TestConcurrentPayAndCancelNoInventoryCorruption|TestConcurrentRefundAndFinishNoInventoryCorruption|TestMassConcurrentStockReservation|TestCyclicSKUAccessNoDeadlock' -v -count=1
+rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable REDIS_ADDR=127.0.0.1:6379 RUN_POSTGRES_INTEGRATION=1 POSTGRES_BENCHTIME=1s GOCACHE=/tmp/go-build-cache bash ci/scripts/backend-ci.sh
+rtk bash scripts/validate-workspace.sh
+rtk bash scripts/check-openapi.sh
+```
+
+### 剩余风险
+
+- `UpdateOrderStatus` 只保证状态迁移的原子性；库存确认/释放（Pay/Cancel/Refund）仍发生在状态迁移提交之后。进程在状态迁移后、库存更新前崩溃会导致订单状态与库存不一致，需后续通过补偿或事务包裹进一步收敛。
+- 当前 PostgreSQL 默认隔离级别为 READ COMMITTED，已用测试文档化非重复读与幻读行为；若业务需要可重复读，需显式提升隔离级别并评估死锁风险。
+
+## 2026-06-12：将状态迁移与库存副作用收敛到同一事务
+
+### AI 参与范围
+
+- 按用户"提升到最保证安全性的程度"要求，把订单状态迁移与库存/事件副作用进一步收敛到同一数据库事务。
+- 扩展 `application.Repository`：新增 `OrderTx` 接口，修改 `UpdateOrderStatus` 增加 `sideEffect` 回调。
+- PostgreSQL 实现 `pgOrderTx`，让回调内的 `GetSKU/SaveSKU/ListInventoryLocksByOrder/UpdateInventoryLock/AppendOrderEvent` 全部复用同一 `*sql.Tx`。
+- 内存实现 `memOrderTx`，在 `UpdateOrderStatus` 全局锁内执行回调，并在副作用失败时回滚状态变更。
+- 将 `PayOrder`、`CancelOrder`、`MerchantApproveRefund` 的库存确认/释放与事件写入移入 `sideEffect`；`ShipOrder`、`FinishOrder`、`RequestRefund` 继续使用 `UpdateOrderStatus` 但副作用为 `nil`。
+- 新增 `TestPayOrderInventoryFailureRollsBackStatus`：人为破坏 SKU locked_stock 使支付副作用失败，验证订单状态回滚到 CREATED。
+- 新增内存仓库 `TestUpdateOrderStatusWithSideEffect`，覆盖事务内副作用与回滚路径，恢复 memory 包覆盖率到阈值以上。
+
+### 人工或主代理修正
+
+- 将公共仓储操作（`GetSKU/SaveSKU/ListInventoryLocksByOrder/UpdateInventoryLock/AppendOrderEvent`）提取为基于 `dbQuerier` 的 helper，使主仓库与 `pgOrderTx` 共用同一份 SQL。
+- 为 `gormTx` 补全 `Query` 方法以满足 `dbQuerier`。
+- 确保 `releaseInventory` 改为接收 `OrderTx`，不再绕过事务。
+
+### 验证证据
+
+```bash
+rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable REDIS_ADDR=127.0.0.1:6379 RUN_POSTGRES_INTEGRATION=1 GOCACHE=/tmp/go-build-cache go test ./internal/redcart/infrastructure/postgres -run 'TestReadCommittedNoDirtyRead|TestNonRepeatableReadInventory|TestPhantomInventoryLocks|TestConcurrentPayOrderNoDoubleConfirm|TestConcurrentPayAndCancelNoInventoryCorruption|TestConcurrentRefundAndFinishNoInventoryCorruption|TestMassConcurrentStockReservation|TestCyclicSKUAccessNoDeadlock|TestPayOrderInventoryFailureRollsBackStatus' -v -count=1
+rtk env GOCACHE=/tmp/go-build-cache go test ./internal/redcart/infrastructure/memory -coverprofile=/tmp/memory-cover.out
+rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable REDIS_ADDR=127.0.0.1:6379 RUN_POSTGRES_INTEGRATION=1 POSTGRES_BENCHTIME=1s GOCACHE=/tmp/go-build-cache bash ci/scripts/backend-ci.sh
+rtk bash scripts/check-openapi.sh
+```
+
+### 剩余风险
+
+- 行为事件（`behavior_events`）仍写在事务外，若崩溃会丢失行为埋点，但不影响订单与库存一致性。
+- 当前隔离级别仍为 READ COMMITTED；若未来引入可重复读或串行化，需要额外死锁测试与性能基线复核。

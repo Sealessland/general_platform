@@ -44,7 +44,7 @@ func initRepository(logger *log.Logger) (application.Repository, func(), error) 
 func wrapRepositoryWithRedisSession(base application.Repository, logger *log.Logger) (application.Repository, func(), error) {
 	addr := envOrDefault("REDIS_ADDR", "")
 	if addr == "" {
-		return base, func() {}, nil
+		return nil, func() {}, fmt.Errorf("REDIS_ADDR is required")
 	}
 
 	client, err := redisrepo.NewClient(addr)
@@ -62,7 +62,7 @@ func wrapRepositoryWithRedisSession(base application.Repository, logger *log.Log
 		return nil, func() {}, err
 	}
 	if logger != nil {
-		logger.Printf("redis session repository enabled on %s with session_ttl=%s catalog_ttl=%s", addr, ttl, catalogTTL)
+		logger.Printf("redis repository wrapped on %s with session_ttl=%s catalog_ttl=%s", addr, ttl, catalogTTL)
 	}
 	withCatalog := redisrepo.NewCatalogCacheRepository(base, client, catalogTTL)
 	withSession := redisrepo.NewSessionRepository(withCatalog, client, ttl)

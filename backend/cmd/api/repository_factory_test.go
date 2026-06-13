@@ -11,16 +11,16 @@ import (
 	redisrepo "github.com/example/redcart-copilot/backend/internal/redcart/infrastructure/redis"
 )
 
-func TestWrapRepositoryWithRedisSessionDisabledWithoutAddr(t *testing.T) {
+func TestWrapRepositoryWithRedisSessionMissingAddr(t *testing.T) {
 	t.Setenv("REDIS_ADDR", "")
 	base := memory.NewRepository()
-	repo, cleanup, err := wrapRepositoryWithRedisSession(base, log.Default())
-	if err != nil {
-		t.Fatalf("wrap repository: %v", err)
+	_, cleanup, err := wrapRepositoryWithRedisSession(base, log.Default())
+	if cleanup == nil {
+		t.Fatal("expected non-nil cleanup")
 	}
-	t.Cleanup(cleanup)
-	if repo != base {
-		t.Fatalf("expected base repository passthrough, got %T", repo)
+	cleanup()
+	if err == nil {
+		t.Fatal("expected error when REDIS_ADDR is missing")
 	}
 }
 
@@ -40,6 +40,14 @@ func TestWrapRepositoryWithRedisSessionEnabled(t *testing.T) {
 	sessionRepo, ok := repo.(*redisrepo.SessionRepository)
 	if !ok {
 		t.Fatalf("expected redis session repository, got %T", repo)
+	}
+
+	catalogRepo, ok := sessionRepo.Repository.(*redisrepo.CatalogCacheRepository)
+	if !ok {
+		t.Fatalf("expected catalog cache repository under session repository, got %T", sessionRepo.Repository)
+	}
+	if catalogRepo.Repository != base {
+		t.Fatal("expected catalog cache repository to wrap base repository")
 	}
 
 	user, ok := base.FindUserByPhone("13800000001")
