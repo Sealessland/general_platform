@@ -80,15 +80,32 @@ func (m MockProvider) generateShoppingGuideSurface(req A2UISurfaceRequest, conte
 	}
 	scene := "智能导购专题"
 	if s, ok := contextMap["scene"].(string); ok && s != "" {
-		scene = s
+		scene = sceneTitle(s)
+	}
+
+	products := contextMap["products"].([]any)
+	hasNotes := false
+	var notes []map[string]any
+	if raw, ok := contextMap["related_notes"].([]any); ok && len(raw) > 0 {
+		for _, item := range raw {
+			if m, ok := item.(map[string]any); ok {
+				notes = append(notes, m)
+			}
+		}
+		hasNotes = len(notes) > 0
+	}
+
+	rootChildren := []string{"header_card", "budget_row", "product_section", "batch_cart_row"}
+	if hasNotes {
+		rootChildren = append(rootChildren, "notes_section")
 	}
 
 	components := []map[string]any{
-		{"id": "root", "component": "Column", "children": []string{"header_card", "budget_row", "product_list"}},
+		{"id": "root", "component": "Column", "children": rootChildren},
 		{"id": "header_card", "component": "Card", "child": "header_col"},
 		{"id": "header_col", "component": "Column", "children": []string{"scene_title", "scene_desc"}},
 		{"id": "scene_title", "component": "Text", "text": scene, "variant": "h2"},
-		{"id": "scene_desc", "component": "Text", "text": fmt.Sprintf("预算 ¥%.2f，已为你筛选 %d 件好物", float64(budget)/100, len(contextMap["products"].([]any)))},
+		{"id": "scene_desc", "component": "Text", "text": fmt.Sprintf("预算 ¥%.2f，已为你筛选 %d 件好物", float64(budget)/100, len(products))},
 	}
 	if budget > 0 {
 		components = append(components,
@@ -100,21 +117,54 @@ func (m MockProvider) generateShoppingGuideSurface(req A2UISurfaceRequest, conte
 		components = append(components, map[string]any{"id": "budget_row", "component": "Row", "children": []string{"budget_label"}})
 		components = append(components, map[string]any{"id": "budget_label", "component": "Text", "text": "预算不限"})
 	}
-	components = append(components, map[string]any{"id": "product_list", "component": "List", "children": map[string]any{"path": "/products", "componentId": "product_card_template"}})
 
-	products := contextMap["products"].([]any)
+	components = append(components,
+		map[string]any{"id": "product_section", "component": "Column", "children": []string{"product_section_title", "product_list"}},
+		map[string]any{"id": "product_section_title", "component": "Text", "text": "精选商品", "variant": "h3"},
+		map[string]any{"id": "product_list", "component": "List", "children": map[string]any{"path": "/products", "componentId": "product_card_template"}},
+	)
 
-	components = append(components, map[string]any{"id": "product_card_template", "component": "Card", "child": "product_col"})
-	components = append(components, map[string]any{"id": "product_col", "component": "Column", "children": []string{"product_image", "product_title", "product_price", "product_points", "add_to_cart_btn"}})
-	components = append(components, map[string]any{"id": "product_image", "component": "Image", "url": map[string]any{"path": "cover_url"}, "alt": map[string]any{"path": "title"}})
-	components = append(components, map[string]any{"id": "product_title", "component": "Text", "text": map[string]any{"path": "title"}, "variant": "h3"})
-	components = append(components, map[string]any{"id": "product_price", "component": "Text", "text": map[string]any{"call": "formatString", "args": map[string]any{"value": "¥${price_yuan}"}}})
-	components = append(components, map[string]any{"id": "product_points", "component": "Text", "text": map[string]any{"path": "selling_points"}})
-	components = append(components, map[string]any{"id": "add_to_cart_btn", "component": "Button", "text": "加入购物车", "variant": "primary", "action": map[string]any{"event": map[string]any{"name": "add_to_cart", "context": map[string]any{"product_id": map[string]any{"path": "id"}, "sku_id": map[string]any{"path": "sku_id"}}}}})
+	components = append(components,
+		map[string]any{"id": "product_card_template", "component": "Card", "child": "product_col"},
+		map[string]any{"id": "product_col", "component": "Column", "children": []string{"product_image", "product_title", "product_price", "product_points", "add_to_cart_btn"}},
+		map[string]any{"id": "product_image", "component": "Image", "url": map[string]any{"path": "cover_url"}, "alt": map[string]any{"path": "title"}},
+		map[string]any{"id": "product_title", "component": "Text", "text": map[string]any{"path": "title"}, "variant": "h3"},
+		map[string]any{"id": "product_price", "component": "Text", "text": map[string]any{"call": "formatString", "args": map[string]any{"value": "¥${price_yuan}"}}},
+		map[string]any{"id": "product_points", "component": "Text", "text": map[string]any{"path": "selling_points"}},
+		map[string]any{"id": "add_to_cart_btn", "component": "Button", "text": "加入购物车", "variant": "primary", "action": map[string]any{"event": map[string]any{"name": "add_to_cart", "context": map[string]any{"product_id": map[string]any{"path": "id"}, "sku_id": map[string]any{"path": "sku_id"}}}}},
+	)
+
+	components = append(components,
+		map[string]any{"id": "batch_cart_row", "component": "Row", "children": []string{"batch_total_text", "batch_add_btn"}},
+		map[string]any{"id": "batch_total_text", "component": "Text", "text": fmt.Sprintf("共 %d 件商品，一键加入购物车", len(products))},
+		map[string]any{"id": "batch_add_btn", "component": "Button", "text": "一键加购全部", "variant": "primary", "action": map[string]any{"event": map[string]any{"name": "add_all_to_cart", "context": map[string]any{"items": map[string]any{"path": "/batch_cart_items"}}}}},
+	)
+
+	if hasNotes {
+		components = append(components,
+			map[string]any{"id": "notes_section", "component": "Column", "children": []string{"notes_section_title", "note_list"}},
+			map[string]any{"id": "notes_section_title", "component": "Text", "text": "相关种草笔记", "variant": "h3"},
+			map[string]any{"id": "note_list", "component": "List", "children": map[string]any{"path": "/related_notes", "componentId": "note_card_template"}},
+		)
+		components = append(components,
+			map[string]any{"id": "note_card_template", "component": "Card", "child": "note_col"},
+			map[string]any{"id": "note_col", "component": "Column", "children": []string{"note_title", "note_meta", "note_link_btn"}},
+			map[string]any{"id": "note_title", "component": "Text", "text": map[string]any{"path": "title"}, "variant": "h3"},
+			map[string]any{"id": "note_meta", "component": "Text", "text": map[string]any{"call": "formatString", "args": map[string]any{"value": "浏览 ${view_count} · 点赞 ${like_count}"}}},
+			map[string]any{"id": "note_link_btn", "component": "Button", "text": "查看笔记", "action": map[string]any{"functionCall": map[string]any{"call": "openUrl", "args": map[string]any{"url": map[string]any{"call": "formatString", "args": map[string]any{"value": "#/notes/${id}"}}}}}},
+		)
+	}
 
 	envelope1 := map[string]any{"version": "v0.9", "createSurface": map[string]any{"surfaceId": req.SurfaceID, "catalogId": "https://redcart.example/a2ui/catalog/v1", "theme": map[string]any{"primaryColor": "#00BFFF"}, "sendDataModel": true}}
 	envelope2 := map[string]any{"version": "v0.9", "updateComponents": map[string]any{"surfaceId": req.SurfaceID, "components": components}}
-	envelope3 := map[string]any{"version": "v0.9", "updateDataModel": map[string]any{"surfaceId": req.SurfaceID, "path": "/", "value": map[string]any{"budget": budget, "products": m.normalizeProducts(products)}}}
+	dataModel := map[string]any{"budget": budget, "products": m.normalizeProducts(products)}
+	if hasNotes {
+		dataModel["related_notes"] = m.normalizeNotes(notes)
+	}
+	if items, ok := contextMap["batch_cart_items"].([]map[string]any); ok {
+		dataModel["batch_cart_items"] = items
+	}
+	envelope3 := map[string]any{"version": "v0.9", "updateDataModel": map[string]any{"surfaceId": req.SurfaceID, "path": "/", "value": dataModel}}
 
 	lines := []string{
 		mustJSON(envelope1),
@@ -125,6 +175,50 @@ func (m MockProvider) generateShoppingGuideSurface(req A2UISurfaceRequest, conte
 		SurfaceID: req.SurfaceID,
 		A2UIJSON:  strings.Join(lines, "\n"),
 	}, nil
+}
+
+func sceneTitle(scene string) string {
+	switch scene {
+	case "dorm_desk":
+		return "宿舍书桌改造方案"
+	case "office_desk":
+		return "通勤办公桌面方案"
+	case "travel":
+		return "出行收纳方案"
+	default:
+		return "智能导购专题"
+	}
+}
+
+func (MockProvider) normalizeNotes(notes []map[string]any) []any {
+	out := make([]any, 0, len(notes))
+	for _, note := range notes {
+		id := int64(0)
+		if v, ok := note["id"].(float64); ok {
+			id = int64(v)
+		} else if v, ok := note["id"].(int64); ok {
+			id = v
+		}
+		viewCount := int64(0)
+		if v, ok := note["view_count"].(float64); ok {
+			viewCount = int64(v)
+		} else if v, ok := note["view_count"].(int64); ok {
+			viewCount = v
+		}
+		likeCount := int64(0)
+		if v, ok := note["like_count"].(float64); ok {
+			likeCount = int64(v)
+		} else if v, ok := note["like_count"].(int64); ok {
+			likeCount = v
+		}
+		out = append(out, map[string]any{
+			"id":         id,
+			"title":      note["title"],
+			"view_count": viewCount,
+			"like_count": likeCount,
+		})
+	}
+	return out
 }
 
 func (MockProvider) normalizeProducts(products []any) []any {

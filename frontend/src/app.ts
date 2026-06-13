@@ -1830,16 +1830,40 @@ function a2uiRenderComponent(surface, component, scope) {
   if (type === "Button") {
     const text = a2uiResolveValue(component.text, dataModel);
     const btn = node("button", { class: "btn " + (component.variant === "primary" ? "primary" : ""), text });
-    if (component.action && component.action.event) {
-      const eventName = component.action.event.name;
-      const context = a2uiResolveActionContext(component.action.event.context, dataModel);
-      btn.onclick = async () => {
-        if (eventName === "add_to_cart") {
-          await a2uiAddToCart(context);
-        } else {
-          setNotice("A2UI action: " + eventName, "info");
-        }
-      };
+    if (component.action) {
+      if (component.action.event) {
+        const eventName = component.action.event.name;
+        const context = a2uiResolveActionContext(component.action.event.context, dataModel);
+        btn.onclick = async () => {
+          if (eventName === "add_to_cart") {
+            await a2uiAddToCart(context);
+          } else if (eventName === "add_all_to_cart") {
+            const itemsDesc = component.action.event.context && component.action.event.context.items;
+            let items = [];
+            if (itemsDesc && itemsDesc.path) {
+              items = a2uiResolvePath(dataModel, itemsDesc.path) || [];
+            }
+            await a2uiAddAllToCart(items);
+          } else {
+            setNotice("A2UI action: " + eventName, "info");
+          }
+        };
+      } else if (component.action.functionCall) {
+        const call = component.action.functionCall.call;
+        const args = a2uiResolveActionContext(component.action.functionCall.args, dataModel);
+        btn.onclick = async () => {
+          if (call === "openUrl") {
+            const url = args.url || "";
+            if (url.startsWith("#")) {
+              window.location.hash = url.slice(1);
+            } else if (url) {
+              window.open(url, "_blank");
+            }
+          } else {
+            setNotice("A2UI function: " + call, "info");
+          }
+        };
+      }
     }
     return btn;
   }
@@ -1861,6 +1885,18 @@ async function a2uiAddToCart(context) {
   } catch (err) {
     setNotice(err.message || "加购失败", "error");
   }
+}
+
+async function a2uiAddAllToCart(items) {
+  const list = Array.isArray(items) ? items : [];
+  if (!list.length) {
+    setNotice("没有可批量加购的商品", "info");
+    return;
+  }
+  for (const item of list) {
+    await a2uiAddToCart(item);
+  }
+  setNotice("全部商品已加入购物车", "ok");
 }
 
 function a2uiResolveChildren(surface, component, dataModel) {
@@ -1896,11 +1932,8 @@ function a2uiResolveValue(value, dataModel) {
     if (value.call === "formatString" && value.args && value.args.value) {
       let template = String(value.args.value);
       template = template.replace(/\$\{([^}]+)\}/g, (_, expr) => {
-        if (expr.startsWith("/")) {
-          const resolved = a2uiResolvePath(dataModel, expr);
-          return resolved == null ? "" : String(resolved);
-        }
-        return "";
+        const resolved = a2uiResolvePath(dataModel, expr);
+        return resolved == null ? "" : String(resolved);
       });
       return template;
     }

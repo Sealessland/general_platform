@@ -166,14 +166,28 @@ func (s *Service) enrichA2UIContext(ctx context.Context, input A2UISurfaceInput)
 		return "", err
 	}
 	filtered := make([]ProductCard, 0, len(products))
+	productIDs := make([]int64, 0, len(products))
 	for _, product := range products {
 		if product.MinPriceCent > 0 && product.MinPriceCent <= budget {
 			filtered = append(filtered, product)
+			productIDs = append(productIDs, product.ID)
 		}
+	}
+
+	notes := s.relatedNotes(ctx, productIDs)
+	batchItems := make([]map[string]any, 0, len(filtered))
+	for _, product := range filtered {
+		batchItems = append(batchItems, map[string]any{
+			"product_id": product.ID,
+			"sku_id":     product.ID, // Simplified: default SKU mapped to product id for demo.
+			"title":      product.Title,
+		})
 	}
 
 	contextMap["budget"] = budget
 	contextMap["products"] = filtered
+	contextMap["related_notes"] = toA2UINotes(notes)
+	contextMap["batch_cart_items"] = batchItems
 	if _, ok := contextMap["scene"]; !ok {
 		contextMap["scene"] = inferSceneFromIntent(input.UserIntent)
 	}
@@ -183,6 +197,41 @@ func (s *Service) enrichA2UIContext(ctx context.Context, input A2UISurfaceInput)
 		return "", fmt.Errorf("marshal a2ui context: %w", err)
 	}
 	return string(out), nil
+}
+
+func toA2UINotes(notes []NoteSummary) []map[string]any {
+	out := make([]map[string]any, 0, len(notes))
+	for _, note := range notes {
+		out = append(out, map[string]any{
+			"id":         note.ID,
+			"title":      note.Title,
+			"view_count": note.ViewCount,
+			"like_count": note.LikeCount,
+		})
+	}
+	return out
+}
+
+func (s *Service) relatedNotes(ctx context.Context, productIDs []int64) []NoteSummary {
+	_ = ctx
+	allNotes := s.repo.ListNotes()
+	wanted := make(map[int64]struct{}, len(productIDs))
+	for _, id := range productIDs {
+		wanted[id] = struct{}{}
+	}
+	out := make([]NoteSummary, 0, 4)
+	for _, note := range allNotes {
+		for _, pid := range note.ProductIDs {
+			if _, ok := wanted[pid]; ok {
+				out = append(out, s.toNoteSummary(note))
+				break
+			}
+		}
+		if len(out) >= 4 {
+			break
+		}
+	}
+	return out
 }
 
 var budgetRegex = regexp.MustCompile(`(?i)(\d+)\s*(百|元|块|rmb|yuan)?`)
