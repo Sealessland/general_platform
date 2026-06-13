@@ -647,3 +647,34 @@ rtk bash scripts/check-openapi.sh
 
 - 行为事件（`behavior_events`）仍写在事务外，若崩溃会丢失行为埋点，但不影响订单与库存一致性。
 - 当前隔离级别仍为 READ COMMITTED；若未来引入可重复读或串行化，需要额外死锁测试与性能基线复核。
+
+## 2026-06-12：AI Copilot gRPC 服务化
+
+### AI 参与范围
+
+- 按 ADR 0005 将 AI Copilot 从进程内 Mock Provider 升级为独立 gRPC 服务边界。
+- 设计 `api/proto/ai/v1/ai.proto`，生成 Go/Python stub，实现 `backend/internal/ai/grpc` 客户端与 `ai-service/app/grpc_server.py` 服务端。
+- 更新 `backend/cmd/api/main.go`、`docker-compose.yml`、`ai-service/Dockerfile` 与 `requirements.txt`，让后端可按 `AI_PROVIDER=grpc` 调用 `ai-service`。
+- 补充 Go/Python gRPC 单元测试，更新 `docs/architecture.md`、扫描脚本排除 `.venv`，并新增 `.codex/skills/git-worktree/SKILL.md`。
+
+### 人工或主代理修正
+
+- 保持 `internal/ai.AIProvider` 契约不变，应用层无需修改；gRPC 客户端仅作为该契约的远程适配器。
+- 保持订单、库存、购物车等核心交易模块仍在单体后端，不在本次提交中引入分布式事务。
+- 把生成工具限定在本地 `backend/.bin` 与 `ai-service/.venv`，不将编译期依赖写死到生产镜像构建流程。
+- 将 `ci/scripts/scan-secrets.sh` 增加 `*/.venv/*` 排除，避免本地虚拟环境文件触发误报。
+
+### 验证证据
+
+```bash
+rtk bash scripts/generate-ai-grpc.sh
+rtk env GOCACHE=/tmp/go-build-cache go test ./internal/ai/grpc -v
+rtk env GOCACHE=/tmp/go-build-cache go build ./...
+rtk bash -c "cd ai-service && .venv/bin/python -m unittest discover -s tests -v"
+rtk bash scripts/validate-workspace.sh
+```
+
+### 剩余风险
+
+- gRPC 服务当前未加 TLS/认证，后续若跨网络部署需要补充传输安全。
+- `ai-service` 当前仍是 Mock Provider 逻辑；替换为真实模型推理时只需替换 `app/provider.py` 实现，gRPC 契约不变。

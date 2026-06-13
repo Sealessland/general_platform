@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package ai.v1;
+
+option go_package = "github.com/example/redcart-copilot/backend/internal/ai/gen/ai/v1";
+option py_generic_services = false;
+
+service AIGenerationService {
+  rpc GenerateSellingPoints(GenerateSellingPointsRequest)
+      returns (GenerateSellingPointsResponse);
+
+  rpc GenerateBusinessReview(GenerateBusinessReviewRequest)
+      returns (GenerateBusinessReviewResponse);
+}
+
+message GenerateSellingPointsRequest {
+  string product_name = 1;
+  string audience = 2;
+  repeated string attributes = 3;
+  repeated string reviews = 4;
+}
+
+message GenerateSellingPointsResponse {
+  repeated string points = 1;
+}
+
+message GenerateBusinessReviewRequest {
+  int32 window_days = 1;
+  int64 gmv = 2;
+  double refund_rate = 3;
+}
+
+message GenerateBusinessReviewResponse {
+  string diagnosis = 1;
+  repeated string next_steps = 2;
+}
