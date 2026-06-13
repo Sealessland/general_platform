@@ -121,9 +121,9 @@
 
 - CPU：11th Gen Intel(R) Core(TM) i7-1185G7 @ 3.00GHz
 - PostgreSQL：Docker Compose 中的 `postgres:16`，本地端口 `127.0.0.1:15432`
-- Redis：Docker Compose 中的 `redis:7`，本地端口 `127.0.0.1:6379`
+- Redis：Docker Compose 中的 `redis:7`，本地端口 `127.0.0.1:6380`
 - 基准命令：
-  `rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable REDIS_ADDR=127.0.0.1:6379 RUN_POSTGRES_INTEGRATION=1 POSTGRES_BENCHTIME=3s GOCACHE=/tmp/go-build-cache go test ./internal/redcart/interfaces/httpapi -run '^$' -bench 'BenchmarkHTTPPostgres(OrderPreview|CreateOrder)$' -benchmem`
+  `rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable REDIS_ADDR=127.0.0.1:6380 RUN_POSTGRES_INTEGRATION=1 POSTGRES_BENCHTIME=3s GOCACHE=/tmp/go-build-cache go test ./internal/redcart/interfaces/httpapi -run '^$' -bench 'BenchmarkHTTPPostgres(OrderPreview|CreateOrder)$' -benchmem`
 
 历史对照数据：
 
