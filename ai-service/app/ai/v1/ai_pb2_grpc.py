@@ -138,3 +138,84 @@ class AIGenerationService:
             timeout,
             metadata,
             _registered_method=True)
+
+
+class A2UIServiceStub:
+    """A2UI (Agent-to-UI) service exposes agent-generated declarative UI surfaces
+    for client-side rendering. The response payload follows the A2UI v0.9 JSON
+    protocol so the frontend can render it safely without executing agent code.
+    """
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.GenerateA2UISurface = channel.unary_unary(
+                '/ai.v1.A2UIService/GenerateA2UISurface',
+                request_serializer=ai_dot_v1_dot_ai__pb2.GenerateA2UISurfaceRequest.SerializeToString,
+                response_deserializer=ai_dot_v1_dot_ai__pb2.GenerateA2UISurfaceResponse.FromString,
+                _registered_method=True)
+
+
+class A2UIServiceServicer:
+    """A2UI (Agent-to-UI) service exposes agent-generated declarative UI surfaces
+    for client-side rendering. The response payload follows the A2UI v0.9 JSON
+    protocol so the frontend can render it safely without executing agent code.
+    """
+
+    def GenerateA2UISurface(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+
+def add_A2UIServiceServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+            'GenerateA2UISurface': grpc.unary_unary_rpc_method_handler(
+                    servicer.GenerateA2UISurface,
+                    request_deserializer=ai_dot_v1_dot_ai__pb2.GenerateA2UISurfaceRequest.FromString,
+                    response_serializer=ai_dot_v1_dot_ai__pb2.GenerateA2UISurfaceResponse.SerializeToString,
+            ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+            'ai.v1.A2UIService', rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+    server.add_registered_method_handlers('ai.v1.A2UIService', rpc_method_handlers)
+
+
+ # This class is part of an EXPERIMENTAL API.
+class A2UIService:
+    """A2UI (Agent-to-UI) service exposes agent-generated declarative UI surfaces
+    for client-side rendering. The response payload follows the A2UI v0.9 JSON
+    protocol so the frontend can render it safely without executing agent code.
+    """
+
+    @staticmethod
+    def GenerateA2UISurface(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/ai.v1.A2UIService/GenerateA2UISurface',
+            ai_dot_v1_dot_ai__pb2.GenerateA2UISurfaceRequest.SerializeToString,
+            ai_dot_v1_dot_ai__pb2.GenerateA2UISurfaceResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)

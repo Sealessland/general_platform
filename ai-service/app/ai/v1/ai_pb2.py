@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0e\x61i/v1/ai.proto\x12\x05\x61i.v1\"k\n\x1cGenerateSellingPointsRequest\x12\x14\n\x0cproduct_name\x18\x01 \x01(\t\x12\x10\n\x08\x61udience\x18\x02 \x01(\t\x12\x12\n\nattributes\x18\x03 \x03(\t\x12\x0f\n\x07reviews\x18\x04 \x03(\t\"/\n\x1dGenerateSellingPointsResponse\x12\x0e\n\x06points\x18\x01 \x03(\t\"V\n\x1dGenerateBusinessReviewRequest\x12\x13\n\x0bwindow_days\x18\x01 \x01(\x05\x12\x0b\n\x03gmv\x18\x02 \x01(\x03\x12\x13\n\x0brefund_rate\x18\x03 \x01(\x01\"G\n\x1eGenerateBusinessReviewResponse\x12\x11\n\tdiagnosis\x18\x01 \x01(\t\x12\x12\n\nnext_steps\x18\x02 \x03(\t2\xe0\x01\n\x13\x41IGenerationService\x12\x62\n\x15GenerateSellingPoints\x12#.ai.v1.GenerateSellingPointsRequest\x1a$.ai.v1.GenerateSellingPointsResponse\x12\x65\n\x16GenerateBusinessReview\x12$.ai.v1.GenerateBusinessReviewRequest\x1a%.ai.v1.GenerateBusinessReviewResponseBEZ@github.com/example/redcart-copilot/backend/internal/ai/gen/ai/v1\x90\x01\x00\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0e\x61i/v1/ai.proto\x12\x05\x61i.v1\"k\n\x1cGenerateSellingPointsRequest\x12\x14\n\x0cproduct_name\x18\x01 \x01(\t\x12\x10\n\x08\x61udience\x18\x02 \x01(\t\x12\x12\n\nattributes\x18\x03 \x03(\t\x12\x0f\n\x07reviews\x18\x04 \x03(\t\"/\n\x1dGenerateSellingPointsResponse\x12\x0e\n\x06points\x18\x01 \x03(\t\"V\n\x1dGenerateBusinessReviewRequest\x12\x13\n\x0bwindow_days\x18\x01 \x01(\x05\x12\x0b\n\x03gmv\x18\x02 \x01(\x03\x12\x13\n\x0brefund_rate\x18\x03 \x01(\x01\"G\n\x1eGenerateBusinessReviewResponse\x12\x11\n\tdiagnosis\x18\x01 \x01(\t\x12\x12\n\nnext_steps\x18\x02 \x03(\t\"[\n\x1aGenerateA2UISurfaceRequest\x12\x12\n\nsurface_id\x18\x01 \x01(\t\x12\x13\n\x0buser_intent\x18\x02 \x01(\t\x12\x14\n\x0c\x63ontext_json\x18\x03 \x01(\t\"D\n\x1bGenerateA2UISurfaceResponse\x12\x12\n\nsurface_id\x18\x01 \x01(\t\x12\x11\n\ta2ui_json\x18\x02 \x01(\t2\xe0\x01\n\x13\x41IGenerationService\x12\x62\n\x15GenerateSellingPoints\x12#.ai.v1.GenerateSellingPointsRequest\x1a$.ai.v1.GenerateSellingPointsResponse\x12\x65\n\x16GenerateBusinessReview\x12$.ai.v1.GenerateBusinessReviewRequest\x1a%.ai.v1.GenerateBusinessReviewResponse2k\n\x0b\x41\x32UIService\x12\\\n\x13GenerateA2UISurface\x12!.ai.v1.GenerateA2UISurfaceRequest\x1a\".ai.v1.GenerateA2UISurfaceResponseBEZ@github.com/example/redcart-copilot/backend/internal/ai/gen/ai/v1\x90\x01\x00\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -40,6 +40,12 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_GENERATEBUSINESSREVIEWREQUEST']._serialized_end=269
   _globals['_GENERATEBUSINESSREVIEWRESPONSE']._serialized_start=271
   _globals['_GENERATEBUSINESSREVIEWRESPONSE']._serialized_end=342
-  _globals['_AIGENERATIONSERVICE']._serialized_start=345
-  _globals['_AIGENERATIONSERVICE']._serialized_end=569
+  _globals['_GENERATEA2UISURFACEREQUEST']._serialized_start=344
+  _globals['_GENERATEA2UISURFACEREQUEST']._serialized_end=435
+  _globals['_GENERATEA2UISURFACERESPONSE']._serialized_start=437
+  _globals['_GENERATEA2UISURFACERESPONSE']._serialized_end=505
+  _globals['_AIGENERATIONSERVICE']._serialized_start=508
+  _globals['_AIGENERATIONSERVICE']._serialized_end=732
+  _globals['_A2UISERVICE']._serialized_start=734
+  _globals['_A2UISERVICE']._serialized_end=841
 # @@protoc_insertion_point(module_scope)

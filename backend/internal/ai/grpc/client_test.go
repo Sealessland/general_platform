@@ -15,6 +15,7 @@ import (
 
 type testAIServer struct {
 	pb.UnimplementedAIGenerationServiceServer
+	pb.UnimplementedA2UIServiceServer
 }
 
 func (s *testAIServer) GenerateSellingPoints(ctx context.Context, req *pb.GenerateSellingPointsRequest) (*pb.GenerateSellingPointsResponse, error) {
@@ -30,11 +31,19 @@ func (s *testAIServer) GenerateBusinessReview(ctx context.Context, req *pb.Gener
 	}, nil
 }
 
+func (s *testAIServer) GenerateA2UISurface(ctx context.Context, req *pb.GenerateA2UISurfaceRequest) (*pb.GenerateA2UISurfaceResponse, error) {
+	return &pb.GenerateA2UISurfaceResponse{
+		SurfaceId: req.SurfaceId,
+		A2UiJson:  `{"version":"v0.9","createSurface":{"surfaceId":"` + req.SurfaceId + `","catalogId":"test"}}`,
+	}, nil
+}
+
 func newTestClient(t *testing.T) (*Client, func()) {
 	t.Helper()
 	lis := bufconn.Listen(1024 * 1024)
 	srv := grpc.NewServer()
 	pb.RegisterAIGenerationServiceServer(srv, &testAIServer{})
+	pb.RegisterA2UIServiceServer(srv, &testAIServer{})
 
 	go func() {
 		if err := srv.Serve(lis); err != nil {
@@ -96,5 +105,25 @@ func TestClientGenerateBusinessReview(t *testing.T) {
 	}
 	if len(result.NextSteps) != 2 {
 		t.Fatalf("expected 2 next steps, got %d", len(result.NextSteps))
+	}
+}
+
+func TestClientGenerateA2UISurface(t *testing.T) {
+	client, cleanup := newTestClient(t)
+	defer cleanup()
+
+	result, err := client.GenerateA2UISurface(context.Background(), backendai.A2UISurfaceRequest{
+		SurfaceID:   "test_surface",
+		UserIntent:  "show welcome",
+		ContextJSON: "{}",
+	})
+	if err != nil {
+		t.Fatalf("GenerateA2UISurface: %v", err)
+	}
+	if result.SurfaceID != "test_surface" {
+		t.Fatalf("unexpected surface id: %s", result.SurfaceID)
+	}
+	if result.A2UIJSON == "" {
+		t.Fatalf("expected non-empty a2ui_json")
 	}
 }

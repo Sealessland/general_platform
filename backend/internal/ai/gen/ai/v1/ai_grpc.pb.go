@@ -157,3 +157,113 @@ var AIGenerationService_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "ai/v1/ai.proto",
 }
+
+const (
+	A2UIService_GenerateA2UISurface_FullMethodName = "/ai.v1.A2UIService/GenerateA2UISurface"
+)
+
+// A2UIServiceClient is the client API for A2UIService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// A2UI (Agent-to-UI) service exposes agent-generated declarative UI surfaces
+// for client-side rendering. The response payload follows the A2UI v0.9 JSON
+// protocol so the frontend can render it safely without executing agent code.
+type A2UIServiceClient interface {
+	GenerateA2UISurface(ctx context.Context, in *GenerateA2UISurfaceRequest, opts ...grpc.CallOption) (*GenerateA2UISurfaceResponse, error)
+}
+
+type a2UIServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewA2UIServiceClient(cc grpc.ClientConnInterface) A2UIServiceClient {
+	return &a2UIServiceClient{cc}
+}
+
+func (c *a2UIServiceClient) GenerateA2UISurface(ctx context.Context, in *GenerateA2UISurfaceRequest, opts ...grpc.CallOption) (*GenerateA2UISurfaceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GenerateA2UISurfaceResponse)
+	err := c.cc.Invoke(ctx, A2UIService_GenerateA2UISurface_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// A2UIServiceServer is the server API for A2UIService service.
+// All implementations must embed UnimplementedA2UIServiceServer
+// for forward compatibility.
+//
+// A2UI (Agent-to-UI) service exposes agent-generated declarative UI surfaces
+// for client-side rendering. The response payload follows the A2UI v0.9 JSON
+// protocol so the frontend can render it safely without executing agent code.
+type A2UIServiceServer interface {
+	GenerateA2UISurface(context.Context, *GenerateA2UISurfaceRequest) (*GenerateA2UISurfaceResponse, error)
+	mustEmbedUnimplementedA2UIServiceServer()
+}
+
+// UnimplementedA2UIServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedA2UIServiceServer struct{}
+
+func (UnimplementedA2UIServiceServer) GenerateA2UISurface(context.Context, *GenerateA2UISurfaceRequest) (*GenerateA2UISurfaceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GenerateA2UISurface not implemented")
+}
+func (UnimplementedA2UIServiceServer) mustEmbedUnimplementedA2UIServiceServer() {}
+func (UnimplementedA2UIServiceServer) testEmbeddedByValue()                     {}
+
+// UnsafeA2UIServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to A2UIServiceServer will
+// result in compilation errors.
+type UnsafeA2UIServiceServer interface {
+	mustEmbedUnimplementedA2UIServiceServer()
+}
+
+func RegisterA2UIServiceServer(s grpc.ServiceRegistrar, srv A2UIServiceServer) {
+	// If the following call panics, it indicates UnimplementedA2UIServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&A2UIService_ServiceDesc, srv)
+}
+
+func _A2UIService_GenerateA2UISurface_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GenerateA2UISurfaceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(A2UIServiceServer).GenerateA2UISurface(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: A2UIService_GenerateA2UISurface_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(A2UIServiceServer).GenerateA2UISurface(ctx, req.(*GenerateA2UISurfaceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// A2UIService_ServiceDesc is the grpc.ServiceDesc for A2UIService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var A2UIService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "ai.v1.A2UIService",
+	HandlerType: (*A2UIServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GenerateA2UISurface",
+			Handler:    _A2UIService_GenerateA2UISurface_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "ai/v1/ai.proto",
+}

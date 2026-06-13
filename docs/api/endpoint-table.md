@@ -82,6 +82,7 @@
 | `POST` | `/api/ai/product-selling-points` | 商家 | `SellingPointRequest` | `200` | 生成商品卖点，并记录 AI 任务 |
 | `POST` | `/api/ai/business-review` | 商家 | `BusinessReviewRequest` | `200` | 生成经营复盘草案，并记录 AI 任务 |
 | `GET` | `/api/ai/tasks/{id}` | 任务所有者 | `id` path 参数 | `200` | 获取 AI 任务详情；按商家或用户所有权隔离 |
+| `POST` | `/api/ai/a2ui` | 登录用户 | `A2UISurfaceRequest` | `200` | 生成 A2UI v0.9 声明式界面，前端按协议渲染 |
 
 ## 常见错误
 

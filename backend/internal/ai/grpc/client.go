@@ -13,8 +13,9 @@ import (
 
 // Client implements backendai.AIProvider by calling the Python AI service over gRPC.
 type Client struct {
-	conn   *grpc.ClientConn
-	client pb.AIGenerationServiceClient
+	conn      *grpc.ClientConn
+	client    pb.AIGenerationServiceClient
+	a2uiClient pb.A2UIServiceClient
 }
 
 // NewClient dials addr and returns a gRPC-backed AI provider.
@@ -29,8 +30,9 @@ func NewClient(addr string, opts ...grpc.DialOption) (*Client, error) {
 		return nil, fmt.Errorf("dial ai grpc service: %w", err)
 	}
 	return &Client{
-		conn:   conn,
-		client: pb.NewAIGenerationServiceClient(conn),
+		conn:       conn,
+		client:     pb.NewAIGenerationServiceClient(conn),
+		a2uiClient: pb.NewA2UIServiceClient(conn),
 	}, nil
 }
 
@@ -63,5 +65,20 @@ func (c *Client) GenerateBusinessReview(ctx context.Context, req backendai.Busin
 	return &backendai.BusinessReviewResult{
 		Diagnosis: resp.Diagnosis,
 		NextSteps: resp.NextSteps,
+	}, nil
+}
+
+func (c *Client) GenerateA2UISurface(ctx context.Context, req backendai.A2UISurfaceRequest) (*backendai.A2UISurfaceResult, error) {
+	resp, err := c.a2uiClient.GenerateA2UISurface(ctx, &pb.GenerateA2UISurfaceRequest{
+		SurfaceId:   req.SurfaceID,
+		UserIntent:  req.UserIntent,
+		ContextJson: req.ContextJSON,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("ai grpc GenerateA2UISurface: %w", err)
+	}
+	return &backendai.A2UISurfaceResult{
+		SurfaceID: resp.SurfaceId,
+		A2UIJSON:  resp.A2UiJson,
 	}, nil
 }

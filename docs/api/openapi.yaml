@@ -165,6 +165,27 @@ components:
         product_id:
           type: integer
           format: int64
+    A2UISurfaceRequest:
+      type: object
+      required: [surface_id, user_intent]
+      properties:
+        surface_id:
+          type: string
+          description: A2UI surface 稳定标识
+        user_intent:
+          type: string
+          description: 用户自然语言意图
+        context_json:
+          type: string
+          description: 可选 JSON 编码上下文
+    A2UISurfaceResponse:
+      type: object
+      properties:
+        surface_id:
+          type: string
+        a2ui_json:
+          type: string
+          description: A2UI v0.9 JSONL surface 载荷
 security:
   - bearerAuth: []
 paths:
@@ -535,3 +556,19 @@ paths:
       responses:
         "200":
           description: 返回 AI 任务详情
+  /api/ai/a2ui:
+    post:
+      summary: 生成 A2UI 界面
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/A2UISurfaceRequest"
+      responses:
+        "200":
+          description: 返回 A2UI v0.9 surface JSON
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/A2UISurfaceResponse"

@@ -52,6 +52,33 @@ func TestRefundFlowAndAIGeneration(t *testing.T) {
 		t.Fatalf("unexpected ai task type %v", aiTask["task_type"])
 	}
 }
+func TestAIHTTPA2UISurface(t *testing.T) {
+	handler := newTestHandler()
+	consumerToken := loginAndGetToken(t, handler, map[string]any{
+		"phone":    "13800000001",
+		"password": "consumer-demo",
+	})
+
+	_ = requestJSON(t, handler, http.MethodPost, "/api/ai/a2ui", consumerToken, map[string]any{
+		"surface_id":   "",
+		"user_intent":  "show welcome",
+		"context_json": "{}",
+	}, http.StatusBadRequest)
+
+	result := requestJSON(t, handler, http.MethodPost, "/api/ai/a2ui", consumerToken, map[string]any{
+		"surface_id":   "http_test_surface",
+		"user_intent":  "show welcome",
+		"context_json": "{}",
+	}, http.StatusOK)
+	if result["surface_id"] != "http_test_surface" {
+		t.Fatalf("unexpected surface_id: %v", result["surface_id"])
+	}
+	a2uiJSON, ok := result["a2ui_json"].(string)
+	if !ok || a2uiJSON == "" {
+		t.Fatalf("expected non-empty a2ui_json, got %+v", result)
+	}
+}
+
 func TestAIHTTPBusinessReviewAndTaskBoundaries(t *testing.T) {
 	handler := newTestHandler()
 	consumerToken := loginAndGetToken(t, handler, map[string]any{

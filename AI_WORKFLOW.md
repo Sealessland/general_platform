@@ -678,3 +678,38 @@ rtk bash scripts/validate-workspace.sh
 
 - gRPC 服务当前未加 TLS/认证，后续若跨网络部署需要补充传输安全。
 - `ai-service` 当前仍是 Mock Provider 逻辑；替换为真实模型推理时只需替换 `app/provider.py` 实现，gRPC 契约不变。
+
+## 2026-06-13：A2UI（Agent-to-UI）RPC 注册
+
+### AI 参与范围
+
+- 在 `api/proto/ai/v1/ai.proto` 新增 `A2UIService` 与 `GenerateA2UISurface` RPC，按 A2UI v0.9 协议返回声明式 UI surface JSON。
+- 生成 Go/Python stub，并在 `backend/internal/ai` 中扩展 `AIProvider` 契约与 `MockProvider`、`backend/internal/ai/grpc` 客户端实现。
+- 在 `ai-service/app/provider.py` 与 `ai-service/app/grpc_server.py` 实现 A2UI surface 生成服务端逻辑。
+- 在后端 `backend/internal/redcart/application/service_ai.go` 与 `backend/internal/redcart/interfaces/httpapi` 增加 `/api/ai/a2ui` HTTP 入口。
+- 在 `frontend/src/app.ts` 增加 `/a2ui` 页面与基础 A2UI 组件渲染器（Card/Column/Row/Text/Button）。
+- 同步更新 `docs/api/openapi.yaml`、`docs/api/endpoint-table.md`、`docs/architecture.md`。
+
+### 人工或主代理修正
+
+- 将 A2UI 实现限定为最小可运行 MVP：后端按 RPC 契约返回 JSONL，前端只渲染基础目录组件，不实现完整 A2UI 校验、双向绑定与事件回传。
+- 保持现有 `AIProvider` 契约风格，将 A2UI 作为同一生成服务的新能力而非独立服务。
+- 在 `scripts/generate-ai-grpc.sh` 执行前补齐 `backend/.bin` 插件与 `ai-service/.venv` 依赖。
+
+### 验证证据
+
+```bash
+rtk bash scripts/generate-ai-grpc.sh
+rtk env GOCACHE=/tmp/go-build-cache go test ./internal/ai/grpc ./internal/ai ./internal/redcart/application ./internal/redcart/interfaces/httpapi
+rtk env GOCACHE=/tmp/go-build-cache go test ./...
+rtk bash -c "cd ai-service && .venv/bin/python -m unittest discover -s tests -v"
+rtk cd frontend && npm run lint && npm run typecheck && npm run build && npm test
+rtk bash scripts/check-openapi.sh
+rtk bash scripts/validate-workspace.sh
+```
+
+### 剩余风险
+
+- 前端 A2UI 渲染器仅覆盖基础目录组件，复杂组件（List/Tabs/Modal/输入组件/函数调用）尚未实现。
+- A2UI surface 当前由 Mock Provider 按固定模板生成，未接入真实 LLM；真实接入时需要按 A2UI v0.9 目录构造 prompt 并做 JSON schema 校验。
+- gRPC 仍使用 insecure 传输，跨网络部署需补充 TLS。

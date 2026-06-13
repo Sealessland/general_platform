@@ -105,6 +105,22 @@ func (s *Service) GenerateBusinessReview(ctx context.Context, actor Actor, input
 	return &view, nil
 }
 
+func (s *Service) GenerateA2UISurface(ctx context.Context, actor Actor, input A2UISurfaceInput) (*A2UISurfaceView, error) {
+	_ = actor
+	result, err := s.aiProvider.GenerateA2UISurface(ctx, backendai.A2UISurfaceRequest{
+		SurfaceID:   input.SurfaceID,
+		UserIntent:  input.UserIntent,
+		ContextJSON: input.ContextJSON,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &A2UISurfaceView{
+		SurfaceID: result.SurfaceID,
+		A2UIJSON:  result.A2UIJSON,
+	}, nil
+}
+
 func (s *Service) GetAITask(ctx context.Context, actor Actor, taskID int64) (*AITaskView, error) {
 	_ = ctx
 	task, ok := s.repo.GetAITask(taskID)

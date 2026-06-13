@@ -38,6 +38,9 @@
 - 后端通过 `AI_PROVIDER=grpc` 与 `AI_GRPC_ADDR` 调用独立 `ai-service`；默认 Docker Compose 启动带 gRPC 端口的 `ai-service` 容器。
 - 新增 gRPC 客户端与服务端单元测试；扫描脚本排除 `*/.venv/*` 以避免本地 Python 虚拟环境触发密钥误报。
 - 更新 `docs/architecture.md`，记录 AI 服务作为内部 gRPC 边界。
+- 新增 A2UI（Agent-to-UI）RPC：`api/proto/ai/v1/ai.proto` 增加 `A2UIService.GenerateA2UISurface`，按 A2UI v0.9 返回声明式 UI surface JSON；生成 Go/Python stub，后端 `AIProvider` 契约、`MockProvider`、`backend/internal/ai/grpc` 客户端、`ai-service/app/provider.py` 与 `ai-service/app/grpc_server.py` 均实现对应方法。
+- 后端新增 `/api/ai/a2ui` HTTP 入口，登录用户可调用；前端新增 `/a2ui` 演示页与基础 A2UI 组件渲染器（Card/Column/Row/Text/Button）。
+- 同步更新 `docs/api/openapi.yaml`、`docs/api/endpoint-table.md`、`docs/architecture.md` 与 `AI_WORKFLOW.md`。
 
 ## [0.1.0] - 2026-06-05
 

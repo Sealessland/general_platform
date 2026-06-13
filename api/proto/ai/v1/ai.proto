@@ -13,6 +13,14 @@ service AIGenerationService {
       returns (GenerateBusinessReviewResponse);
 }
 
+// A2UI (Agent-to-UI) service exposes agent-generated declarative UI surfaces
+// for client-side rendering. The response payload follows the A2UI v0.9 JSON
+// protocol so the frontend can render it safely without executing agent code.
+service A2UIService {
+  rpc GenerateA2UISurface(GenerateA2UISurfaceRequest)
+      returns (GenerateA2UISurfaceResponse);
+}
+
 message GenerateSellingPointsRequest {
   string product_name = 1;
   string audience = 2;
@@ -33,4 +41,20 @@ message GenerateBusinessReviewRequest {
 message GenerateBusinessReviewResponse {
   string diagnosis = 1;
   repeated string next_steps = 2;
+}
+
+message GenerateA2UISurfaceRequest {
+  // Stable identifier for the surface; reused across updates.
+  string surface_id = 1;
+  // Natural-language intent describing what the user wants the agent to show.
+  string user_intent = 2;
+  // Optional JSON-encoded context (e.g. product_id, merchant_id) for the agent.
+  string context_json = 3;
+}
+
+message GenerateA2UISurfaceResponse {
+  // Surface identifier echoed from the request.
+  string surface_id = 1;
+  // A2UI v0.9 surface JSON. The client validates and renders this payload.
+  string a2ui_json = 2;
 }

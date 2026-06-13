@@ -83,5 +83,6 @@ func (s *Server) registerRoutes() {
 
 	s.router.POST("/api/ai/product-selling-points", s.withAuth(true, s.handleAISellingPoints))
 	s.router.POST("/api/ai/business-review", s.withAuth(true, s.handleAIBusinessReview))
+	s.router.POST("/api/ai/a2ui", s.withAuth(true, s.handleAIA2UISurface))
 	s.router.GET("/api/ai/tasks/:id", s.withAuth(true, s.handleAITaskByID))
 }

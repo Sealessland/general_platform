@@ -273,6 +273,17 @@ type BusinessReviewInput struct {
 	ProductID  int64 `json:"product_id"`
 }
 
+type A2UISurfaceInput struct {
+	SurfaceID   string `json:"surface_id"`
+	UserIntent  string `json:"user_intent"`
+	ContextJSON string `json:"context_json,omitempty"`
+}
+
+type A2UISurfaceView struct {
+	SurfaceID string `json:"surface_id"`
+	A2UIJSON  string `json:"a2ui_json"`
+}
+
 type AITaskView struct {
 	ID           int64          `json:"id"`
 	TaskType     string         `json:"task_type"`

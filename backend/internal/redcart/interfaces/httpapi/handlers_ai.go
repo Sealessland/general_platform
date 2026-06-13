@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
@@ -35,6 +36,32 @@ func (s *Server) handleAIBusinessReview(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	result, err := s.service.GenerateBusinessReview(r.Context(), actor, input)
+	if err != nil {
+		writeAppError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleAIA2UISurface(w http.ResponseWriter, r *http.Request, actor application.Actor) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+	var input application.A2UISurfaceInput
+	if err := decodeJSON(r, &input); err != nil {
+		writeBadRequest(w, err)
+		return
+	}
+	if input.SurfaceID == "" {
+		writeBadRequest(w, fmt.Errorf("surface_id is required"))
+		return
+	}
+	if input.UserIntent == "" {
+		writeBadRequest(w, fmt.Errorf("user_intent is required"))
+		return
+	}
+	result, err := s.service.GenerateA2UISurface(r.Context(), actor, input)
 	if err != nil {
 		writeAppError(w, err)
 		return

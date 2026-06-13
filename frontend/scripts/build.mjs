@@ -229,6 +229,12 @@ const html = `<!DOCTYPE html>
     animation: spin 1s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+  .a2ui-surface { padding: 12px; }
+  .a2ui-column { display: flex; flex-direction: column; gap: 10px; }
+  .a2ui-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .a2ui-text { color: var(--text); }
+  .a2ui-text.h2 { font-size: 20px; font-weight: 700; }
+  .a2ui-unknown { color: var(--danger); font-family: monospace; font-size: 12px; }
   @media (max-width: 980px) {
     .grid.cols-2, .grid.cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }

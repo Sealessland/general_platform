@@ -245,6 +245,123 @@ func (x *GenerateBusinessReviewResponse) GetNextSteps() []string {
 	return nil
 }
 
+type GenerateA2UISurfaceRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Stable identifier for the surface; reused across updates.
+	SurfaceId string `protobuf:"bytes,1,opt,name=surface_id,json=surfaceId,proto3" json:"surface_id,omitempty"`
+	// Natural-language intent describing what the user wants the agent to show.
+	UserIntent string `protobuf:"bytes,2,opt,name=user_intent,json=userIntent,proto3" json:"user_intent,omitempty"`
+	// Optional JSON-encoded context (e.g. product_id, merchant_id) for the agent.
+	ContextJson   string `protobuf:"bytes,3,opt,name=context_json,json=contextJson,proto3" json:"context_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GenerateA2UISurfaceRequest) Reset() {
+	*x = GenerateA2UISurfaceRequest{}
+	mi := &file_ai_v1_ai_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GenerateA2UISurfaceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GenerateA2UISurfaceRequest) ProtoMessage() {}
+
+func (x *GenerateA2UISurfaceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ai_v1_ai_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GenerateA2UISurfaceRequest.ProtoReflect.Descriptor instead.
+func (*GenerateA2UISurfaceRequest) Descriptor() ([]byte, []int) {
+	return file_ai_v1_ai_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *GenerateA2UISurfaceRequest) GetSurfaceId() string {
+	if x != nil {
+		return x.SurfaceId
+	}
+	return ""
+}
+
+func (x *GenerateA2UISurfaceRequest) GetUserIntent() string {
+	if x != nil {
+		return x.UserIntent
+	}
+	return ""
+}
+
+func (x *GenerateA2UISurfaceRequest) GetContextJson() string {
+	if x != nil {
+		return x.ContextJson
+	}
+	return ""
+}
+
+type GenerateA2UISurfaceResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Surface identifier echoed from the request.
+	SurfaceId string `protobuf:"bytes,1,opt,name=surface_id,json=surfaceId,proto3" json:"surface_id,omitempty"`
+	// A2UI v0.9 surface JSON. The client validates and renders this payload.
+	A2UiJson      string `protobuf:"bytes,2,opt,name=a2ui_json,json=a2uiJson,proto3" json:"a2ui_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GenerateA2UISurfaceResponse) Reset() {
+	*x = GenerateA2UISurfaceResponse{}
+	mi := &file_ai_v1_ai_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GenerateA2UISurfaceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GenerateA2UISurfaceResponse) ProtoMessage() {}
+
+func (x *GenerateA2UISurfaceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_ai_v1_ai_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GenerateA2UISurfaceResponse.ProtoReflect.Descriptor instead.
+func (*GenerateA2UISurfaceResponse) Descriptor() ([]byte, []int) {
+	return file_ai_v1_ai_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *GenerateA2UISurfaceResponse) GetSurfaceId() string {
+	if x != nil {
+		return x.SurfaceId
+	}
+	return ""
+}
+
+func (x *GenerateA2UISurfaceResponse) GetA2UiJson() string {
+	if x != nil {
+		return x.A2UiJson
+	}
+	return ""
+}
+
 var File_ai_v1_ai_proto protoreflect.FileDescriptor
 
 const file_ai_v1_ai_proto_rawDesc = "" +
@@ -268,10 +385,22 @@ const file_ai_v1_ai_proto_rawDesc = "" +
 	"\x1eGenerateBusinessReviewResponse\x12\x1c\n" +
 	"\tdiagnosis\x18\x01 \x01(\tR\tdiagnosis\x12\x1d\n" +
 	"\n" +
-	"next_steps\x18\x02 \x03(\tR\tnextSteps2\xe0\x01\n" +
+	"next_steps\x18\x02 \x03(\tR\tnextSteps\"\x7f\n" +
+	"\x1aGenerateA2UISurfaceRequest\x12\x1d\n" +
+	"\n" +
+	"surface_id\x18\x01 \x01(\tR\tsurfaceId\x12\x1f\n" +
+	"\vuser_intent\x18\x02 \x01(\tR\n" +
+	"userIntent\x12!\n" +
+	"\fcontext_json\x18\x03 \x01(\tR\vcontextJson\"Y\n" +
+	"\x1bGenerateA2UISurfaceResponse\x12\x1d\n" +
+	"\n" +
+	"surface_id\x18\x01 \x01(\tR\tsurfaceId\x12\x1b\n" +
+	"\ta2ui_json\x18\x02 \x01(\tR\ba2uiJson2\xe0\x01\n" +
 	"\x13AIGenerationService\x12b\n" +
 	"\x15GenerateSellingPoints\x12#.ai.v1.GenerateSellingPointsRequest\x1a$.ai.v1.GenerateSellingPointsResponse\x12e\n" +
-	"\x16GenerateBusinessReview\x12$.ai.v1.GenerateBusinessReviewRequest\x1a%.ai.v1.GenerateBusinessReviewResponseBEZ@github.com/example/redcart-copilot/backend/internal/ai/gen/ai/v1\x90\x01\x00b\x06proto3"
+	"\x16GenerateBusinessReview\x12$.ai.v1.GenerateBusinessReviewRequest\x1a%.ai.v1.GenerateBusinessReviewResponse2k\n" +
+	"\vA2UIService\x12\\\n" +
+	"\x13GenerateA2UISurface\x12!.ai.v1.GenerateA2UISurfaceRequest\x1a\".ai.v1.GenerateA2UISurfaceResponseBEZ@github.com/example/redcart-copilot/backend/internal/ai/gen/ai/v1\x90\x01\x00b\x06proto3"
 
 var (
 	file_ai_v1_ai_proto_rawDescOnce sync.Once
@@ -285,20 +414,24 @@ func file_ai_v1_ai_proto_rawDescGZIP() []byte {
 	return file_ai_v1_ai_proto_rawDescData
 }
 
-var file_ai_v1_ai_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_ai_v1_ai_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_ai_v1_ai_proto_goTypes = []any{
 	(*GenerateSellingPointsRequest)(nil),   // 0: ai.v1.GenerateSellingPointsRequest
 	(*GenerateSellingPointsResponse)(nil),  // 1: ai.v1.GenerateSellingPointsResponse
 	(*GenerateBusinessReviewRequest)(nil),  // 2: ai.v1.GenerateBusinessReviewRequest
 	(*GenerateBusinessReviewResponse)(nil), // 3: ai.v1.GenerateBusinessReviewResponse
+	(*GenerateA2UISurfaceRequest)(nil),     // 4: ai.v1.GenerateA2UISurfaceRequest
+	(*GenerateA2UISurfaceResponse)(nil),    // 5: ai.v1.GenerateA2UISurfaceResponse
 }
 var file_ai_v1_ai_proto_depIdxs = []int32{
 	0, // 0: ai.v1.AIGenerationService.GenerateSellingPoints:input_type -> ai.v1.GenerateSellingPointsRequest
 	2, // 1: ai.v1.AIGenerationService.GenerateBusinessReview:input_type -> ai.v1.GenerateBusinessReviewRequest
-	1, // 2: ai.v1.AIGenerationService.GenerateSellingPoints:output_type -> ai.v1.GenerateSellingPointsResponse
-	3, // 3: ai.v1.AIGenerationService.GenerateBusinessReview:output_type -> ai.v1.GenerateBusinessReviewResponse
-	2, // [2:4] is the sub-list for method output_type
-	0, // [0:2] is the sub-list for method input_type
+	4, // 2: ai.v1.A2UIService.GenerateA2UISurface:input_type -> ai.v1.GenerateA2UISurfaceRequest
+	1, // 3: ai.v1.AIGenerationService.GenerateSellingPoints:output_type -> ai.v1.GenerateSellingPointsResponse
+	3, // 4: ai.v1.AIGenerationService.GenerateBusinessReview:output_type -> ai.v1.GenerateBusinessReviewResponse
+	5, // 5: ai.v1.A2UIService.GenerateA2UISurface:output_type -> ai.v1.GenerateA2UISurfaceResponse
+	3, // [3:6] is the sub-list for method output_type
+	0, // [0:3] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
 	0, // [0:0] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
@@ -315,9 +448,9 @@ func file_ai_v1_ai_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ai_v1_ai_proto_rawDesc), len(file_ai_v1_ai_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   6,
 			NumExtensions: 0,
-			NumServices:   1,
+			NumServices:   2,
 		},
 		GoTypes:           file_ai_v1_ai_proto_goTypes,
 		DependencyIndexes: file_ai_v1_ai_proto_depIdxs,

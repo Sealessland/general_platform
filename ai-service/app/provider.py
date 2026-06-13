@@ -14,6 +14,13 @@ class BusinessReviewRequest:
     refund_rate: float = 0.0
 
 
+@dataclass(frozen=True)
+class A2UISurfaceRequest:
+    surface_id: str
+    user_intent: str
+    context_json: str = "{}"
+
+
 class MockAIProvider:
     def generate_selling_points(self, request: SellingPointRequest) -> list[str]:
         if not request.product_name:
@@ -37,3 +44,22 @@ class MockAIProvider:
             "gmv": request.gmv,
             "refund_rate": request.refund_rate,
         }
+
+    def generate_a2ui_surface(self, request: A2UISurfaceRequest) -> dict[str, str]:
+        if not request.surface_id:
+            raise ValueError("surface_id is required")
+        if not request.user_intent:
+            raise ValueError("user_intent is required")
+        import json
+        lines = [
+            json.dumps({"version": "v0.9", "createSurface": {"surfaceId": request.surface_id, "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json", "theme": {"primaryColor": "#00BFFF"}, "sendDataModel": False}}),
+            json.dumps({"version": "v0.9", "updateComponents": {"surfaceId": request.surface_id, "components": [
+                {"id": "root", "component": "Card", "child": "content_col"},
+                {"id": "content_col", "component": "Column", "children": ["title_text", "intent_text", "action_button"]},
+                {"id": "title_text", "component": "Text", "text": "AI Generated UI", "variant": "h2"},
+                {"id": "intent_text", "component": "Text", "text": f"Intent: {request.user_intent}"},
+                {"id": "action_button", "component": "Button", "text": "OK", "variant": "primary", "action": {"event": {"name": "a2ui_ack", "context": {"surface_id": request.surface_id}}}},
+            ]}}),
+            json.dumps({"version": "v0.9", "updateDataModel": {"surfaceId": request.surface_id, "path": "/", "value": {"acknowledged": False}}}),
+        ]
+        return {"surface_id": request.surface_id, "a2ui_json": "\n".join(lines)}

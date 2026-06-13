@@ -35,3 +35,20 @@ func (MockProvider) GenerateBusinessReview(ctx context.Context, req BusinessRevi
 		},
 	}, nil
 }
+
+func (MockProvider) GenerateA2UISurface(ctx context.Context, req A2UISurfaceRequest) (*A2UISurfaceResult, error) {
+	if req.SurfaceID == "" {
+		return nil, fmt.Errorf("surface_id is required")
+	}
+	if req.UserIntent == "" {
+		return nil, fmt.Errorf("user_intent is required")
+	}
+	// Minimal A2UI v0.9 surface: a card greeting the user and echoing intent.
+	a2uiJSON := `{"version":"v0.9","createSurface":{"surfaceId":"` + req.SurfaceID + `","catalogId":"https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json","theme":{"primaryColor":"#00BFFF"},"sendDataModel":false}}` + "\n" +
+		`{"version":"v0.9","updateComponents":{"surfaceId":"` + req.SurfaceID + `","components":[{"id":"root","component":"Card","child":"content_col"},{"id":"content_col","component":"Column","children":["title_text","intent_text","action_button"]},{"id":"title_text","component":"Text","text":"AI 生成界面","variant":"h2"},{"id":"intent_text","component":"Text","text":"收到意图：` + req.UserIntent + `"},{"id":"action_button","component":"Button","text":"好的","variant":"primary","action":{"event":{"name":"a2ui_ack","context":{"surface_id":"` + req.SurfaceID + `"}}}}]}}` + "\n" +
+		`{"version":"v0.9","updateDataModel":{"surfaceId":"` + req.SurfaceID + `","path":"/","value":{"acknowledged":false}}}`
+	return &A2UISurfaceResult{
+		SurfaceID: req.SurfaceID,
+		A2UIJSON:  a2uiJSON,
+	}, nil
+}

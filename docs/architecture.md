@@ -69,7 +69,7 @@ RedCart Copilot 当前 MVP 的代码映射如下：
 
 当前运行时数据库是 PostgreSQL，运行时缓存/会话源是 Redis。后端启动必须同时提供 `POSTGRES_DSN` 与 `REDIS_ADDR`：PostgreSQL 仓储适配器负责迁移、种子数据和业务真相；Redis 读侧适配器包裹 PostgreSQL 仓储，认证 token 以 Redis 为共享会话源并带本地热缓存，商品、SKU 和 SKU 列表读路径优先命中 Redis。订单、库存、购物车和业务真相仍以 PostgreSQL 为准。内存仓储保留为服务层、HTTP 层测试和契约对齐用适配器，不作为当前 Docker Compose MVP 的运行时数据源。
 
-HTTP 入口当前由 Gin 负责路由和 method gate，但 Gin 只停留在产品接口层；应用层和领域层不依赖 Gin 类型。AI 能力当前通过 `backend/internal/ai.AIProvider` 契约接入：默认使用进程内 `MockProvider`；当 `AI_PROVIDER=grpc` 时，后端通过 gRPC 调用独立的 `ai-service` 容器（`GenerateSellingPoints` / `GenerateBusinessReview`）。gRPC schema 定义在 `api/proto/ai/v1/ai.proto`，生成代码分别提交到 `backend/internal/ai/gen/ai/v1` 与 `ai-service/app/ai/v1`。RabbitMQ 仍是规划中的适配目标，不是当前运行前置依赖。Redis 当前只落地 session 与 catalog 热读适配，不承载库存预扣、购物车、幂等真相或订单事件总线职责。
+HTTP 入口当前由 Gin 负责路由和 method gate，但 Gin 只停留在产品接口层；应用层和领域层不依赖 Gin 类型。AI 能力当前通过 `backend/internal/ai.AIProvider` 契约接入：默认使用进程内 `MockProvider`；当 `AI_PROVIDER=grpc` 时，后端通过 gRPC 调用独立的 `ai-service` 容器（`GenerateSellingPoints` / `GenerateBusinessReview` / `GenerateA2UISurface`）。gRPC schema 定义在 `api/proto/ai/v1/ai.proto`，生成代码分别提交到 `backend/internal/ai/gen/ai/v1` 与 `ai-service/app/ai/v1`；新增的 `A2UIService` 按 A2UI v0.9 协议返回声明式 UI JSON，供前端 `/a2ui` 页面渲染。RabbitMQ 仍是规划中的适配目标，不是当前运行前置依赖。Redis 当前只落地 session 与 catalog 热读适配，不承载库存预扣、购物车、幂等真相或订单事件总线职责。
 
 运行时性能分析当前支持可选的 Grafana Pyroscope Go push mode。接入点位于后端启动装配层，依赖环境变量启用，不向应用层或领域层泄漏供应商类型。
 

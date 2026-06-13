@@ -313,11 +313,13 @@ function renderShell() {
       navRoot.appendChild(navLink("/cart", "购物车"));
       navRoot.appendChild(navLink("/checkout", "结算"));
       navRoot.appendChild(navLink("/orders", "我的订单"));
+      navRoot.appendChild(navLink("/a2ui", "A2UI"));
     } else {
       navRoot.appendChild(navLink("/merchant/dashboard", "经营看板"));
       navRoot.appendChild(navLink("/merchant/products", "商品管理"));
       navRoot.appendChild(navLink("/merchant/orders", "订单履约"));
       navRoot.appendChild(navLink("/merchant/ai", "AI Copilot"));
+      navRoot.appendChild(navLink("/a2ui", "A2UI"));
     }
   } else {
     right.appendChild(node("div", { class: "account", text: "请登录演示账号" }));
@@ -346,6 +348,11 @@ async function renderRoute() {
 
   if (path === "/login") {
     mainRoot.appendChild(loginView());
+    return;
+  }
+
+  if (path === "/a2ui") {
+    mainRoot.appendChild(a2uiView());
     return;
   }
 
@@ -1650,6 +1657,161 @@ function merchantOrderDetailView(id) {
     });
 
   return wrap;
+}
+
+function a2uiView() {
+  const wrap = node("div");
+  wrap.appendChild(titleBar("A2UI 演示", "Agent-to-UI：AI 生成声明式 UI，前端按 A2UI v0.9 协议渲染。"));
+
+  const panel = node("section", { class: "panel" });
+  const intentInput = node("input", { type: "text", value: "帮我生成一个欢迎卡片" });
+  const contextInput = node("input", { type: "text", value: "{\"product_id\": 1}" });
+  const message = node("div", { class: "error", style: "display:none" });
+  const output = node("div");
+
+  panel.appendChild(formRow("意图", intentInput));
+  panel.appendChild(formRow("上下文 JSON", contextInput));
+  panel.appendChild(message);
+
+  const run = node("button", { class: "btn primary", text: "生成 A2UI" });
+  run.onclick = async () => {
+    message.style.display = "none";
+    run.disabled = true;
+    output.innerHTML = "";
+    output.appendChild(loadBlock("AI 生成界面中..."));
+    try {
+      const result = await request("/api/ai/a2ui", {
+        method: "POST",
+        body: JSON.stringify({
+          surface_id: "demo_surface_" + Date.now(),
+          user_intent: intentInput.value,
+          context_json: contextInput.value,
+        }),
+      });
+      output.innerHTML = "";
+      output.appendChild(a2uiRenderPanel(result.surface_id, result.a2ui_json));
+    } catch (err) {
+      output.innerHTML = "";
+      message.textContent = err.message || "生成失败";
+      message.style.display = "";
+    } finally {
+      run.disabled = false;
+    }
+  };
+  panel.appendChild(node("div", { class: "actions" }, [run]));
+  wrap.appendChild(panel);
+  wrap.appendChild(output);
+  return wrap;
+}
+
+function a2uiRenderPanel(surfaceId, a2uiJSON) {
+  const panel = node("section", { class: "panel soft" });
+  panel.appendChild(node("div", { class: "meta", text: "surface: " + surfaceId }));
+  const host = node("div", { class: "a2ui-surface" });
+  panel.appendChild(host);
+
+  const surfaces = new Map();
+  const lines = String(a2uiJSON || "").split("\n").filter(Boolean);
+  lines.forEach((line) => {
+    let envelope;
+    try {
+      envelope = JSON.parse(line);
+    } catch (err) {
+      host.appendChild(errorBlock("A2UI JSON 解析失败: " + line));
+      return;
+    }
+    if (envelope.createSurface) {
+      surfaces.set(envelope.createSurface.surfaceId, { components: new Map(), dataModel: {} });
+    } else if (envelope.updateComponents && surfaces.has(envelope.updateComponents.surfaceId)) {
+      const surface = surfaces.get(envelope.updateComponents.surfaceId);
+      (envelope.updateComponents.components || []).forEach((component) => {
+        surface.components.set(component.id, component);
+      });
+      const root = surface.components.get("root");
+      if (root) {
+        host.innerHTML = "";
+        host.appendChild(a2uiRenderComponent(surface, root));
+      }
+    } else if (envelope.updateDataModel && surfaces.has(envelope.updateDataModel.surfaceId)) {
+      const surface = surfaces.get(envelope.updateDataModel.surfaceId);
+      const path = envelope.updateDataModel.path || "/";
+      const parts = path.split("/").filter(Boolean);
+      let target = surface.dataModel;
+      parts.slice(0, -1).forEach((part) => {
+        if (!target[part]) target[part] = {};
+        target = target[part];
+      });
+      if (parts.length === 0) {
+        surface.dataModel = envelope.updateDataModel.value;
+      } else {
+        target[parts[parts.length - 1]] = envelope.updateDataModel.value;
+      }
+    }
+  });
+  return panel;
+}
+
+function a2uiRenderComponent(surface, component) {
+  if (!component) return node("span");
+  const type = component.component;
+  const children = a2uiResolveChildren(surface, component);
+  const text = a2uiResolveValue(component.text, surface.dataModel);
+
+  if (type === "Card") {
+    const card = node("section", { class: "card a2ui-card" });
+    const child = children[0];
+    if (child) card.appendChild(child);
+    return card;
+  }
+  if (type === "Column") {
+    const col = node("div", { class: "a2ui-column" });
+    children.forEach((child) => col.appendChild(child));
+    return col;
+  }
+  if (type === "Row") {
+    const row = node("div", { class: "a2ui-row" });
+    children.forEach((child) => row.appendChild(child));
+    return row;
+  }
+  if (type === "Text") {
+    return node("div", { class: "a2ui-text " + (component.variant || ""), text });
+  }
+  if (type === "Button") {
+    const btn = node("button", { class: "btn " + (component.variant === "primary" ? "primary" : ""), text });
+    if (component.action && component.action.event) {
+      btn.onclick = () => {
+        setNotice("A2UI action: " + component.action.event.name, "info");
+      };
+    }
+    return btn;
+  }
+  return node("div", { class: "a2ui-unknown", text: "未知组件: " + type });
+}
+
+function a2uiResolveChildren(surface, component) {
+  if (!component.children) return [];
+  if (Array.isArray(component.children)) {
+    return component.children.map((id) => a2uiRenderComponent(surface, surface.components.get(id))).filter(Boolean);
+  }
+  if (component.child) {
+    const child = a2uiRenderComponent(surface, surface.components.get(component.child));
+    return child ? [child] : [];
+  }
+  return [];
+}
+
+function a2uiResolveValue(value, dataModel) {
+  if (value == null) return "";
+  if (typeof value === "object" && value.path) {
+    const parts = String(value.path).split("/").filter(Boolean);
+    let target = dataModel;
+    for (const part of parts) {
+      if (target == null || typeof target !== "object") return "";
+      target = target[part];
+    }
+    return target == null ? "" : String(target);
+  }
+  return String(value);
 }
 
 function aiView() {

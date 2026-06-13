@@ -141,3 +141,7 @@ func (failingAIProvider) GenerateSellingPoints(context.Context, backendai.Sellin
 func (failingAIProvider) GenerateBusinessReview(context.Context, backendai.BusinessReviewRequest) (*backendai.BusinessReviewResult, error) {
 	return nil, errors.New("provider unavailable")
 }
+
+func (failingAIProvider) GenerateA2UISurface(context.Context, backendai.A2UISurfaceRequest) (*backendai.A2UISurfaceResult, error) {
+	return nil, errors.New("provider unavailable")
+}
