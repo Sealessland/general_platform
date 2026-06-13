@@ -6,5 +6,5 @@ docker compose up -d postgres redis pyroscope backend frontend
 printf 'backend:  http://127.0.0.1:18080\n'
 printf 'frontend: http://127.0.0.1:4173\n'
 printf 'postgres: postgresql://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable\n'
-printf 'redis:    redis://127.0.0.1:6379\n'
+printf 'redis:    redis://127.0.0.1:6380\n'
 printf 'pyroscope: http://127.0.0.1:4040\n'
