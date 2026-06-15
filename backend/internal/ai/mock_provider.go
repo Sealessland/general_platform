@@ -251,12 +251,12 @@ func (MockProvider) normalizeProducts(products []any) []any {
 			points = strings.Join(parts, " · ")
 		}
 		out = append(out, map[string]any{
-			"id":            product["id"],
-			"title":         product["title"],
-			"cover_url":     product["cover_url"],
-			"price_yuan":    fmt.Sprintf("%.2f", float64(priceCent)/100),
+			"id":             product["id"],
+			"title":          product["title"],
+			"cover_url":      product["cover_url"],
+			"price_yuan":     fmt.Sprintf("%.2f", float64(priceCent)/100),
 			"selling_points": points,
-			"sku_id":        skuID,
+			"sku_id":         skuID,
 		})
 	}
 	return out

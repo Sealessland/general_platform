@@ -13,8 +13,8 @@ import (
 
 // Client implements backendai.AIProvider by calling the Python AI service over gRPC.
 type Client struct {
-	conn      *grpc.ClientConn
-	client    pb.AIGenerationServiceClient
+	conn       *grpc.ClientConn
+	client     pb.AIGenerationServiceClient
 	a2uiClient pb.A2UIServiceClient
 }
 

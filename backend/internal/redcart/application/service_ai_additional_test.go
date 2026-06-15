@@ -3,6 +3,7 @@ package application_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	backendai "github.com/example/redcart-copilot/backend/internal/ai"
@@ -144,4 +145,74 @@ func (failingAIProvider) GenerateBusinessReview(context.Context, backendai.Busin
 
 func (failingAIProvider) GenerateA2UISurface(context.Context, backendai.A2UISurfaceRequest) (*backendai.A2UISurfaceResult, error) {
 	return nil, errors.New("provider unavailable")
+}
+
+func TestGenerateA2UISurfaceShoppingGuide(t *testing.T) {
+	t.Parallel()
+
+	service := application.NewService(memory.NewRepository(), backendai.MockProvider{})
+	merchant := application.Actor{UserID: 2, Role: domain.RoleMerchant, MerchantID: 1}
+
+	view, err := service.GenerateA2UISurface(context.Background(), merchant, application.A2UISurfaceInput{
+		SurfaceID:  "shop-surface",
+		UserIntent: "宿舍书桌 200元",
+	})
+	if err != nil {
+		t.Fatalf("generate a2ui surface: %v", err)
+	}
+	if view.SurfaceID != "shop-surface" {
+		t.Fatalf("expected surface id shop-surface, got %s", view.SurfaceID)
+	}
+	if !strings.Contains(view.A2UIJSON, "createSurface") {
+		t.Fatalf("expected createSurface in a2ui json, got %s", view.A2UIJSON)
+	}
+}
+
+func TestGenerateA2UISurfaceGreetingWhenNoBudget(t *testing.T) {
+	t.Parallel()
+
+	service := application.NewService(memory.NewRepository(), backendai.MockProvider{})
+	merchant := application.Actor{UserID: 2, Role: domain.RoleMerchant, MerchantID: 1}
+
+	view, err := service.GenerateA2UISurface(context.Background(), merchant, application.A2UISurfaceInput{
+		SurfaceID:  "greet-surface",
+		UserIntent: "hello",
+	})
+	if err != nil {
+		t.Fatalf("generate a2ui surface: %v", err)
+	}
+	if !strings.Contains(view.A2UIJSON, "AI 生成界面") {
+		t.Fatalf("expected greeting surface, got %s", view.A2UIJSON)
+	}
+}
+
+func TestGenerateA2UISurfaceRejectsInvalidContext(t *testing.T) {
+	t.Parallel()
+
+	service := application.NewService(memory.NewRepository(), backendai.MockProvider{})
+	merchant := application.Actor{UserID: 2, Role: domain.RoleMerchant, MerchantID: 1}
+
+	_, err := service.GenerateA2UISurface(context.Background(), merchant, application.A2UISurfaceInput{
+		SurfaceID:   "bad-context",
+		UserIntent:  "demo",
+		ContextJSON: "not-json",
+	})
+	if !isAppError(err, application.ErrorInvalidArgument) {
+		t.Fatalf("expected invalid argument error, got %v", err)
+	}
+}
+
+func TestGenerateA2UISurfacePropagatesProviderError(t *testing.T) {
+	t.Parallel()
+
+	service := application.NewService(memory.NewRepository(), failingAIProvider{})
+	merchant := application.Actor{UserID: 2, Role: domain.RoleMerchant, MerchantID: 1}
+
+	_, err := service.GenerateA2UISurface(context.Background(), merchant, application.A2UISurfaceInput{
+		SurfaceID:  "fail-surface",
+		UserIntent: "宿舍 200元",
+	})
+	if err == nil {
+		t.Fatal("expected provider error")
+	}
 }
