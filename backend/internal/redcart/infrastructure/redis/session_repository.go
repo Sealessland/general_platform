@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -24,6 +25,7 @@ type SessionRepository struct {
 
 	merchantMu    sync.RWMutex
 	merchantCache map[int64]merchantState
+	merchantLocks sync.Map
 }
 
 type sessionRecord struct {
@@ -51,6 +53,7 @@ type merchantState struct {
 type sessionCacheEntry struct {
 	user      domain.User
 	expiresAt time.Time
+	found     bool
 }
 
 func NewSessionRepository(base application.Repository, client goredis.UniversalClient, ttl time.Duration) *SessionRepository {
@@ -106,11 +109,12 @@ func (r *SessionRepository) SaveSession(accessToken, refreshToken string, userID
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultWriteTimeout)
 	defer cancel()
-	_ = r.client.Set(ctx, sessionKey(accessToken), payload, r.ttl).Err()
-	r.saveCache(accessToken, user)
+	ttl := r.ttlWithJitter()
+	_ = r.client.Set(ctx, sessionKey(accessToken), payload, ttl).Err()
+	r.saveCacheWithTTL(accessToken, user, ttl)
 	if refreshToken != "" {
-		_ = r.client.Set(ctx, sessionKey(refreshToken), payload, r.ttl).Err()
-		r.saveCache(refreshToken, user)
+		_ = r.client.Set(ctx, sessionKey(refreshToken), payload, ttl).Err()
+		r.saveCacheWithTTL(refreshToken, user, ttl)
 	}
 }
 
@@ -118,8 +122,8 @@ func (r *SessionRepository) GetUserByToken(token string) (domain.User, bool) {
 	if token == "" {
 		return domain.User{}, false
 	}
-	if user, ok := r.loadCache(token); ok {
-		return user, true
+	if user, found, ok := r.loadCache(token); ok {
+		return user, found
 	}
 	if r.client == nil {
 		return r.Repository.GetUserByToken(token)
@@ -137,6 +141,9 @@ func (r *SessionRepository) GetUserByToken(token string) (domain.User, bool) {
 		}
 	}
 	if err == goredis.Nil {
+		// Cache penetration guard: remember missing tokens briefly to avoid
+		// hammering Redis with random/invalid tokens.
+		r.saveNegativeCache(token)
 		return domain.User{}, false
 	}
 	return domain.User{}, false
@@ -181,19 +188,6 @@ func decodeSessionRecord(payload []byte) (sessionRecord, bool) {
 	return record, true
 }
 
-func (r *SessionRepository) GetMerchantByUserID(userID int64) (domain.Merchant, bool) {
-	r.merchantMu.RLock()
-	state, ok := r.merchantCache[userID]
-	r.merchantMu.RUnlock()
-	if ok && state.known {
-		if state.merchant.ID == 0 {
-			return domain.Merchant{}, false
-		}
-		return state.merchant, true
-	}
-	return r.Repository.GetMerchantByUserID(userID)
-}
-
 func decodeSessionUser(payload []byte) (domain.User, merchantState, bool) {
 	var record sessionRecord
 	if err := json.Unmarshal(payload, &record); err != nil {
@@ -224,16 +218,30 @@ func sessionKey(token string) string {
 	return fmt.Sprintf("%s%s", sessionKeyPrefix, token)
 }
 
-func (r *SessionRepository) saveCache(token string, user domain.User) {
+func (r *SessionRepository) saveCacheWithTTL(token string, user domain.User, ttl time.Duration) {
 	r.cacheMu.Lock()
 	defer r.cacheMu.Unlock()
 	r.cache[token] = sessionCacheEntry{
 		user:      user,
-		expiresAt: time.Now().Add(r.ttl),
+		expiresAt: time.Now().Add(ttl),
+		found:     true,
 	}
 }
 
-func (r *SessionRepository) loadCache(token string) (domain.User, bool) {
+func (r *SessionRepository) saveCache(token string, user domain.User) {
+	r.saveCacheWithTTL(token, user, r.ttlWithJitter())
+}
+
+func (r *SessionRepository) saveNegativeCache(token string) {
+	r.cacheMu.Lock()
+	defer r.cacheMu.Unlock()
+	r.cache[token] = sessionCacheEntry{
+		expiresAt: time.Now().Add(r.negativeCacheTTL()),
+		found:     false,
+	}
+}
+
+func (r *SessionRepository) loadCache(token string) (domain.User, bool, bool) {
 	r.cacheMu.RLock()
 	session, ok := r.cache[token]
 	r.cacheMu.RUnlock()
@@ -243,15 +251,69 @@ func (r *SessionRepository) loadCache(token string) (domain.User, bool) {
 			delete(r.cache, token)
 			r.cacheMu.Unlock()
 		}
-		return domain.User{}, false
+		return domain.User{}, false, false
 	}
-	return session.user, true
+	return session.user, session.found, true
 }
 
 func (r *SessionRepository) invalidateCache(token string) {
 	r.cacheMu.Lock()
 	defer r.cacheMu.Unlock()
 	delete(r.cache, token)
+}
+
+func (r *SessionRepository) ttlWithJitter() time.Duration {
+	if r.ttl <= 0 {
+		return r.ttl
+	}
+	jitter := time.Duration(rand.Int63n(int64(r.ttl) / 4))
+	return r.ttl + jitter
+}
+
+func (r *SessionRepository) negativeCacheTTL() time.Duration {
+	ttl := r.ttl / 10
+	if ttl < 5*time.Second {
+		ttl = 5 * time.Second
+	}
+	if ttl > time.Minute {
+		ttl = time.Minute
+	}
+	return ttl
+}
+
+func (r *SessionRepository) GetMerchantByUserID(userID int64) (domain.Merchant, bool) {
+	if state, ok := r.loadMerchantCache(userID); ok {
+		if state.merchant.ID == 0 {
+			return domain.Merchant{}, false
+		}
+		return state.merchant, true
+	}
+
+	// Cache breakdown guard: only one goroutine per userID reconstructs the
+	// merchant entry while others wait for the result.
+	mu, _ := r.merchantLocks.LoadOrStore(userID, &sync.Mutex{})
+	mu.(*sync.Mutex).Lock()
+	defer mu.(*sync.Mutex).Unlock()
+
+	if state, ok := r.loadMerchantCache(userID); ok {
+		if state.merchant.ID == 0 {
+			return domain.Merchant{}, false
+		}
+		return state.merchant, true
+	}
+	merchant, ok := r.Repository.GetMerchantByUserID(userID)
+	r.saveMerchantCache(userID, merchantState{known: true, merchant: merchant})
+	return merchant, ok
+}
+
+func (r *SessionRepository) loadMerchantCache(userID int64) (merchantState, bool) {
+	r.merchantMu.RLock()
+	state, ok := r.merchantCache[userID]
+	r.merchantMu.RUnlock()
+	if !ok {
+		return merchantState{}, false
+	}
+	return state, true
 }
 
 func (r *SessionRepository) saveMerchantCache(userID int64, state merchantState) {
