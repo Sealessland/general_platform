@@ -42,10 +42,13 @@ func (r *Repository) GetUser(id int64) (domain.User, bool) {
 	return cloneUser(user), ok
 }
 
-func (r *Repository) SaveSession(token string, userID int64) {
+func (r *Repository) SaveSession(accessToken, refreshToken string, userID int64) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.sessions[token] = userID
+	r.sessions[accessToken] = userID
+	if refreshToken != "" {
+		r.sessions[refreshToken] = userID
+	}
 }
 
 func (r *Repository) GetUserByToken(token string) (domain.User, bool) {
@@ -57,4 +60,18 @@ func (r *Repository) GetUserByToken(token string) (domain.User, bool) {
 	}
 	user, ok := r.users[userID]
 	return cloneUser(user), ok
+}
+
+func (r *Repository) DeleteSession(token string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	userID, ok := r.sessions[token]
+	if !ok {
+		return
+	}
+	for t, id := range r.sessions {
+		if id == userID {
+			delete(r.sessions, t)
+		}
+	}
 }

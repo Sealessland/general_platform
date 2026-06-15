@@ -27,11 +27,13 @@ type SessionRepository struct {
 }
 
 type sessionRecord struct {
-	ID       int64         `json:"id"`
-	Nickname string        `json:"nickname"`
-	Phone    string        `json:"phone"`
-	Role     string        `json:"role"`
-	Merchant *merchantWire `json:"merchant,omitempty"`
+	ID           int64         `json:"id"`
+	Nickname     string        `json:"nickname"`
+	Phone        string        `json:"phone"`
+	Role         string        `json:"role"`
+	Merchant     *merchantWire `json:"merchant,omitempty"`
+	AccessToken  string        `json:"access_token,omitempty"`
+	RefreshToken string        `json:"refresh_token,omitempty"`
 }
 
 type merchantWire struct {
@@ -64,12 +66,12 @@ func NewSessionRepository(base application.Repository, client goredis.UniversalC
 	}
 }
 
-func (r *SessionRepository) SaveSession(token string, userID int64) {
+func (r *SessionRepository) SaveSession(accessToken, refreshToken string, userID int64) {
 	if r.client == nil {
-		r.Repository.SaveSession(token, userID)
+		r.Repository.SaveSession(accessToken, refreshToken, userID)
 		return
 	}
-	if token == "" || userID == 0 {
+	if accessToken == "" || userID == 0 {
 		return
 	}
 
@@ -77,12 +79,14 @@ func (r *SessionRepository) SaveSession(token string, userID int64) {
 	if !ok {
 		return
 	}
-	r.saveCache(token, user)
+
 	record := sessionRecord{
-		ID:       user.ID,
-		Nickname: user.Nickname,
-		Phone:    user.Phone,
-		Role:     user.Role,
+		ID:           user.ID,
+		Nickname:     user.Nickname,
+		Phone:        user.Phone,
+		Role:         user.Role,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
 	}
 	if merchant, ok := r.Repository.GetMerchantByUserID(userID); ok {
 		record.Merchant = &merchantWire{
@@ -102,7 +106,12 @@ func (r *SessionRepository) SaveSession(token string, userID int64) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultWriteTimeout)
 	defer cancel()
-	_ = r.client.Set(ctx, sessionKey(token), payload, r.ttl).Err()
+	_ = r.client.Set(ctx, sessionKey(accessToken), payload, r.ttl).Err()
+	r.saveCache(accessToken, user)
+	if refreshToken != "" {
+		_ = r.client.Set(ctx, sessionKey(refreshToken), payload, r.ttl).Err()
+		r.saveCache(refreshToken, user)
+	}
 }
 
 func (r *SessionRepository) GetUserByToken(token string) (domain.User, bool) {
@@ -131,6 +140,45 @@ func (r *SessionRepository) GetUserByToken(token string) (domain.User, bool) {
 		return domain.User{}, false
 	}
 	return domain.User{}, false
+}
+
+func (r *SessionRepository) DeleteSession(token string) {
+	if token == "" {
+		return
+	}
+	r.invalidateCache(token)
+	if r.client == nil {
+		r.Repository.DeleteSession(token)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultWriteTimeout)
+	defer cancel()
+	payload, err := r.client.Get(ctx, sessionKey(token)).Bytes()
+	if err == nil {
+		if record, ok := decodeSessionRecord(payload); ok {
+			_ = r.client.Del(ctx, sessionKey(record.AccessToken), sessionKey(record.RefreshToken)).Err()
+			if record.AccessToken != "" {
+				r.invalidateCache(record.AccessToken)
+			}
+			if record.RefreshToken != "" {
+				r.invalidateCache(record.RefreshToken)
+			}
+			return
+		}
+	}
+	_ = r.client.Del(ctx, sessionKey(token)).Err()
+}
+
+func decodeSessionRecord(payload []byte) (sessionRecord, bool) {
+	var record sessionRecord
+	if err := json.Unmarshal(payload, &record); err != nil {
+		return sessionRecord{}, false
+	}
+	if record.ID == 0 || record.Role == "" {
+		return sessionRecord{}, false
+	}
+	return record, true
 }
 
 func (r *SessionRepository) GetMerchantByUserID(userID int64) (domain.Merchant, bool) {
@@ -198,6 +246,12 @@ func (r *SessionRepository) loadCache(token string) (domain.User, bool) {
 		return domain.User{}, false
 	}
 	return session.user, true
+}
+
+func (r *SessionRepository) invalidateCache(token string) {
+	r.cacheMu.Lock()
+	defer r.cacheMu.Unlock()
+	delete(r.cache, token)
 }
 
 func (r *SessionRepository) saveMerchantCache(userID int64, state merchantState) {

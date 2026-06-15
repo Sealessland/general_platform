@@ -40,6 +40,31 @@ func TestSessionRepositoryRoundTrip(t *testing.T) {
 	}
 }
 
+func TestSessionRepositoryDeleteInvalidatesTokens(t *testing.T) {
+	server := miniredis.RunT(t)
+	client := goredis.NewClient(&goredis.Options{Addr: server.Addr()})
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	base := memory.NewRepository()
+	repo := NewSessionRepository(base, client, time.Hour)
+	service := application.NewService(repo, backendai.MockProvider{})
+
+	session, err := service.Login(t.Context(), application.LoginInput{
+		Phone:    "13800000001",
+		Password: "consumer-demo",
+	})
+	if err != nil {
+		t.Fatalf("login: %v", err)
+	}
+
+	repo.DeleteSession(session.Token)
+	if _, ok := repo.GetUserByToken(session.Token); ok {
+		t.Fatal("expected access token invalidated after delete")
+	}
+}
+
 func TestSessionTTLFromEnv(t *testing.T) {
 	ttl, err := SessionTTLFromEnv("")
 	if err != nil {

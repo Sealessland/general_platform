@@ -54,7 +54,7 @@ func TestWrapRepositoryWithRedisSessionEnabled(t *testing.T) {
 	if !ok {
 		t.Fatal("expected seeded user")
 	}
-	sessionRepo.SaveSession("wrapped-token", user.ID)
+	sessionRepo.SaveSession("wrapped-token", "wrapped-refresh", user.ID)
 
 	saved, ok := sessionRepo.GetUserByToken("wrapped-token")
 	if !ok || saved.ID != user.ID {

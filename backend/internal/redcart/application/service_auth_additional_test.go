@@ -84,3 +84,53 @@ func TestLoginMeAndAuthenticateRejectInvalidCredentials(t *testing.T) {
 		t.Fatalf("expected merchant actor, got %+v", actor)
 	}
 }
+
+func TestLogoutInvalidatesSession(t *testing.T) {
+	t.Parallel()
+
+	service := application.NewService(memory.NewRepository(), backendai.MockProvider{})
+	session, err := service.Login(context.Background(), application.LoginInput{Phone: "13800000001", Password: "consumer-demo"})
+	if err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	if err := service.Logout(context.Background(), session.Token); err != nil {
+		t.Fatalf("logout: %v", err)
+	}
+	if _, err := service.Authenticate(session.Token); !isAppError(err, application.ErrorUnauthorized) {
+		t.Fatalf("expected session invalidated after logout, got %v", err)
+	}
+}
+
+func TestRefreshSessionRotatesTokens(t *testing.T) {
+	t.Parallel()
+
+	service := application.NewService(memory.NewRepository(), backendai.MockProvider{})
+	session, err := service.Login(context.Background(), application.LoginInput{Phone: "13800000001", Password: "consumer-demo"})
+	if err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	if session.RefreshToken == "" {
+		t.Fatal("expected refresh token")
+	}
+
+	refreshed, err := service.RefreshSession(context.Background(), session.RefreshToken)
+	if err != nil {
+		t.Fatalf("refresh session: %v", err)
+	}
+	if refreshed.Token == session.Token || refreshed.RefreshToken == session.RefreshToken {
+		t.Fatal("expected new tokens after refresh")
+	}
+	if _, err := service.Authenticate(session.Token); !isAppError(err, application.ErrorUnauthorized) {
+		t.Fatalf("expected old access token invalidated, got %v", err)
+	}
+	if _, err := service.RefreshSession(context.Background(), session.RefreshToken); !isAppError(err, application.ErrorUnauthorized) {
+		t.Fatalf("expected old refresh token invalidated, got %v", err)
+	}
+	actor, err := service.Authenticate(refreshed.Token)
+	if err != nil {
+		t.Fatalf("authenticate refreshed token: %v", err)
+	}
+	if actor.UserID != session.User.ID {
+		t.Fatalf("expected same user after refresh, got %+v", actor)
+	}
+}

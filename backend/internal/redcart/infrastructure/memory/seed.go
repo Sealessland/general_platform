@@ -1,10 +1,11 @@
 package memory
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
+	"fmt"
 	"time"
+
+	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func (r *Repository) seed() {
@@ -237,6 +238,9 @@ func (r *Repository) nextID(counter *int64) int64 {
 }
 
 func seededPasswordHash(password string) string {
-	sum := sha256.Sum256([]byte(password))
-	return hex.EncodeToString(sum[:])
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		panic(fmt.Sprintf("seed password hash: %v", err))
+	}
+	return string(hash)
 }

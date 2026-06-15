@@ -2,11 +2,12 @@ package postgres
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 func (r *Repository) migrate(ctx context.Context) error {
@@ -173,8 +174,11 @@ SELECT setval(pg_get_serial_sequence('behavior_events', 'id'), COALESCE((SELECT 
 }
 
 func seededPasswordHash(password string) string {
-	sum := sha256.Sum256([]byte(password))
-	return fmt.Sprintf("%x", sum[:])
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		panic(fmt.Sprintf("seed password hash: %v", err))
+	}
+	return string(hash)
 }
 
 func envOrDefault(key, fallback string) string {

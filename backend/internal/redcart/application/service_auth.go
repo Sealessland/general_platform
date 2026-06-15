@@ -2,12 +2,13 @@ package application
 
 import (
 	"context"
-	"crypto/sha256"
+	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"strings"
 
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func (s *Service) Register(ctx context.Context, input RegisterInput) (*AuthSession, error) {
@@ -18,11 +19,15 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (*AuthSessi
 	if input.Role != domain.RoleConsumer && input.Role != domain.RoleMerchant {
 		return nil, newError(ErrorInvalidArgument, "role must be consumer or merchant")
 	}
+	hash, err := hashPassword(input.Password)
+	if err != nil {
+		return nil, fmt.Errorf("hash password: %w", err)
+	}
 	now := s.now()
 	user, err := s.repo.CreateUser(domain.User{
 		Nickname:     strings.TrimSpace(input.Nickname),
 		Phone:        strings.TrimSpace(input.Phone),
-		PasswordHash: hashPassword(input.Password),
+		PasswordHash: hash,
 		Role:         input.Role,
 		CreatedAt:    now,
 		UpdatedAt:    now,
@@ -52,9 +57,25 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (*AuthSession, er
 	if !ok {
 		return nil, newError(ErrorUnauthorized, "invalid phone or password")
 	}
-	if user.PasswordHash != hashPassword(input.Password) {
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(input.Password)); err != nil {
 		return nil, newError(ErrorUnauthorized, "invalid phone or password")
 	}
+	return s.issueSession(user)
+}
+
+func (s *Service) Logout(ctx context.Context, token string) error {
+	_ = ctx
+	s.repo.DeleteSession(strings.TrimPrefix(strings.TrimSpace(token), "Bearer "))
+	return nil
+}
+
+func (s *Service) RefreshSession(ctx context.Context, refreshToken string) (*AuthSession, error) {
+	_ = ctx
+	user, ok := s.repo.GetUserByToken(refreshToken)
+	if !ok {
+		return nil, newError(ErrorUnauthorized, "invalid refresh token")
+	}
+	s.repo.DeleteSession(refreshToken)
 	return s.issueSession(user)
 }
 
@@ -85,13 +106,35 @@ func (s *Service) Authenticate(token string) (*Actor, error) {
 }
 
 func (s *Service) issueSession(user domain.User) (*AuthSession, error) {
-	token := fmt.Sprintf("redcart-%d-%d", user.ID, s.now().UnixNano())
-	s.repo.SaveSession(token, user.ID)
+	accessToken, err := generateOpaqueToken()
+	if err != nil {
+		return nil, fmt.Errorf("generate access token: %w", err)
+	}
+	refreshToken, err := generateOpaqueToken()
+	if err != nil {
+		return nil, fmt.Errorf("generate refresh token: %w", err)
+	}
+	s.repo.SaveSession(accessToken, refreshToken, user.ID)
 	view := s.toUserView(user)
-	return &AuthSession{Token: token, User: view}, nil
+	return &AuthSession{
+		Token:        accessToken,
+		RefreshToken: refreshToken,
+		User:         view,
+	}, nil
 }
 
-func hashPassword(password string) string {
-	sum := sha256.Sum256([]byte(password))
-	return hex.EncodeToString(sum[:])
+func hashPassword(password string) (string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(hash), nil
+}
+
+func generateOpaqueToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
 }

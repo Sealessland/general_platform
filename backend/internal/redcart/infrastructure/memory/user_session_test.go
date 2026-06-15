@@ -27,7 +27,7 @@ func TestRepositoryUserSessionAndMerchantFlow(t *testing.T) {
 	if fetched, ok := repo.FindUserByPhone(user.Phone); !ok || fetched.ID != user.ID {
 		t.Fatalf("expected user by phone, got %+v ok=%v", fetched, ok)
 	}
-	repo.SaveSession("repo-token", user.ID)
+	repo.SaveSession("repo-token", "repo-refresh", user.ID)
 	if fetched, ok := repo.GetUserByToken("repo-token"); !ok || fetched.ID != user.ID {
 		t.Fatalf("expected user by token, got %+v ok=%v", fetched, ok)
 	}

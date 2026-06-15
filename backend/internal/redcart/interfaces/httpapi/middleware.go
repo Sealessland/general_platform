@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
+	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 	"github.com/gin-gonic/gin"
 )
 
@@ -51,6 +52,20 @@ func (s *Server) authenticate(r *http.Request) (*application.Actor, error) {
 		return nil, &application.AppError{Kind: application.ErrorUnauthorized, Message: "missing bearer token"}
 	}
 	return s.service.Authenticate(authHeader)
+}
+
+func requireRole(role string, next authedHandler) authedHandler {
+	return func(w http.ResponseWriter, r *http.Request, actor application.Actor) {
+		if actor.Role != role {
+			writeAppError(w, &application.AppError{Kind: application.ErrorForbidden, Message: "role access required"})
+			return
+		}
+		next(w, r, actor)
+	}
+}
+
+func requireMerchant(next authedHandler) authedHandler {
+	return requireRole(domain.RoleMerchant, next)
 }
 
 func NewContext(parent context.Context) context.Context {

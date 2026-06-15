@@ -22,8 +22,9 @@ type LoginInput struct {
 }
 
 type AuthSession struct {
-	Token string   `json:"token"`
-	User  UserView `json:"user"`
+	Token        string   `json:"token"`
+	RefreshToken string   `json:"refresh_token,omitempty"`
+	User         UserView `json:"user"`
 }
 
 type UserView struct {

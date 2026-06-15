@@ -66,3 +66,39 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request, actor applicat
 	}
 	writeJSON(w, http.StatusOK, result)
 }
+
+func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request, actor application.Actor) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+	_ = actor
+	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
+	authHeader = strings.TrimPrefix(authHeader, "Bearer ")
+	if err := s.service.Logout(r.Context(), authHeader); err != nil {
+		writeAppError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
+func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request, actor application.Actor) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+	_ = actor
+	var input struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err := decodeJSON(r, &input); err != nil {
+		writeBadRequest(w, err)
+		return
+	}
+	result, err := s.service.RefreshSession(r.Context(), input.RefreshToken)
+	if err != nil {
+		writeAppError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
