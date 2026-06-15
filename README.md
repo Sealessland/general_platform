@@ -150,3 +150,14 @@ bash scripts/validate-workspace.sh
 - 核心文档是否齐全
 - 工作流文档是否写明完成证据
 - OpenAPI、迁移和仓库基础结构是否完整
+
+<!-- BENCHMARK_RESULTS_START -->
+## Performance
+
+_Last updated: 2026-06-15 14:04 UTC via GitHub Actions._
+
+| Benchmark | QPS | ns/op | B/op | allocs/op |
+|---|---|---|---|---|
+| `BenchmarkHTTPNotes` | 100.39K | 9961 | 11545 | 59 |
+| `BenchmarkHTTPOrderPreview` | 149.08K | 6708 | 9095 | 43 |
+<!-- BENCHMARK_RESULTS_END -->
