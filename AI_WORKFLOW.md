@@ -766,6 +766,7 @@ rtk bash scripts/validate-workspace.sh
 
 ### 人工或主代理修正
 
+- 调研公开 benchmark 后确认：SPECjms2007（已退役）和 OpenMessaging Benchmark Framework 都是 broker-centric，不评估「事务性发件箱 + 业务请求路径」的收益；因此手工构建控制变量 benchmark，并在 ADR / 测试文件顶部说明理由与引用。
 - 保持核心交易路径仍为数据库事务强一致；消息队列只承担异步解耦，不引入 Saga/TCC。
 - 订单创建等暂无法纳入 `UpdateOrderStatus` 事务路径的写事件，使用非事务发件箱写入，后续可扩展 `SaveOrderWithInventoryLocks` 的 side-effect 机制实现完全原子性。
 - gRPC 仍使用 insecure 传输，跨网络部署需补充 TLS；RabbitMQ 当前也使用 plain AMQP。

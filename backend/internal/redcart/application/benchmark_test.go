@@ -13,6 +13,29 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// Benchmark methodology note:
+//
+// There is no public benchmark that specifically measures the application-level
+// benefit of the transactional outbox pattern combined with a business
+// transaction. Existing industry benchmarks focus on the message broker itself:
+//
+//   - SPECjms2007 (retired 2016) evaluates JMS-based MOM platforms using a
+//     supply-chain workload; it does not include the outbox pattern or a
+//     business-service request path.
+//   - OpenMessaging Benchmark Framework evaluates Kafka/Pulsar/RabbitMQ/etc.
+//     throughput and latency; it is broker-centric and does not model the
+//     " synchronous side effects inside an order API" scenario.
+//
+// Because the value proposition here is "decouple downstream work from the
+// order creation request path while keeping the business write and event
+// write atomic", we hand-built a controlled A/B benchmark that keeps the
+// business logic identical and only varies where the downstream work happens:
+// inside the request (sync) vs. via the outbox (async).
+//
+// The 500µs per simulated downstream call is representative of a light
+// in-region RPC / HTTP notification / analytics flush. Three such calls are
+// injected to model notification + analytics + search-index update.
+
 // latencyRepo wraps a Repository and injects a fixed delay after every order
 // save to simulate synchronous downstream side effects (notification,
 // analytics, search index) happening inside the request path.

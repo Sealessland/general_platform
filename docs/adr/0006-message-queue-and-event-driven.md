@@ -81,12 +81,21 @@
 
 ## 性能证据
 
-为了量化「异步解耦」带来的收益，在 `backend/internal/redcart/application` 中增加了对照 benchmark：
+### 为什么采用手工构建的 benchmark
+
+调研后发现，目前没有直接评估「事务性发件箱 + 业务服务请求路径」的公开可信测试集：
+
+- **SPECjms2007** 是 JMS/MOM 的行业标准 benchmark，但已于 2016 年退役；它评估的是消息中间件本身（供应链场景），不包含发件箱模式，也不把业务写入与事件写入放在同一个数据库事务内评估。
+- **OpenMessaging Benchmark Framework** 支持 RabbitMQ、Kafka、Pulsar 等，但属于 broker-centric 测试，关注吞吐、延迟、稳定性，不模拟「订单 API 内同步执行下游副作用」这一典型电商场景。
+
+因此，我们在 `backend/internal/redcart/application` 中手工构建了一个**控制变量**的对照 benchmark：业务逻辑完全相同，唯一变量是下游副作用发生在请求路径内（同步）还是通过发件箱异步处理。
+
+### 测试设计
 
 - `BenchmarkCreateOrderOutbox`：订单创建时只把事件写入事务性发件箱，下游副作用异步处理。
-- `BenchmarkCreateOrderSyncSideEffects`：订单创建时同步模拟三个轻量下游调用（通知 + 分析 + 搜索索引），每个调用 500μs。
+- `BenchmarkCreateOrderSyncSideEffects`：订单创建时同步模拟三个轻量下游调用（通知 + 分析 + 搜索索引），每个调用 500μs。500μs 代表同区域轻量 RPC / HTTP 通知 / 分析刷盘的典型耗时。
 
-本地基准结果（Go 1.23，8 核 Intel i7-1185G7）：
+### 本地基准结果（Go 1.23，8 核 Intel i7-1185G7）
 
 | Benchmark | QPS | ns/op | B/op | allocs/op |
 |---|---|---|---|---|
