@@ -34,6 +34,7 @@ def parse_benchmarks(text: str) -> list[dict]:
             {
                 "name": name,
                 "qps": format_qps(float(ns)),
+                "qps_raw": 1_000_000_000.0 / float(ns),
                 "ns": ns,
                 "b": b,
                 "allocs": allocs,
@@ -42,19 +43,75 @@ def parse_benchmarks(text: str) -> list[dict]:
     return results
 
 
+def parse_existing_table(content: str) -> dict[str, float]:
+    """Extract QPS numbers from the existing README performance table."""
+    old = {}
+    in_table = False
+    for line in content.splitlines():
+        if line.startswith("| Benchmark"):
+            in_table = True
+            continue
+        if in_table and line.startswith("| `"):
+            parts = [p.strip() for p in line.split("|")]
+            if len(parts) >= 3:
+                name = parts[1].strip("` ")
+                qps_str = parts[2].strip()
+                old[name] = parse_qps(qps_str)
+        elif in_table and not line.startswith("|"):
+            break
+    return old
+
+
+def parse_qps(qps_str: str) -> float:
+    qps_str = qps_str.replace(",", "")
+    if qps_str.endswith("M"):
+        return float(qps_str[:-1]) * 1_000_000
+    if qps_str.endswith("K"):
+        return float(qps_str[:-1]) * 1_000
+    return float(qps_str)
+
+
+def format_change(current: float, previous: float) -> str:
+    if previous == 0:
+        return "—"
+    delta = (current - previous) / previous * 100
+    if delta > 0:
+        return f"+{delta:.1f}% 📈"
+    if delta < 0:
+        return f"{delta:.1f}% 📉"
+    return "0.0% ➡️"
+
+
 def render_table(results: list[dict]) -> str:
     if not results:
         return "_No benchmark results available._"
+
+    old = parse_existing_table(README.read_text(encoding="utf-8"))
+
     lines = [
         "## Performance",
         "",
         f"_Last updated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} via GitHub Actions._",
         "",
-        "| Benchmark | QPS | ns/op | B/op | allocs/op |",
-        "|---|---|---|---|---|",
+        "| Benchmark | QPS | Change vs previous | ns/op | B/op | allocs/op |",
+        "|---|---|---|---|---|---|",
     ]
     for r in results:
-        lines.append(f"| `{r['name']}` | {r['qps']} | {r['ns']} | {r['b']} | {r['allocs']} |")
+        change = format_change(r["qps_raw"], old.get(r["name"], 0.0))
+        lines.append(
+            f"| `{r['name']}` | {r['qps']} | {change} | {r['ns']} | {r['b']} | {r['allocs']} |"
+        )
+
+    outbox = next((r for r in results if r["name"] == "BenchmarkCreateOrderOutbox"), None)
+    sync = next((r for r in results if r["name"] == "BenchmarkCreateOrderSyncSideEffects"), None)
+    if outbox and sync and sync["qps_raw"] > 0:
+        gain = outbox["qps_raw"] / sync["qps_raw"]
+        lines.append("")
+        lines.append(
+            f"_Outbox decoupling gain: create-order throughput is **{gain:.1f}x** higher "
+            f"when downstream side effects are moved out of the request path._"
+        )
+
     return "\n".join(lines)
 
 
