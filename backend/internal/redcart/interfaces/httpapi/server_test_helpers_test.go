@@ -13,18 +13,11 @@ import (
 
 	backendai "github.com/example/redcart-copilot/backend/internal/ai"
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
-	"github.com/example/redcart-copilot/backend/internal/redcart/infrastructure/memory"
 	postgresrepo "github.com/example/redcart-copilot/backend/internal/redcart/infrastructure/postgres"
 	redisrepo "github.com/example/redcart-copilot/backend/internal/redcart/infrastructure/redis"
 )
 
 var testUniqueCounter atomic.Int64
-
-func newTestHandler() http.Handler {
-	repo := memory.NewRepository()
-	service := application.NewService(repo, backendai.MockProvider{})
-	return NewServer(service).Handler()
-}
 
 func newPostgresTestHandler(t testing.TB) (http.Handler, func()) {
 	t.Helper()

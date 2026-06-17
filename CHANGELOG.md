@@ -6,6 +6,8 @@
 
 ### 工程
 
+- 删除内存仓储实现、内存仓储单元测试、handler-only HTTP benchmark、空 publisher outbox benchmark 和模拟下游延迟 benchmark；后端测试与性能证据收束到 PostgreSQL/Redis/RabbitMQ-backed 路径和 live HTTP benchmark。
+- 新增 live HTTP benchmark，要求 `LIVE_HTTP_BASE_URL` 指向已启动后端进程，通过真实 TCP 请求验证 `/healthz`、结算预览和下单写路径；README 性能表更新脚本拒绝非真实运行时 benchmark 名称。
 - 建立本地 `main` 分支作为集成主干；删除已合并或停滞的 `feature/*` 分支以及过期的 `ai/live-*`、`ai/codex-*` 会话分支；清理所有非主工作区的 worktree；将 `.aidev-local/` 加入 `.gitignore`，保持主工作区干净。
 
 ### 优化

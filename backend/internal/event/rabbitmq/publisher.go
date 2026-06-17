@@ -13,8 +13,8 @@ import (
 
 // Publisher sends events to RabbitMQ using topic exchanges.
 type Publisher struct {
-	conn    *amqp.Connection
-	channel *amqp.Channel
+	conn     *amqp.Connection
+	channel  *amqp.Channel
 	exchange string
 }
 

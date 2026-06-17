@@ -33,19 +33,6 @@ POSTGRES_DSN="${POSTGRES_DSN:-postgres://postgres:postgres@127.0.0.1:5432/redcar
   go test ./internal/redcart/interfaces/httpapi -run '^TestPostgresHTTP' -count=1 -v \
   | tee "$ARTIFACT_DIR/backend-postgres-http-integration.txt"
 
-POSTGRES_DSN="${POSTGRES_DSN:-postgres://postgres:postgres@127.0.0.1:5432/redcart_test?sslmode=disable}" \
-  go test ./internal/redcart/interfaces/httpapi -run '^$' -bench 'BenchmarkHTTP(Notes|OrderPreview)$' -benchmem -count=1 \
-  | tee "$ARTIFACT_DIR/backend-benchmark.txt"
-
-awk '
-/^BenchmarkHTTP/ {
-  bench=$1
-  ns=$3
-  qps=1000000000/ns
-  printf "%s qps=%.2f ns_per_op=%s\n", bench, qps, ns
-}
-' "$ARTIFACT_DIR/backend-benchmark.txt" | tee "$ARTIFACT_DIR/backend-qps.txt"
-
 if [[ "${RUN_POSTGRES_INTEGRATION:-0}" == "1" ]]; then
   POSTGRES_DSN="${POSTGRES_DSN:-postgres://postgres:postgres@127.0.0.1:5432/redcart_test?sslmode=disable}" \
     RUN_POSTGRES_INTEGRATION=1 \
@@ -63,6 +50,27 @@ if [[ "${RUN_POSTGRES_INTEGRATION:-0}" == "1" ]]; then
 else
   printf 'postgres http benchmark skipped: RUN_POSTGRES_INTEGRATION is not 1\n' | tee "$ARTIFACT_DIR/backend-postgres-http-benchmark.txt"
   printf 'postgres http qps skipped: RUN_POSTGRES_INTEGRATION is not 1\n' | tee "$ARTIFACT_DIR/backend-postgres-http-qps.txt"
+fi
+
+if [[ "${RUN_POSTGRES_INTEGRATION:-0}" == "1" && -n "${RABBITMQ_ADDR:-}" ]]; then
+  POSTGRES_DSN="${POSTGRES_DSN:-postgres://postgres:postgres@127.0.0.1:5432/redcart_test?sslmode=disable}" \
+    RUN_POSTGRES_INTEGRATION=1 \
+    RABBITMQ_ADDR="${RABBITMQ_ADDR}" \
+    RABBITMQ_EXCHANGE="${RABBITMQ_EXCHANGE:-redcart.events.bench}" \
+    go test ./internal/event/rabbitmq ./internal/event/outbox -run '^$' -bench 'BenchmarkRabbitMQPublish|BenchmarkPostgresRabbitMQOutboxRelay' -benchmem -count=1 -benchtime="${RABBITMQ_BENCHTIME:-1s}" \
+    | tee "$ARTIFACT_DIR/backend-rabbitmq-benchmark.txt"
+
+  awk '
+/^Benchmark(RabbitMQ|PostgresRabbitMQ)/ {
+  bench=$1
+  ns=$3
+  qps=1000000000/ns
+  printf "%s qps=%.2f ns_per_op=%s\n", bench, qps, ns
+}
+' "$ARTIFACT_DIR/backend-rabbitmq-benchmark.txt" | tee "$ARTIFACT_DIR/backend-rabbitmq-qps.txt"
+else
+  printf 'rabbitmq benchmark skipped: RUN_POSTGRES_INTEGRATION is not 1 or RABBITMQ_ADDR is empty\n' | tee "$ARTIFACT_DIR/backend-rabbitmq-benchmark.txt"
+  printf 'rabbitmq qps skipped: RUN_POSTGRES_INTEGRATION is not 1 or RABBITMQ_ADDR is empty\n' | tee "$ARTIFACT_DIR/backend-rabbitmq-qps.txt"
 fi
 
 RUN_POSTGRES_INTEGRATION="${RUN_POSTGRES_INTEGRATION:-0}" bash "$ROOT_DIR/ci/scripts/backend-test-metrics.sh"

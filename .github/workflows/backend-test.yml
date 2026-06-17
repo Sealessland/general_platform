@@ -30,6 +30,18 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
+      rabbitmq:
+        image: rabbitmq:4-alpine
+        env:
+          RABBITMQ_DEFAULT_USER: redcart
+          RABBITMQ_DEFAULT_PASS: redcart
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd="rabbitmq-diagnostics -q ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -39,6 +51,8 @@ jobs:
         env:
           POSTGRES_DSN: postgres://postgres:postgres@127.0.0.1:5432/redcart_test?sslmode=disable
           REDIS_ADDR: 127.0.0.1:6379
+          RABBITMQ_ADDR: amqp://redcart:redcart@127.0.0.1:5672/
+          RABBITMQ_EXCHANGE: redcart.events.ci
           RUN_POSTGRES_INTEGRATION: "1"
         run: bash ci/scripts/backend-ci.sh
       - name: Upload backend artifacts
@@ -54,7 +68,7 @@ jobs:
             ci/artifacts/backend-test-metrics.json
             ci/artifacts/backend-postgres-integration.txt
             ci/artifacts/backend-postgres-http-integration.txt
-            ci/artifacts/backend-benchmark.txt
-            ci/artifacts/backend-qps.txt
             ci/artifacts/backend-postgres-http-benchmark.txt
             ci/artifacts/backend-postgres-http-qps.txt
+            ci/artifacts/backend-rabbitmq-benchmark.txt
+            ci/artifacts/backend-rabbitmq-qps.txt

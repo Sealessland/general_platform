@@ -13,6 +13,17 @@ BENCH_RE = re.compile(
     r"^(Benchmark\w+)-\d+\s+(\d+)\s+([\d.]+)\s+ns/op\s+([\d.]+)\s+B/op\s+([\d.]+)\s+allocs/op"
 )
 
+ALLOWED_BENCHMARKS = {
+    "BenchmarkHTTPPostgresOrderPreview",
+    "BenchmarkHTTPPostgresCreateOrder",
+    "BenchmarkHTTPPostgresCreateOrderWithOutbox",
+    "BenchmarkPostgresRabbitMQOutboxRelay",
+    "BenchmarkRabbitMQPublish",
+    "BenchmarkLiveHTTPHealthz",
+    "BenchmarkLiveHTTPOrderPreview",
+    "BenchmarkLiveHTTPCreateOrder",
+}
+
 
 def format_qps(ns_per_op: float) -> str:
     qps = 1_000_000_000.0 / ns_per_op
@@ -30,6 +41,8 @@ def parse_benchmarks(text: str) -> list[dict]:
         if not match:
             continue
         name, _, ns, b, allocs = match.groups()
+        if name not in ALLOWED_BENCHMARKS:
+            raise ValueError(f"refusing non-runtime benchmark result: {name}")
         results.append(
             {
                 "name": name,
@@ -73,13 +86,13 @@ def parse_qps(qps_str: str) -> float:
 
 def format_change(current: float, previous: float) -> str:
     if previous == 0:
-        return "—"
+        return "-"
     delta = (current - previous) / previous * 100
     if delta > 0:
-        return f"+{delta:.1f}% 📈"
+        return f"+{delta:.1f}%"
     if delta < 0:
-        return f"{delta:.1f}% 📉"
-    return "0.0% ➡️"
+        return f"{delta:.1f}%"
+    return "0.0%"
 
 
 def render_table(results: list[dict]) -> str:
@@ -102,15 +115,11 @@ def render_table(results: list[dict]) -> str:
             f"| `{r['name']}` | {r['qps']} | {change} | {r['ns']} | {r['b']} | {r['allocs']} |"
         )
 
-    outbox = next((r for r in results if r["name"] == "BenchmarkCreateOrderOutbox"), None)
-    sync = next((r for r in results if r["name"] == "BenchmarkCreateOrderSyncSideEffects"), None)
-    if outbox and sync and sync["qps_raw"] > 0:
-        gain = outbox["qps_raw"] / sync["qps_raw"]
-        lines.append("")
-        lines.append(
-            f"_Outbox decoupling gain: create-order throughput is **{gain:.1f}x** higher "
-            f"when downstream side effects are moved out of the request path._"
-        )
+    lines.append("")
+    lines.append(
+        "_Only PostgreSQL/Redis/RabbitMQ-backed component benchmarks and live HTTP "
+        "benchmarks from a running backend process are accepted._"
+    )
 
     return "\n".join(lines)
 
@@ -136,12 +145,16 @@ def update_readme(table_markdown: str) -> None:
 
 def main() -> int:
     raw = sys.stdin.read()
-    results = parse_benchmarks(raw)
-    if not results:
-        print("No benchmark results found in input", file=sys.stderr)
+    try:
+        results = parse_benchmarks(raw)
+        if not results:
+            print("No benchmark results found in input", file=sys.stderr)
+            return 1
+        update_readme(render_table(results))
+        return 0
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
         return 1
-    update_readme(render_table(results))
-    return 0
 
 
 if __name__ == "__main__":
