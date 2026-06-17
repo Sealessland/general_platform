@@ -8,6 +8,9 @@ import (
 
 	backendai "github.com/example/redcart-copilot/backend/internal/ai"
 	aigrpc "github.com/example/redcart-copilot/backend/internal/ai/grpc"
+	"github.com/example/redcart-copilot/backend/internal/event"
+	"github.com/example/redcart-copilot/backend/internal/event/outbox"
+	rabbitmqevent "github.com/example/redcart-copilot/backend/internal/event/rabbitmq"
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 	"github.com/example/redcart-copilot/backend/internal/redcart/interfaces/httpapi"
 )
@@ -35,10 +38,34 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
+	if outboxStore, ok := repo.(event.OutboxStore); ok {
+		stopOutbox := startOutboxPublisher(outboxStore, log.Default())
+		defer stopOutbox()
+	}
+
 	log.Printf("redcart api listening on %s", server.Addr)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
+}
+
+func startOutboxPublisher(store event.OutboxStore, logger *log.Logger) func() {
+	addr := envOrDefault("RABBITMQ_ADDR", "")
+	if addr == "" {
+		return func() {}
+	}
+	publisher, err := rabbitmqevent.NewPublisher(addr, envOrDefault("RABBITMQ_EXCHANGE", "redcart.events"))
+	if err != nil {
+		logger.Printf("rabbitmq publisher disabled: %v", err)
+		return func() {}
+	}
+	relay := outbox.NewPublisher(store, publisher, outbox.Config{
+		Interval:  5 * time.Second,
+		BatchSize: 100,
+		Logger:    logger,
+	})
+	relay.Start()
+	return func() { relay.Stop(); _ = publisher.Close() }
 }
 
 func newAIProvider() (backendai.AIProvider, error) {

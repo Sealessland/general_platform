@@ -109,13 +109,14 @@ python3 -m http.server 4173 --bind 127.0.0.1
 
 ## 当前实现说明
 
-当前 MVP 运行时采用 PostgreSQL + Redis 环境：
+当前 MVP 运行时采用 PostgreSQL + Redis + RabbitMQ 环境：
 
 - 后端启动时必须提供 `POSTGRES_DSN` 与 `REDIS_ADDR`
+- RabbitMQ 通过 `RABBITMQ_ADDR` 可选启用；启用后，订单状态变更事件会通过事务性发件箱发布到 `RABBITMQ_EXCHANGE`（默认 `redcart.events`）
 - 后端连接 PostgreSQL 后会自动执行初始化迁移与演示种子数据
 - Redis 读侧适配默认启用：认证 session 以 Redis 为真相源并带本地热缓存，商品/SKU/SKU 列表读路径会优先命中 Redis 缓存
 - AI 能力使用可重复的 Mock Provider
-- RabbitMQ 暂不作为运行时前置依赖
+- 消息队列与事件驱动边界见 `docs/adr/0006-message-queue-and-event-driven.md`
 
 ## 工程规则
 

@@ -6,57 +6,111 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 func (r *Repository) migrate(ctx context.Context) error {
-	var exists string
-	err := r.gormDB.WithContext(ctx).Raw(`SELECT COALESCE(to_regclass('public.users')::text, '')`).Row().Scan(&exists)
-	if err == nil && exists == "users" {
-		return nil
+	if err := r.ensureSchemaMigrationsTable(ctx); err != nil {
+		return fmt.Errorf("ensure schema_migrations: %w", err)
 	}
-	migrationFile, err := resolveMigrationFile()
+	dir, err := resolveMigrationsDir()
 	if err != nil {
 		return err
 	}
-	sqlText, err := os.ReadFile(migrationFile)
+	files, err := listMigrationFiles(dir)
 	if err != nil {
-		return fmt.Errorf("read migration file: %w", err)
+		return fmt.Errorf("list migration files: %w", err)
 	}
-	if err := r.gormDB.WithContext(ctx).Exec(string(sqlText)).Error; err != nil {
-		return fmt.Errorf("apply migration: %w", err)
+	for _, file := range files {
+		version := filepath.Base(file)
+		applied, err := r.isMigrationApplied(ctx, version)
+		if err != nil {
+			return fmt.Errorf("check migration %s: %w", version, err)
+		}
+		if applied {
+			continue
+		}
+		sqlText, err := os.ReadFile(file)
+		if err != nil {
+			return fmt.Errorf("read migration %s: %w", version, err)
+		}
+		if err := r.gormDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			if err := tx.Exec(string(sqlText)).Error; err != nil {
+				return err
+			}
+			return tx.Exec(`INSERT INTO schema_migrations (version) VALUES (?) ON CONFLICT DO NOTHING`, version).Error
+		}); err != nil {
+			return fmt.Errorf("apply migration %s: %w", version, err)
+		}
 	}
 	return nil
 }
 
-func resolveMigrationFile() (string, error) {
+func (r *Repository) ensureSchemaMigrationsTable(ctx context.Context) error {
+	return r.gormDB.WithContext(ctx).Exec(`
+		CREATE TABLE IF NOT EXISTS schema_migrations (
+			version VARCHAR(64) PRIMARY KEY,
+			applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+	`).Error
+}
+
+func (r *Repository) isMigrationApplied(ctx context.Context, version string) (bool, error) {
+	var count int64
+	err := r.gormDB.WithContext(ctx).Raw(`SELECT COUNT(*) FROM schema_migrations WHERE version = ?`, version).Row().Scan(&count)
+	return count > 0, err
+}
+
+func resolveMigrationsDir() (string, error) {
 	candidates := []string{
-		filepath.Join(envOrDefault("MIGRATIONS_DIR", ""), "0001_init_schema.sql"),
+		envOrDefault("MIGRATIONS_DIR", ""),
 	}
 
-	// Resolve relative to this source file so tests work from any working directory.
 	_, sourceFile, _, ok := runtime.Caller(0)
 	if ok {
 		candidates = append(candidates,
-			filepath.Join(filepath.Dir(sourceFile), "..", "..", "..", "..", "migrations", "0001_init_schema.sql"),
-			filepath.Join(filepath.Dir(sourceFile), "..", "..", "..", "..", "..", "migrations", "0001_init_schema.sql"),
+			filepath.Join(filepath.Dir(sourceFile), "..", "..", "..", "..", "migrations"),
+			filepath.Join(filepath.Dir(sourceFile), "..", "..", "..", "..", "..", "migrations"),
 		)
 	}
 
 	candidates = append(candidates,
-		filepath.Join("migrations", "0001_init_schema.sql"),
-		filepath.Join("/app/migrations", "0001_init_schema.sql"),
+		"migrations",
+		"/app/migrations",
 	)
 	for _, candidate := range candidates {
-		if candidate == "" || filepath.Base(candidate) != "0001_init_schema.sql" {
+		if candidate == "" {
 			continue
 		}
-		if _, err := os.Stat(candidate); err == nil {
+		info, err := os.Stat(candidate)
+		if err == nil && info.IsDir() {
 			return candidate, nil
 		}
 	}
-	return "", fmt.Errorf("migration file not found")
+	return "", fmt.Errorf("migrations directory not found")
+}
+
+func listMigrationFiles(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	var files []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if filepath.Ext(name) != ".sql" {
+			continue
+		}
+		files = append(files, filepath.Join(dir, name))
+	}
+	sort.Strings(files)
+	return files, nil
 }
 
 func (r *Repository) seed(ctx context.Context) error {

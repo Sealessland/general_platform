@@ -1,8 +1,11 @@
 package memory
 
 import (
+	"context"
 	"fmt"
+
 	orderdomain "github.com/example/redcart-copilot/backend/internal/order/domain"
+	"github.com/example/redcart-copilot/backend/internal/event"
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 	"sort"
@@ -104,6 +107,19 @@ func (t *memOrderTx) UpdateInventoryLock(lock domain.InventoryLock) error {
 
 func (t *memOrderTx) AppendOrderEvent(event domain.OrderEvent) (domain.OrderEvent, error) {
 	return t.r.appendOrderEventLocked(event)
+}
+
+func (t *memOrderTx) Append(ctx context.Context, evt event.Event) (int64, error) {
+	// The in-memory repository is used for tests and process-local runs where
+	// there is no message broker. Outbox events are silently accepted so that
+	// application code can call tx.Append unconditionally.
+	return 0, nil
+}
+
+func (r *Repository) Append(ctx context.Context, evt event.Event) (int64, error) {
+	// The in-memory repository does not persist outbox events; they are only
+	// meaningful when a real message broker is configured.
+	return 0, nil
 }
 
 func (r *Repository) UpdateOrderStatus(orderID int64, fromStatus, toStatus string, mutator func(*domain.Order) error, sideEffect func(application.OrderTx, domain.Order) error) (domain.Order, error) {

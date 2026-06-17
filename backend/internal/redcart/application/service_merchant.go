@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	orderdomain "github.com/example/redcart-copilot/backend/internal/order/domain"
+	"github.com/example/redcart-copilot/backend/internal/event"
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 )
 
@@ -203,6 +204,7 @@ func (s *Service) MerchantShipOrder(ctx context.Context, actor Actor, orderID in
 		Remark:       strings.TrimSpace(input.LogisticsNo),
 		CreatedAt:    now,
 	})
+	s.appendOrderEventToOutboxAsync(saved, event.TypeOrderShipped, actor.UserID, actor.Role, strings.TrimSpace(input.LogisticsNo), now)
 	view, err := s.enrichOrderView(saved)
 	if err != nil {
 		return nil, err
@@ -240,6 +242,7 @@ func (s *Service) MerchantApproveRefund(ctx context.Context, actor Actor, orderI
 			Remark:       "merchant approved refund",
 			CreatedAt:    now,
 		})
+		s.appendOrderEventToOutbox(tx, o, event.TypeOrderRefunded, actor.UserID, actor.Role, "merchant approved refund", now)
 		return nil
 	})
 	if err != nil {

@@ -1,9 +1,12 @@
 package postgres
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+
 	orderdomain "github.com/example/redcart-copilot/backend/internal/order/domain"
+	"github.com/example/redcart-copilot/backend/internal/event"
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 	"sort"
@@ -198,6 +201,10 @@ func (t *pgOrderTx) UpdateInventoryLock(lock domain.InventoryLock) error {
 
 func (t *pgOrderTx) AppendOrderEvent(event domain.OrderEvent) (domain.OrderEvent, error) {
 	return appendOrderEvent(t.tx, event)
+}
+
+func (t *pgOrderTx) Append(ctx context.Context, evt event.Event) (int64, error) {
+	return appendOutboxEvent(t.tx, evt)
 }
 
 func (r *Repository) UpdateOrderStatus(orderID int64, fromStatus, toStatus string, mutator func(*domain.Order) error, sideEffect func(application.OrderTx, domain.Order) error) (domain.Order, error) {

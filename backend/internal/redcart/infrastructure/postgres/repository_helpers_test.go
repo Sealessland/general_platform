@@ -247,11 +247,18 @@ func TestPostgresNullableHelpersAndMigrationResolution(t *testing.T) {
 		t.Fatalf("write migration fixture: %v", err)
 	}
 	t.Setenv("MIGRATIONS_DIR", dir)
-	resolved, err := resolveMigrationFile()
+	resolvedDir, err := resolveMigrationsDir()
 	if err != nil {
-		t.Fatalf("resolve migration file: %v", err)
+		t.Fatalf("resolve migrations dir: %v", err)
 	}
-	if resolved != migration {
-		t.Fatalf("expected %s, got %s", migration, resolved)
+	if resolvedDir != dir {
+		t.Fatalf("expected %s, got %s", dir, resolvedDir)
+	}
+	files, err := listMigrationFiles(resolvedDir)
+	if err != nil {
+		t.Fatalf("list migration files: %v", err)
+	}
+	if len(files) != 1 || files[0] != migration {
+		t.Fatalf("expected [%s], got %v", migration, files)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	orderdomain "github.com/example/redcart-copilot/backend/internal/order/domain"
+	"github.com/example/redcart-copilot/backend/internal/event"
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 )
 
@@ -57,12 +58,13 @@ func (s *Service) CreateOrder(ctx context.Context, actor Actor, idempotencyKey s
 		}
 		return nil, err
 	}
-	event := s.appendOrderCreatedEvent(saved, actor, now)
+	createdEvent := s.appendOrderCreatedEvent(saved, actor, now)
 	s.recordOrderCreateBehavior(saved, actor, now)
+	s.appendOrderEventToOutboxAsync(saved, event.TypeOrderCreated, actor.UserID, actor.Role, "order created", now)
 	if clearSelectedCartItems {
 		_ = s.repo.DeleteSelectedCartItems(actor.UserID)
 	}
-	view := freshCreatedOrderView(saved, event, locks)
+	view := freshCreatedOrderView(saved, createdEvent, locks)
 	return &view, nil
 }
 
@@ -140,6 +142,7 @@ func (s *Service) PayOrder(ctx context.Context, actor Actor, orderID int64) (*Or
 			Remark:       "payment simulated",
 			CreatedAt:    now,
 		})
+		s.appendOrderEventToOutbox(tx, o, event.TypeOrderPaid, actor.UserID, actor.Role, "payment simulated", now)
 		return nil
 	})
 	if err != nil {
@@ -194,6 +197,7 @@ func (s *Service) CancelOrder(ctx context.Context, actor Actor, orderID int64) (
 			Remark:       "consumer cancelled before payment",
 			CreatedAt:    now,
 		})
+		s.appendOrderEventToOutbox(tx, o, event.TypeOrderCancelled, actor.UserID, actor.Role, "consumer cancelled before payment", now)
 		return nil
 	})
 	if err != nil {
@@ -252,6 +256,7 @@ func (s *Service) FinishOrder(ctx context.Context, actor Actor, orderID int64) (
 		Remark:       "consumer confirmed receipt",
 		CreatedAt:    now,
 	})
+	s.appendOrderEventToOutboxAsync(saved, event.TypeOrderFinished, actor.UserID, actor.Role, "consumer confirmed receipt", now)
 	view, err := s.enrichOrderView(saved)
 	if err != nil {
 		return nil, err
@@ -294,6 +299,7 @@ func (s *Service) RequestRefund(ctx context.Context, actor Actor, orderID int64,
 		Remark:       strings.TrimSpace(input.Reason),
 		CreatedAt:    now,
 	})
+	s.appendOrderEventToOutboxAsync(saved, event.TypeOrderRefundRequested, actor.UserID, actor.Role, strings.TrimSpace(input.Reason), now)
 	view, err := s.enrichOrderView(saved)
 	if err != nil {
 		return nil, err

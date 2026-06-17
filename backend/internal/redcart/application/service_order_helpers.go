@@ -1,11 +1,14 @@
 package application
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	orderdomain "github.com/example/redcart-copilot/backend/internal/order/domain"
+	"github.com/example/redcart-copilot/backend/internal/event"
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 )
 
@@ -217,6 +220,48 @@ func (s *Service) buildOrderPreview(lines []checkoutLine) (*OrderPreview, error)
 	}
 	preview.PayAmountCent = preview.TotalAmountCent - preview.DiscountAmountCent
 	return preview, nil
+}
+
+func orderEventPayload(order domain.Order, operatorID int64, operatorRole string, remark string) ([]byte, error) {
+	return json.Marshal(map[string]any{
+		"order_id":      order.ID,
+		"order_no":      order.OrderNo,
+		"user_id":       order.UserID,
+		"merchant_id":   order.MerchantID,
+		"status":        string(order.Status),
+		"operator_id":   operatorID,
+		"operator_role": operatorRole,
+		"remark":        remark,
+	})
+}
+
+func (s *Service) appendOrderEventToOutbox(tx OrderTx, order domain.Order, eventType event.Type, operatorID int64, operatorRole string, remark string, now time.Time) {
+	payload, err := orderEventPayload(order, operatorID, operatorRole, remark)
+	if err != nil {
+		return
+	}
+	_, _ = tx.Append(context.Background(), event.Event{
+		Type:       eventType,
+		Topic:      eventType.Topic(),
+		Payload:    payload,
+		OccurredAt: now,
+	})
+}
+
+func (s *Service) appendOrderEventToOutboxAsync(order domain.Order, eventType event.Type, operatorID int64, operatorRole string, remark string, now time.Time) {
+	if s.outbox == nil {
+		return
+	}
+	payload, err := orderEventPayload(order, operatorID, operatorRole, remark)
+	if err != nil {
+		return
+	}
+	_, _ = s.outbox.Append(context.Background(), event.Event{
+		Type:       eventType,
+		Topic:      eventType.Topic(),
+		Payload:    payload,
+		OccurredAt: now,
+	})
 }
 
 func (s *Service) releaseInventory(tx OrderTx, orderID int64, fromLocked bool) error {

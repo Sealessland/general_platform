@@ -38,6 +38,7 @@
 - 库存锁策略：`adr/0003-inventory-lock-strategy.md`
 - AI Provider 抽象：`adr/0004-ai-provider-abstraction.md`
 - 服务边界与 RPC 使用场景：`adr/0005-service-boundaries-and-rpc.md`
+- 消息队列与事件驱动边界：`adr/0006-message-queue-and-event-driven.md`
 
 ## 关键行为
 

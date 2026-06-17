@@ -44,6 +44,18 @@ services:
       timeout: 5s
       retries: 5
 
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    network_mode: host
+    environment:
+      RABBITMQ_DEFAULT_USER: redcart
+      RABBITMQ_DEFAULT_PASS: redcart
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: ./backend
@@ -54,6 +66,8 @@ services:
       REDIS_ADDR: 127.0.0.1:6380
       AI_PROVIDER: grpc
       AI_GRPC_ADDR: 127.0.0.1:50051
+      RABBITMQ_ADDR: amqp://redcart:redcart@127.0.0.1:5672/
+      RABBITMQ_EXCHANGE: redcart.events
       PYROSCOPE_SERVER_ADDRESS: ${PYROSCOPE_SERVER_ADDRESS-http://127.0.0.1:4040}
       PYROSCOPE_APPLICATION_NAME: ${PYROSCOPE_APPLICATION_NAME-redcart.backend}
       PYROSCOPE_BASIC_AUTH_USER: ${PYROSCOPE_BASIC_AUTH_USER:-}
@@ -65,6 +79,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
       pyroscope:
         condition: service_started

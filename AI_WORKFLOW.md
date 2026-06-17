@@ -746,3 +746,41 @@ rtk bash scripts/validate-workspace.sh
 - 导购页仍使用固定模板，未接入真实 LLM 做商品匹配与页面布局决策。
 - 预算 Slider 仅做前端展示与本地数据模型更新，未真正回传后端重新筛选商品。
 - 商品图片使用示例 URL，本地无真实图片资源。
+
+## 2026-06-16：消息队列与事件驱动边界
+
+### AI 参与范围
+
+- 基于 `main` 最新提交创建独立 git worktree `feature/microservice-boundaries-mq`，与当前未提交的 MQ 工作并行。
+- 撰写 `docs/adr/0006-message-queue-and-event-driven.md`，确定 RabbitMQ + 事务性发件箱（Transactional Outbox）方案，把订单状态变更事件发布到消息队列。
+- 更新 `docs/architecture.md` 与 `docs/index.md`，记录事件与异步边界成为当前运行时架构的一部分。
+- 新增 `backend/internal/event` 事件发布契约、`backend/internal/event/rabbitmq` RabbitMQ 适配器、`backend/internal/event/outbox` 发件箱发布器。
+- 新增 `backend/migrations/0002_outbox.sql` 发件箱与死信表，并将迁移机制升级为按文件名顺序执行的版本化迁移（`schema_migrations` 表）。
+- 在 PostgreSQL 与内存仓储中实现 `event.Outbox` / `event.OutboxStore`；Redis 包装器（CatalogCacheRepository、SessionRepository）透传 Append 到基础仓储。
+- 在应用层订单服务（CreateOrder、PayOrder、CancelOrder、FinishOrder、RequestRefund）与商家服务（MerchantShipOrder、MerchantApproveRefund）中写入发件箱事件。
+- 更新 `docker-compose.yml` 加入 `rabbitmq` 服务，并配置后端 `RABBITMQ_ADDR` / `RABBITMQ_EXCHANGE`。
+- 更新 `README.md`、`.env.example`，补充事件驱动相关说明。
+- 新增单元测试：`backend/internal/event/event_test.go`、`backend/internal/event/outbox/publisher_test.go`、`backend/internal/redcart/infrastructure/postgres/outbox_repository_test.go`。
+
+### 人工或主代理修正
+
+- 保持核心交易路径仍为数据库事务强一致；消息队列只承担异步解耦，不引入 Saga/TCC。
+- 订单创建等暂无法纳入 `UpdateOrderStatus` 事务路径的写事件，使用非事务发件箱写入，后续可扩展 `SaveOrderWithInventoryLocks` 的 side-effect 机制实现完全原子性。
+- gRPC 仍使用 insecure 传输，跨网络部署需补充 TLS；RabbitMQ 当前也使用 plain AMQP。
+
+### 验证证据
+
+```bash
+rtk bash scripts/git-worktree.sh create feature/microservice-boundaries-mq main
+cd /tmp/agent-native-shop-feature-microservice-boundaries-mq
+rtk env GOCACHE=/tmp/go-build-cache go test ./...
+rtk bash scripts/check-openapi.sh
+rtk bash scripts/validate-workspace.sh
+```
+
+### 剩余风险
+
+- 尚未实现 RabbitMQ 消费者；通知、分析、库存等下游服务仍停留在规划阶段。
+- 行为事件（`behavior.*`）尚未接入发件箱，仍直接写入 `behavior_events` 表。
+- 死信队列目前只写到 `outbox_dead_letter` 表，没有自动重放或告警机制。
+- 未引入服务发现、API 网关、链路追踪、Service Mesh；这些按 ADR 0005 继续后置。

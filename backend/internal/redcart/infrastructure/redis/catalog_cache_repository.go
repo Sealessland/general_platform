@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/example/redcart-copilot/backend/internal/event"
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 	goredis "github.com/redis/go-redis/v9"
@@ -113,6 +114,13 @@ func (r *CatalogCacheRepository) SaveSKU(sku domain.SKU) (domain.SKU, error) {
 	r.saveSKURedis(saved)
 	r.invalidateSKUList(saved.ProductID)
 	return saved, nil
+}
+
+func (r *CatalogCacheRepository) Append(ctx context.Context, evt event.Event) (int64, error) {
+	if outbox, ok := r.Repository.(event.Outbox); ok {
+		return outbox.Append(ctx, evt)
+	}
+	return 0, nil
 }
 
 func (r *CatalogCacheRepository) SaveOrderWithInventoryLocks(order domain.Order, locks []domain.InventoryLock) (domain.Order, error) {

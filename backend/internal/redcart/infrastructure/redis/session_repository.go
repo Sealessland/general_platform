@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/example/redcart-copilot/backend/internal/event"
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 	goredis "github.com/redis/go-redis/v9"
@@ -67,6 +68,13 @@ func NewSessionRepository(base application.Repository, client goredis.UniversalC
 		cache:         make(map[string]sessionCacheEntry),
 		merchantCache: make(map[int64]merchantState),
 	}
+}
+
+func (r *SessionRepository) Append(ctx context.Context, evt event.Event) (int64, error) {
+	if outbox, ok := r.Repository.(event.Outbox); ok {
+		return outbox.Append(ctx, evt)
+	}
+	return 0, nil
 }
 
 func (r *SessionRepository) SaveSession(accessToken, refreshToken string, userID int64) {

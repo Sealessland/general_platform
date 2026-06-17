@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+
+	"github.com/example/redcart-copilot/backend/internal/event"
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 	"gorm.io/driver/postgres"
@@ -16,6 +18,7 @@ type Repository struct {
 	db     *gormSQL
 	gormDB *gorm.DB
 	sqlDB  *sql.DB
+	Outbox event.OutboxStore
 
 	sessionMu sync.RWMutex
 	sessions  map[string]int64
@@ -116,6 +119,7 @@ func NewRepository(dsn string) (*Repository, error) {
 		db:       &gormSQL{db: sqlDB},
 		gormDB:   db,
 		sqlDB:    sqlDB,
+		Outbox:   newOutboxStore(&gormSQL{db: sqlDB}),
 		sessions: make(map[string]int64),
 	}
 	if err := repo.migrate(ctx); err != nil {

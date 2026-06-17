@@ -3,6 +3,7 @@ package application
 import (
 	"errors"
 
+	"github.com/example/redcart-copilot/backend/internal/event"
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 )
 
@@ -13,6 +14,7 @@ var ErrInsufficientStock = errors.New("stock is insufficient")
 // sideEffect callback of UpdateOrderStatus so that inventory changes and
 // event writes are committed atomically with the status change.
 type OrderTx interface {
+	event.Outbox
 	GetSKU(id int64) (domain.SKU, bool)
 	SaveSKU(sku domain.SKU) (domain.SKU, error)
 	ListInventoryLocksByOrder(orderID int64) []domain.InventoryLock
