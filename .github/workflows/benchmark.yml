@@ -65,9 +65,9 @@ jobs:
           RABBITMQ_EXCHANGE: redcart.events.bench
           RUN_POSTGRES_INTEGRATION: "1"
         run: |
-          go test ./internal/redcart/interfaces/httpapi ./internal/event/outbox ./internal/event/rabbitmq \
+          go test ./internal/redcart/interfaces/httpapi ./internal/redcart/application ./internal/event/outbox ./internal/event/rabbitmq \
             -run '^$' \
-            -bench 'BenchmarkHTTPNotes|BenchmarkHTTPOrderPreview|BenchmarkHTTPPostgresOrderPreview|BenchmarkHTTPPostgresCreateOrder|BenchmarkHTTPPostgresCreateOrderWithOutbox|BenchmarkOutbox|BenchmarkRabbitMQPublish' \
+            -bench 'BenchmarkHTTPNotes|BenchmarkHTTPOrderPreview|BenchmarkHTTPPostgresOrderPreview|BenchmarkHTTPPostgresCreateOrder|BenchmarkHTTPPostgresCreateOrderWithOutbox|BenchmarkCreateOrderOutbox|BenchmarkCreateOrderSyncSideEffects|BenchmarkOutbox|BenchmarkRabbitMQPublish' \
             -benchtime=1s \
             -benchmem \
             -count=1 \

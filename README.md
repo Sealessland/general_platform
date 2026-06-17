@@ -155,10 +155,14 @@ bash scripts/validate-workspace.sh
 <!-- BENCHMARK_RESULTS_START -->
 ## Performance
 
-_Last updated: 2026-06-15 14:04 UTC via GitHub Actions._
+_Last updated: 2026-06-17 08:33 UTC via GitHub Actions._
 
 | Benchmark | QPS | ns/op | B/op | allocs/op |
 |---|---|---|---|---|
-| `BenchmarkHTTPNotes` | 100.39K | 9961 | 11545 | 59 |
-| `BenchmarkHTTPOrderPreview` | 149.08K | 6708 | 9095 | 43 |
+| `BenchmarkHTTPNotes` | 111.91K | 8936 | 11541 | 59 |
+| `BenchmarkHTTPOrderPreview` | 169.15K | 5912 | 9095 | 43 |
+| `BenchmarkCreateOrderOutbox` | 179.89K | 5559 | 5319 | 53 |
+| `BenchmarkCreateOrderSyncSideEffects` | 459.42 | 2176681 | 3776 | 27 |
+| `BenchmarkOutboxRelay` | 72.10M | 13.87 | 8 | 0 |
+| `BenchmarkOutboxAppend` | 6.44M | 155.2 | 545 | 0 |
 <!-- BENCHMARK_RESULTS_END -->

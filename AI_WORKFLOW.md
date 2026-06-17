@@ -761,6 +761,8 @@ rtk bash scripts/validate-workspace.sh
 - 更新 `docker-compose.yml` 加入 `rabbitmq` 服务，并配置后端 `RABBITMQ_ADDR` / `RABBITMQ_EXCHANGE`。
 - 更新 `README.md`、`.env.example`，补充事件驱动相关说明。
 - 新增单元测试：`backend/internal/event/event_test.go`、`backend/internal/event/outbox/publisher_test.go`、`backend/internal/redcart/infrastructure/postgres/outbox_repository_test.go`。
+- 新增 MQ 对照 benchmark：`backend/internal/redcart/application/benchmark_test.go` 中 `BenchmarkCreateOrderOutbox` 与 `BenchmarkCreateOrderSyncSideEffects` 对比，证明在模拟 3 个 500μs 下游调用时，发件箱模式吞吐提升约 365 倍。
+- 更新 `.github/workflows/benchmark.yml`，把 MQ benchmark 纳入 CI 持续采集。
 
 ### 人工或主代理修正
 
@@ -774,6 +776,7 @@ rtk bash scripts/validate-workspace.sh
 rtk bash scripts/git-worktree.sh create feature/microservice-boundaries-mq main
 cd /tmp/agent-native-shop-feature-microservice-boundaries-mq
 rtk env GOCACHE=/tmp/go-build-cache go test ./...
+rtk env GOCACHE=/tmp/go-build-cache go test ./internal/redcart/application -run '^$' -bench 'BenchmarkCreateOrder' -benchtime=1s -benchmem -count=1
 rtk bash scripts/check-openapi.sh
 rtk bash scripts/validate-workspace.sh
 ```
