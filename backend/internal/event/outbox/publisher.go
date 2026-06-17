@@ -13,13 +13,13 @@ import (
 
 // Publisher polls an OutboxStore and forwards pending events to a Publisher.
 type Publisher struct {
-	store      event.OutboxStore
-	publisher  event.Publisher
-	interval   time.Duration
-	batchSize  int
-	logger     *log.Logger
-	stop       chan struct{}
-	stopped    chan struct{}
+	store     event.OutboxStore
+	publisher event.Publisher
+	interval  time.Duration
+	batchSize int
+	logger    *log.Logger
+	stop      chan struct{}
+	stopped   chan struct{}
 }
 
 // Config configures the outbox publisher relay.

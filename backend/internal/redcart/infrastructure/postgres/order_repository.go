@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 
-	orderdomain "github.com/example/redcart-copilot/backend/internal/order/domain"
 	"github.com/example/redcart-copilot/backend/internal/event"
+	orderdomain "github.com/example/redcart-copilot/backend/internal/order/domain"
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 	"sort"

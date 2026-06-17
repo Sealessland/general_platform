@@ -11,13 +11,15 @@ import (
 
 func TestOutboxAppendAndPoll(t *testing.T) {
 	repo := newPostgresRepo(t)
+	clearOutboxForTest(t, repo)
 	ctx := context.Background()
 
 	evt := event.Event{
-		Type:       event.TypeOrderCreated,
-		Topic:      event.TypeOrderCreated.Topic(),
-		Payload:    json.RawMessage(`{"order_id":42}`),
-		OccurredAt: time.Now().UTC(),
+		Type:          event.TypeOrderCreated,
+		Topic:         event.TypeOrderCreated.Topic(),
+		CorrelationID: "outbox-test-created",
+		Payload:       json.RawMessage(`{"order_id":42}`),
+		OccurredAt:    time.Now().UTC(),
 	}
 	id, err := repo.Outbox.Append(ctx, evt)
 	if err != nil {
@@ -27,38 +29,41 @@ func TestOutboxAppendAndPoll(t *testing.T) {
 		t.Fatal("expected non-zero outbox id")
 	}
 
-	pending, err := repo.Outbox.PollPending(ctx, 10)
+	pending, err := repo.Outbox.PollPending(ctx, 100)
 	if err != nil {
 		t.Fatalf("poll pending: %v", err)
 	}
-	if len(pending) != 1 {
-		t.Fatalf("expected 1 pending event, got %d", len(pending))
+	polled, ok := findOutboxEvent(pending, id)
+	if !ok {
+		t.Fatalf("expected pending event %d in %+v", id, pending)
 	}
-	if pending[0].Type != event.TypeOrderCreated {
-		t.Fatalf("expected %s, got %s", event.TypeOrderCreated, pending[0].Type)
+	if polled.Type != event.TypeOrderCreated {
+		t.Fatalf("expected %s, got %s", event.TypeOrderCreated, polled.Type)
 	}
 
-	if err := repo.Outbox.MarkPublished(ctx, []int64{pending[0].ID}); err != nil {
+	if err := repo.Outbox.MarkPublished(ctx, []int64{id}); err != nil {
 		t.Fatalf("mark published: %v", err)
 	}
-	pending, err = repo.Outbox.PollPending(ctx, 10)
+	pending, err = repo.Outbox.PollPending(ctx, 100)
 	if err != nil {
 		t.Fatalf("poll after publish: %v", err)
 	}
-	if len(pending) != 0 {
-		t.Fatalf("expected 0 pending events, got %d", len(pending))
+	if _, ok := findOutboxEvent(pending, id); ok {
+		t.Fatalf("expected event %d to be removed after publish", id)
 	}
 }
 
 func TestOutboxMarkFailedMovesToDeadLetter(t *testing.T) {
 	repo := newPostgresRepo(t)
+	clearOutboxForTest(t, repo)
 	ctx := context.Background()
 
 	evt := event.Event{
-		Type:       event.TypeOrderPaid,
-		Topic:      event.TypeOrderPaid.Topic(),
-		Payload:    json.RawMessage(`{}`),
-		OccurredAt: time.Now().UTC(),
+		Type:          event.TypeOrderPaid,
+		Topic:         event.TypeOrderPaid.Topic(),
+		CorrelationID: "outbox-test-paid",
+		Payload:       json.RawMessage(`{}`),
+		OccurredAt:    time.Now().UTC(),
 	}
 	id, err := repo.Outbox.Append(ctx, evt)
 	if err != nil {
@@ -71,11 +76,30 @@ func TestOutboxMarkFailedMovesToDeadLetter(t *testing.T) {
 		}
 	}
 
-	pending, err := repo.Outbox.PollPending(ctx, 10)
+	pending, err := repo.Outbox.PollPending(ctx, 100)
 	if err != nil {
 		t.Fatalf("poll pending: %v", err)
 	}
-	if len(pending) != 0 {
-		t.Fatalf("expected event to leave pending after max retries, got %d", len(pending))
+	if _, ok := findOutboxEvent(pending, id); ok {
+		t.Fatalf("expected event %d to leave pending after max retries", id)
 	}
+}
+
+func clearOutboxForTest(t *testing.T, repo *Repository) {
+	t.Helper()
+	if _, err := repo.db.Exec(`DELETE FROM outbox_dead_letter`); err != nil {
+		t.Fatalf("clear outbox dead letter: %v", err)
+	}
+	if _, err := repo.db.Exec(`DELETE FROM outbox`); err != nil {
+		t.Fatalf("clear outbox: %v", err)
+	}
+}
+
+func findOutboxEvent(events []event.Event, id int64) (event.Event, bool) {
+	for _, evt := range events {
+		if evt.ID == id {
+			return evt, true
+		}
+	}
+	return event.Event{}, false
 }

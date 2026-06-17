@@ -23,11 +23,11 @@ RedCart Copilot 面向四类直接可见的使用面：
 - 产品接口层：`backend/cmd/api`、Gin HTTP 适配器 `backend/internal/redcart/interfaces/httpapi` 和 `frontend/`
 - 运行编排层：`backend/internal/redcart/application`
 - 领域能力层：`backend/internal/order/domain` 与 `backend/internal/redcart/domain`
-- 集成适配层：PostgreSQL 仓储 `backend/internal/redcart/infrastructure/postgres`、迁移 `backend/migrations/`、内存测试仓储 `backend/internal/redcart/infrastructure/memory` 与 Mock AI Provider `backend/internal/ai`
+- 集成适配层：PostgreSQL 仓储 `backend/internal/redcart/infrastructure/postgres`、Redis 适配器 `backend/internal/redcart/infrastructure/redis`、迁移 `backend/migrations/` 与 AI Provider `backend/internal/ai`
 
-后端运行时必须提供 `POSTGRES_DSN`。PostgreSQL 仓储在启动时负责初始化迁移和演示种子数据，并在订单创建路径中用事务和条件更新完成库存预锁。内存仓储只用于测试和契约对齐，不是当前 Docker Compose MVP 的运行时数据源。
+后端运行时必须提供 `POSTGRES_DSN` 与 `REDIS_ADDR`。PostgreSQL 仓储在启动时负责初始化迁移和演示种子数据，并在订单创建路径中用事务和条件更新完成库存预锁。仓储层不再保留内存测试适配器，服务层、HTTP 层和性能验证必须使用 PostgreSQL/Redis/RabbitMQ 或真实运行中的 HTTP 服务作为证据来源。
 
-Redis 当前以可选读侧适配器方式接入：session 以 Redis 为共享真相源，商品与 SKU 读路径可命中 Redis 缓存，但订单、库存、购物车和幂等真相仍然保留在 PostgreSQL。RabbitMQ 尚未作为运行前置依赖接入。相关能力仍通过适配层边界保留扩展点，不能把中间件细节混进领域逻辑。
+Redis 当前作为运行时读侧适配器接入：session 以 Redis 为共享真相源，商品与 SKU 读路径可命中 Redis 缓存，但订单、库存、购物车和幂等真相仍然保留在 PostgreSQL。RabbitMQ 作为事务性发件箱发布目标接入。相关能力仍通过适配层边界保留扩展点，不能把中间件细节混进领域逻辑。
 
 ## 核心数据流
 

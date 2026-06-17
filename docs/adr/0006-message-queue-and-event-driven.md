@@ -81,28 +81,14 @@
 
 ## 性能证据
 
-### 为什么采用手工构建的 benchmark
+性能证据只接受真实依赖路径，不再使用内存 outbox、空 publisher 或手工 sleep 模拟下游副作用作为吞吐来源。
 
-调研后发现，目前没有直接评估「事务性发件箱 + 业务服务请求路径」的公开可信测试集：
+当前保留两类 benchmark：
 
-- **SPECjms2007** 是 JMS/MOM 的行业标准 benchmark，但已于 2016 年退役；它评估的是消息中间件本身（供应链场景），不包含发件箱模式，也不把业务写入与事件写入放在同一个数据库事务内评估。
-- **OpenMessaging Benchmark Framework** 支持 RabbitMQ、Kafka、Pulsar 等，但属于 broker-centric 测试，关注吞吐、延迟、稳定性，不模拟「订单 API 内同步执行下游副作用」这一典型电商场景。
+- `BenchmarkHTTPPostgresCreateOrderWithOutbox`：通过 Gin handler 进入应用层，使用 PostgreSQL 仓储创建订单，并在事务性发件箱中写入事件。benchmark 结束后会检查 PostgreSQL outbox 表中待发布事件数量。
+- `BenchmarkPostgresRabbitMQOutboxRelay`：先向 PostgreSQL outbox 表写入真实事件，再用 outbox relay 通过 RabbitMQ publisher 发布并标记已发布。
 
-因此，我们在 `backend/internal/redcart/application` 中手工构建了一个**控制变量**的对照 benchmark：业务逻辑完全相同，唯一变量是下游副作用发生在请求路径内（同步）还是通过发件箱异步处理。
-
-### 测试设计
-
-- `BenchmarkCreateOrderOutbox`：订单创建时只把事件写入事务性发件箱，下游副作用异步处理。
-- `BenchmarkCreateOrderSyncSideEffects`：订单创建时同步模拟三个轻量下游调用（通知 + 分析 + 搜索索引），每个调用 500μs。500μs 代表同区域轻量 RPC / HTTP 通知 / 分析刷盘的典型耗时。
-
-### 本地基准结果（Go 1.23，8 核 Intel i7-1185G7）
-
-| Benchmark | QPS | ns/op | B/op | allocs/op |
-|---|---|---|---|---|
-| `BenchmarkCreateOrderOutbox` | ~168.7K | 5927 | 5269 | 53 |
-| `BenchmarkCreateOrderSyncSideEffects` | ~462 | 2166098 | 3773 | 27 |
-
-当请求路径中存在毫秒级下游调用时，发件箱模式把创建订单的吞吐提升了约 **365 倍**，而业务状态变更与事件记录仍在同一个数据库事务内保持原子。该测试会随 CI benchmark workflow 持续运行，结果写入 README 性能表格。
+README 性能表只由 GitHub Actions 的 benchmark workflow 更新，白名单限定为 PostgreSQL/Redis/RabbitMQ-backed 组件 benchmark 和 live HTTP benchmark。任何内存仓储、空 publisher 或模拟延迟 benchmark 结果都会被脚本拒绝。
 
 ## 影响
 

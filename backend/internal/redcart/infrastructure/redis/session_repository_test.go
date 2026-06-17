@@ -1,36 +1,75 @@
 package redis
 
 import (
+	"context"
+	"fmt"
+	"os"
 	"testing"
 	"time"
 
-	"github.com/alicebob/miniredis/v2"
 	backendai "github.com/example/redcart-copilot/backend/internal/ai"
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
-	"github.com/example/redcart-copilot/backend/internal/redcart/infrastructure/memory"
+	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
+	postgresrepo "github.com/example/redcart-copilot/backend/internal/redcart/infrastructure/postgres"
 	goredis "github.com/redis/go-redis/v9"
+	"golang.org/x/crypto/bcrypt"
 )
 
-func TestSessionRepositoryRoundTrip(t *testing.T) {
-	server := miniredis.RunT(t)
-	client := goredis.NewClient(&goredis.Options{Addr: server.Addr()})
-	t.Cleanup(func() {
-		_ = client.Close()
-	})
+type redisPostgresFixture struct {
+	repo   *postgresrepo.Repository
+	client *goredis.Client
+}
 
-	base := memory.NewRepository()
-	repo := NewSessionRepository(base, client, time.Hour)
+func newRedisPostgresFixture(t *testing.T) redisPostgresFixture {
+	t.Helper()
+	if os.Getenv("RUN_POSTGRES_INTEGRATION") != "1" {
+		t.Skip("RUN_POSTGRES_INTEGRATION is not set")
+	}
+	dsn := os.Getenv("POSTGRES_DSN")
+	if dsn == "" {
+		t.Skip("POSTGRES_DSN is not set")
+	}
+	addr := os.Getenv("REDIS_ADDR")
+	if addr == "" {
+		t.Skip("REDIS_ADDR is not set")
+	}
+
+	repo, err := postgresrepo.NewRepository(dsn)
+	if err != nil {
+		t.Fatalf("new postgres repository: %v", err)
+	}
+	client, err := NewClient(addr)
+	if err != nil {
+		_ = repo.Close()
+		t.Fatalf("new redis client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.FlushDB(context.Background()).Err()
+		_ = client.Close()
+		_ = repo.Close()
+	})
+	return redisPostgresFixture{repo: repo, client: client}
+}
+
+func TestSessionRepositoryRoundTrip(t *testing.T) {
+	fixture := newRedisPostgresFixture(t)
+	repo := NewSessionRepository(fixture.repo, fixture.client, time.Hour)
 	service := application.NewService(repo, backendai.MockProvider{})
 
+	phone := uniqueRedisTestPhone()
+	password := "consumer-pass"
+	if _, err := createRedisTestUser(fixture.repo, phone, password, domain.RoleConsumer); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
 	session, err := service.Login(t.Context(), application.LoginInput{
-		Phone:    "13800000001",
-		Password: "consumer-demo",
+		Phone:    phone,
+		Password: password,
 	})
 	if err != nil {
 		t.Fatalf("login: %v", err)
 	}
 
-	server.FastForward(10 * time.Minute)
 	user, ok := repo.GetUserByToken(session.Token)
 	if !ok {
 		t.Fatal("expected redis-backed session lookup")
@@ -41,19 +80,19 @@ func TestSessionRepositoryRoundTrip(t *testing.T) {
 }
 
 func TestSessionRepositoryDeleteInvalidatesTokens(t *testing.T) {
-	server := miniredis.RunT(t)
-	client := goredis.NewClient(&goredis.Options{Addr: server.Addr()})
-	t.Cleanup(func() {
-		_ = client.Close()
-	})
-
-	base := memory.NewRepository()
-	repo := NewSessionRepository(base, client, time.Hour)
+	fixture := newRedisPostgresFixture(t)
+	repo := NewSessionRepository(fixture.repo, fixture.client, time.Hour)
 	service := application.NewService(repo, backendai.MockProvider{})
 
+	phone := uniqueRedisTestPhone()
+	password := "consumer-pass"
+	if _, err := createRedisTestUser(fixture.repo, phone, password, domain.RoleConsumer); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
 	session, err := service.Login(t.Context(), application.LoginInput{
-		Phone:    "13800000001",
-		Password: "consumer-demo",
+		Phone:    phone,
+		Password: password,
 	})
 	if err != nil {
 		t.Fatalf("login: %v", err)
@@ -88,4 +127,23 @@ func TestSessionTTLFromEnv(t *testing.T) {
 	if _, err := SessionTTLFromEnv("0s"); err == nil {
 		t.Fatal("expected positive ttl error")
 	}
+}
+
+func createRedisTestUser(repo *postgresrepo.Repository, phone, password, role string) (domain.User, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return domain.User{}, err
+	}
+	return repo.CreateUser(domain.User{
+		Nickname:     "Redis Test User",
+		Phone:        phone,
+		PasswordHash: string(hash),
+		Role:         role,
+		CreatedAt:    time.Now().UTC(),
+		UpdatedAt:    time.Now().UTC(),
+	})
+}
+
+func uniqueRedisTestPhone() string {
+	return fmt.Sprintf("137%08d", time.Now().UnixNano()%100000000)
 }

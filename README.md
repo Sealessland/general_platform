@@ -170,4 +170,15 @@ _Last updated: 2026-06-17 12:50 UTC via GitHub Actions._
 | `BenchmarkRabbitMQPublish` | 35.58K | — | 28106 | 3073 | 80 |
 
 _Outbox decoupling gain: create-order throughput is **246.5x** higher when downstream side effects are moved out of the request path._
+||||||| parent of af0aee1 (test: verify real middleware backend paths)
+_Last updated: 2026-06-17 08:33 UTC via GitHub Actions._
+
+| Benchmark | QPS | ns/op | B/op | allocs/op |
+|---|---|---|---|---|
+| `BenchmarkHTTPNotes` | 111.91K | 8936 | 11541 | 59 |
+| `BenchmarkHTTPOrderPreview` | 169.15K | 5912 | 9095 | 43 |
+| `BenchmarkCreateOrderOutbox` | 179.89K | 5559 | 5319 | 53 |
+| `BenchmarkCreateOrderSyncSideEffects` | 459.42 | 2176681 | 3776 | 27 |
+| `BenchmarkOutboxRelay` | 72.10M | 13.87 | 8 | 0 |
+| `BenchmarkOutboxAppend` | 6.44M | 155.2 | 545 | 0 |
 <!-- BENCHMARK_RESULTS_END -->

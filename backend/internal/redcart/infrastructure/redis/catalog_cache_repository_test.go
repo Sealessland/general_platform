@@ -1,13 +1,13 @@
 package redis
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
-	"github.com/alicebob/miniredis/v2"
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
-	"github.com/example/redcart-copilot/backend/internal/redcart/infrastructure/memory"
+	postgresrepo "github.com/example/redcart-copilot/backend/internal/redcart/infrastructure/postgres"
 	goredis "github.com/redis/go-redis/v9"
 )
 
@@ -33,44 +33,41 @@ func (r *countingRepo) ListSKUsByProduct(productID int64) []domain.SKU {
 	return r.Repository.ListSKUsByProduct(productID)
 }
 
-func newCatalogCacheRepoWithMiniredis(t *testing.T, base application.Repository) (*CatalogCacheRepository, func()) {
+func newCatalogCacheRepo(t *testing.T, base application.Repository, client goredis.UniversalClient) *CatalogCacheRepository {
 	t.Helper()
-	server := miniredis.RunT(t)
-	client := goredis.NewClient(&goredis.Options{Addr: server.Addr()})
-	cleanup := func() { _ = client.Close() }
-	repo := NewCatalogCacheRepository(base, client, time.Hour)
-	return repo, cleanup
+	return NewCatalogCacheRepository(base, client, time.Hour)
 }
 
 func TestCatalogCacheRepositoryUsesLocalCacheAfterFirstRead(t *testing.T) {
-	base := &countingRepo{Repository: memory.NewRepository()}
-	repo, cleanup := newCatalogCacheRepoWithMiniredis(t, base)
-	defer cleanup()
+	fixture := newRedisPostgresFixture(t)
+	product, sku := createRedisCatalogFixture(t, fixture.repo, 12)
+	base := &countingRepo{Repository: fixture.repo}
+	repo := newCatalogCacheRepo(t, base, fixture.client)
 
-	if _, ok := repo.GetProduct(1); !ok {
-		t.Fatal("expected seeded product")
+	if _, ok := repo.GetProduct(product.ID); !ok {
+		t.Fatal("expected postgres product")
 	}
-	if _, ok := repo.GetProduct(1); !ok {
+	if _, ok := repo.GetProduct(product.ID); !ok {
 		t.Fatal("expected cached product")
 	}
 	if base.productReads != 1 {
 		t.Fatalf("expected one product read, got %d", base.productReads)
 	}
 
-	if _, ok := repo.GetSKU(1); !ok {
-		t.Fatal("expected seeded sku")
+	if _, ok := repo.GetSKU(sku.ID); !ok {
+		t.Fatal("expected postgres sku")
 	}
-	if _, ok := repo.GetSKU(1); !ok {
+	if _, ok := repo.GetSKU(sku.ID); !ok {
 		t.Fatal("expected cached sku")
 	}
 	if base.skuReads != 1 {
 		t.Fatalf("expected one sku read, got %d", base.skuReads)
 	}
 
-	if skus := repo.ListSKUsByProduct(1); len(skus) == 0 {
-		t.Fatal("expected seeded skus")
+	if skus := repo.ListSKUsByProduct(product.ID); len(skus) == 0 {
+		t.Fatal("expected postgres sku list")
 	}
-	if skus := repo.ListSKUsByProduct(1); len(skus) == 0 {
+	if skus := repo.ListSKUsByProduct(product.ID); len(skus) == 0 {
 		t.Fatal("expected cached sku list")
 	}
 	if base.skuListReads != 1 {
@@ -79,39 +76,39 @@ func TestCatalogCacheRepositoryUsesLocalCacheAfterFirstRead(t *testing.T) {
 }
 
 func TestCatalogCacheRepositoryReadsFromRedisAcrossInstances(t *testing.T) {
-	server := miniredis.RunT(t)
-	client := goredis.NewClient(&goredis.Options{Addr: server.Addr()})
-	t.Cleanup(func() { _ = client.Close() })
+	fixture := newRedisPostgresFixture(t)
+	product, _ := createRedisCatalogFixture(t, fixture.repo, 12)
 
-	baseOne := &countingRepo{Repository: memory.NewRepository()}
-	repoOne := NewCatalogCacheRepository(baseOne, client, time.Hour)
-	product, ok := repoOne.GetProduct(1)
+	baseOne := &countingRepo{Repository: fixture.repo}
+	repoOne := newCatalogCacheRepo(t, baseOne, fixture.client)
+	loadedByFirst, ok := repoOne.GetProduct(product.ID)
 	if !ok {
-		t.Fatal("expected seeded product")
+		t.Fatal("expected postgres product")
 	}
 
-	baseTwo := &countingRepo{Repository: memory.NewRepository()}
-	repoTwo := NewCatalogCacheRepository(baseTwo, client, time.Hour)
-	loaded, ok := repoTwo.GetProduct(product.ID)
+	baseTwo := &countingRepo{Repository: fixture.repo}
+	repoTwo := newCatalogCacheRepo(t, baseTwo, fixture.client)
+	loadedBySecond, ok := repoTwo.GetProduct(product.ID)
 	if !ok {
 		t.Fatal("expected redis-backed product")
 	}
-	if loaded.ID != product.ID {
-		t.Fatalf("expected product %d, got %d", product.ID, loaded.ID)
+	if loadedBySecond.ID != loadedByFirst.ID {
+		t.Fatalf("expected product %d, got %d", loadedByFirst.ID, loadedBySecond.ID)
 	}
 	if baseTwo.productReads != 0 {
-		t.Fatalf("expected zero DB product reads, got %d", baseTwo.productReads)
+		t.Fatalf("expected zero postgres product reads, got %d", baseTwo.productReads)
 	}
 }
 
 func TestCatalogCacheRepositoryInvalidatesSKUListOnSaveSKU(t *testing.T) {
-	base := &countingRepo{Repository: memory.NewRepository()}
-	repo, cleanup := newCatalogCacheRepoWithMiniredis(t, base)
-	defer cleanup()
+	fixture := newRedisPostgresFixture(t)
+	product, _ := createRedisCatalogFixture(t, fixture.repo, 12)
+	base := &countingRepo{Repository: fixture.repo}
+	repo := newCatalogCacheRepo(t, base, fixture.client)
 
-	skus := repo.ListSKUsByProduct(1)
+	skus := repo.ListSKUsByProduct(product.ID)
 	if len(skus) == 0 {
-		t.Fatal("expected seeded skus")
+		t.Fatal("expected postgres skus")
 	}
 	updated := skus[0]
 	updated.Stock++
@@ -125,19 +122,20 @@ func TestCatalogCacheRepositoryInvalidatesSKUListOnSaveSKU(t *testing.T) {
 }
 
 func TestCatalogCacheRepositoryInvalidatesOrderSKUsAfterSaveOrderWithInventoryLocks(t *testing.T) {
-	base := &countingRepo{Repository: memory.NewRepository()}
-	repo, cleanup := newCatalogCacheRepoWithMiniredis(t, base)
-	defer cleanup()
+	fixture := newRedisPostgresFixture(t)
+	product, sku := createRedisCatalogFixture(t, fixture.repo, 12)
+	base := &countingRepo{Repository: fixture.repo}
+	repo := newCatalogCacheRepo(t, base, fixture.client)
 
-	sku, ok := repo.GetSKU(1)
-	if !ok {
-		t.Fatal("expected seeded sku")
+	if _, ok := repo.GetSKU(sku.ID); !ok {
+		t.Fatal("expected postgres sku")
 	}
+	now := time.Now().UTC()
 	order, err := repo.SaveOrderWithInventoryLocks(domain.Order{
 		UserID:             1,
-		MerchantID:         1,
-		IdempotencyKey:     "cache-invalidate-order",
-		OrderNo:            "CACHE-ORDER-1",
+		MerchantID:         product.MerchantID,
+		IdempotencyKey:     fmt.Sprintf("cache-invalidate-order-%d", sku.ID),
+		OrderNo:            fmt.Sprintf("CACHE-ORDER-%d", sku.ID),
 		Status:             "CREATED",
 		TotalAmountCent:    sku.PriceCent,
 		PayAmountCent:      sku.PriceCent,
@@ -145,26 +143,26 @@ func TestCatalogCacheRepositoryInvalidatesOrderSKUsAfterSaveOrderWithInventoryLo
 		ReceiverName:       "Alice",
 		ReceiverPhone:      "13800000001",
 		ReceiverAddress:    "Shanghai",
-		CreatedAt:          time.Now().UTC(),
-		UpdatedAt:          time.Now().UTC(),
+		CreatedAt:          now,
+		UpdatedAt:          now,
 		Items: []domain.OrderItem{{
-			ProductID:            sku.ProductID,
+			ProductID:            product.ID,
 			SKUID:                sku.ID,
-			ProductTitleSnapshot: "seed",
+			ProductTitleSnapshot: product.Title,
 			SKUNameSnapshot:      sku.SKUName,
 			PriceCentSnapshot:    sku.PriceCent,
 			Quantity:             1,
 			TotalAmountCent:      sku.PriceCent,
-			CreatedAt:            time.Now().UTC(),
-			UpdatedAt:            time.Now().UTC(),
+			CreatedAt:            now,
+			UpdatedAt:            now,
 		}},
 	}, []domain.InventoryLock{{
 		SKUID:     sku.ID,
 		Quantity:  1,
 		Status:    domain.InventoryLockStatusLocked,
-		LockedAt:  time.Now().UTC(),
-		CreatedAt: time.Now().UTC(),
-		UpdatedAt: time.Now().UTC(),
+		LockedAt:  now,
+		CreatedAt: now,
+		UpdatedAt: now,
 	}})
 	if err != nil {
 		t.Fatalf("save order with locks: %v", err)
@@ -180,4 +178,37 @@ func TestCatalogCacheRepositoryInvalidatesOrderSKUsAfterSaveOrderWithInventoryLo
 	if loaded.LockedStock != sku.LockedStock+1 {
 		t.Fatalf("expected locked stock %d, got %d", sku.LockedStock+1, loaded.LockedStock)
 	}
+}
+
+func createRedisCatalogFixture(t *testing.T, repo *postgresrepo.Repository, stock int) (domain.Product, domain.SKU) {
+	t.Helper()
+	now := time.Now().UTC()
+	product, err := repo.SaveProduct(domain.Product{
+		MerchantID:    1,
+		Title:         fmt.Sprintf("Redis Catalog Product %d", now.UnixNano()),
+		Description:   "redis catalog cache integration fixture",
+		CategoryID:    20260617,
+		Status:        domain.ProductStatusOnline,
+		SellingPoints: []string{"redis", "postgres"},
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	})
+	if err != nil {
+		t.Fatalf("save product: %v", err)
+	}
+	sku, err := repo.SaveSKU(domain.SKU{
+		ProductID:   product.ID,
+		SKUName:     fmt.Sprintf("Redis Catalog SKU %d", now.UnixNano()),
+		SKUAttrs:    map[string]string{"size": "standard"},
+		PriceCent:   12345,
+		Stock:       stock,
+		LockedStock: 0,
+		Status:      domain.SKUStatusActive,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	})
+	if err != nil {
+		t.Fatalf("save sku: %v", err)
+	}
+	return product, sku
 }

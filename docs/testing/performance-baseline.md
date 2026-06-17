@@ -1,6 +1,6 @@
 # 性能基线记录
 
-本记录只保存当前运行时性能基线。当前运行时是 Gin + PostgreSQL 适配层；GORM 仅保留建连与迁移职责，因此内存仓储 benchmark 不进入本基线。
+本记录只保存当前运行时性能基线。当前运行时是 Gin + PostgreSQL + Redis + RabbitMQ；内存仓储、空 publisher、模拟 sleep 和 handler-only 替代路径不允许进入本基线。
 
 ## 2026-06-06 Gin/GORM 迁移评估
 
@@ -33,7 +33,7 @@
 
 - 仅修改 `backend/internal/redcart/application/service_order.go`
 - `backend/internal/redcart/application/service_order_helpers.go`
-- `backend/internal/redcart/infrastructure/{memory,postgres}/repository.go`
+- `backend/internal/redcart/infrastructure/postgres/repository.go`
 - 不调整 OpenAPI、schema、库存规则、支付/退款状态机或 Redis 读侧
 
 优化原因：
@@ -44,7 +44,7 @@
 优化动作：
 
 - 将订单创建成功响应改为直接复用刚写出的订单项、`ORDER_CREATED` 事件和库存锁，不再为这两部分做额外仓储回查。
-- 让内存仓储和 PostgreSQL 仓储在 `SaveOrderWithInventoryLocks` 内把库存锁 `ID/OrderID` 回填到调用方传入切片，保证应用层可直接构造返回值。
+- 让 PostgreSQL 仓储在 `SaveOrderWithInventoryLocks` 内把库存锁 `ID/OrderID` 回填到调用方传入切片，保证应用层可直接构造返回值。
 - 仅在 `CreateOrder` 实际从“已选购物车项”结算时，才执行 `DeleteSelectedCartItems`；显式传入 `items` 的直接购买路径不再做无意义删除。
 
 复测环境：
@@ -70,7 +70,7 @@
 优化边界：
 
 - 仅修改 `backend/internal/redcart/infrastructure/postgres/repository.go`
-- 不调整应用层、HTTP 层、内存仓储、OpenAPI、migration 或 schema
+- 不调整应用层、HTTP 层、OpenAPI、migration 或 schema
 
 优化原因：
 
@@ -141,7 +141,8 @@
 ## 评估结论
 
 - 本基线数据来自 Gin handler -> 应用层 -> PostgreSQL 仓储适配层 -> 本地 Docker Compose PostgreSQL 的真实运行路径。
-- `backend-qps.txt` 是内存仓储下的诊断数据，不进入运行时 baseline，也不用于评估数据库迁移成果。
+- README 性能表只允许 PostgreSQL/Redis/RabbitMQ-backed 组件 benchmark 和 `LIVE_HTTP_BASE_URL` 指向真实后端进程的 live HTTP benchmark。
+- 历史 `backend-qps.txt`、内存仓储 benchmark、空 publisher benchmark 和模拟延迟 benchmark 已废弃，不再作为诊断数据、baseline 或简历指标来源。
 - 结算预览在 PostgreSQL-backed 路径约 6960 QPS，读路径表现明显好于上一次基线，仍可作为当前 MVP 的可演示基线。
 - 下单写路径约 71 QPS，主要覆盖多次查询、事务、条件更新、订单明细写入、库存锁写入和后续事件写入，仍然是后续优化的重点。
 - `CreateOrder` 路径约比 `OrderPreview` 慢两个数量级，并伴随 `69457 B/op`、`1081 allocs/op`，说明写路径的对象分配和数据库往返成本都偏高。
