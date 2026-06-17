@@ -155,14 +155,19 @@ bash scripts/validate-workspace.sh
 <!-- BENCHMARK_RESULTS_START -->
 ## Performance
 
-_Last updated: 2026-06-17 08:33 UTC via GitHub Actions._
+_Last updated: 2026-06-17 12:50 UTC via GitHub Actions._
 
-| Benchmark | QPS | ns/op | B/op | allocs/op |
-|---|---|---|---|---|
-| `BenchmarkHTTPNotes` | 111.91K | 8936 | 11541 | 59 |
-| `BenchmarkHTTPOrderPreview` | 169.15K | 5912 | 9095 | 43 |
-| `BenchmarkCreateOrderOutbox` | 179.89K | 5559 | 5319 | 53 |
-| `BenchmarkCreateOrderSyncSideEffects` | 459.42 | 2176681 | 3776 | 27 |
-| `BenchmarkOutboxRelay` | 72.10M | 13.87 | 8 | 0 |
-| `BenchmarkOutboxAppend` | 6.44M | 155.2 | 545 | 0 |
+| Benchmark | QPS | Change vs previous | ns/op | B/op | allocs/op |
+|---|---|---|---|---|---|
+| `BenchmarkHTTPNotes` | 80.64K | -27.9% 📉 | 12401 | 11522 | 59 |
+| `BenchmarkHTTPPostgresOrderPreview` | 2.76K | — | 362071 | 14178 | 179 |
+| `BenchmarkHTTPPostgresCreateOrder` | 333.11 | — | 3001980 | 30628 | 465 |
+| `BenchmarkHTTPOrderPreview` | 94.76K | -44.0% 📉 | 10553 | 9084 | 43 |
+| `BenchmarkCreateOrderOutbox` | 115.15K | -36.0% 📉 | 8684 | 5221 | 53 |
+| `BenchmarkCreateOrderSyncSideEffects` | 467.14 | +1.7% 📈 | 2140685 | 3766 | 27 |
+| `BenchmarkOutboxRelay` | 90.74M | +25.9% 📈 | 11.02 | 8 | 0 |
+| `BenchmarkOutboxAppend` | 5.93M | -8.0% 📉 | 168.7 | 591 | 0 |
+| `BenchmarkRabbitMQPublish` | 35.58K | — | 28106 | 3073 | 80 |
+
+_Outbox decoupling gain: create-order throughput is **246.5x** higher when downstream side effects are moved out of the request path._
 <!-- BENCHMARK_RESULTS_END -->
