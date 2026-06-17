@@ -36,6 +36,19 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+      rabbitmq:
+        image: rabbitmq:4-alpine
+        env:
+          RABBITMQ_DEFAULT_USER: postgres
+          RABBITMQ_DEFAULT_PASS: postgres
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@v4
 
@@ -48,11 +61,13 @@ jobs:
         env:
           POSTGRES_DSN: postgres://postgres:postgres@127.0.0.1:5432/redcart_test?sslmode=disable
           REDIS_ADDR: 127.0.0.1:6379
+          RABBITMQ_ADDR: amqp://postgres:postgres@127.0.0.1:5672/
+          RABBITMQ_EXCHANGE: redcart.events.bench
           RUN_POSTGRES_INTEGRATION: "1"
         run: |
-          go test ./internal/redcart/interfaces/httpapi \
+          go test ./internal/redcart/interfaces/httpapi ./internal/event/outbox ./internal/event/rabbitmq \
             -run '^$' \
-            -bench 'BenchmarkHTTPNotes|BenchmarkHTTPOrderPreview|BenchmarkHTTPPostgresOrderPreview|BenchmarkHTTPPostgresCreateOrder' \
+            -bench 'BenchmarkHTTPNotes|BenchmarkHTTPOrderPreview|BenchmarkHTTPPostgresOrderPreview|BenchmarkHTTPPostgresCreateOrder|BenchmarkHTTPPostgresCreateOrderWithOutbox|BenchmarkOutbox|BenchmarkRabbitMQPublish' \
             -benchtime=1s \
             -benchmem \
             -count=1 \
