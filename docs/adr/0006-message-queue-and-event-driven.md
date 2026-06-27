@@ -80,7 +80,15 @@
 - RabbitMQ publisher 启用 **publisher confirm 模式**：每条消息调用 `PublishWithDeferredConfirmWithContext` 并 `WaitContext` 等待 broker 确认，未确认或 NACK 时标记为发布失败。
 - publisher 通过 `NotifyClose` 监听 channel/connection 断开，自动以 3 秒间隔重连，重连期间 `sync.Mutex` 保护 conn/channel 防止并发 publish 写入已关闭资源。
 - 发布器失败后在同一事务内调用 `MarkFailedInTx`，递增 `retry_count`；超过最大重试次数（当前 5 次）的事件移动到 `outbox_dead_letter` 表，等待人工/补偿处理。
-- 消费者处理失败时消息不确认（nack），由 RabbitMQ 重新投递；达到重试上限后进入死信队列。
+- 消费者侧错误处理见第 7 节。
+
+### 7. 消费侧可靠性
+
+- **手动 ack**：消费者以 `autoAck=false` 消费，处理成功后才 `Ack`；保证**至少一次**交付语义（at-least-once）。进程崩溃或网络中断时未 ack 的消息会被 RabbitMQ 重新投递。
+- **QoS prefetch**：`channel.Qos(prefetch, 0, false)` 限制每个消费者未 ack 消息的上限（默认 10），防止慢 handler 被大量 in-flight 消息压垮。
+- **幂等去重**：RabbitMQ 的至少一次语义意味着消息可能被重复投递（redelivery）。消费者使用 outbox `event_id` 做幂等检查：处理前调用 `Deduplicator.IsDuplicate`，处理后调用 `MarkProcessed`。`MarkProcessed` 必须在 `Ack` 之前完成——如果进程在 Ack 后、MarkProcessed 前崩溃，redelivery 会跳过已处理的副作用；反过来则可能执行两次。
+- **死信队列（DLX）**：主队列声明 `x-dead-letter-exchange` 参数，指向 `redcart.events.dlx` fanout exchange。handler 返回错误时调用 `Nack(requeue=false)`，消息进入死信队列 `redcart.events.dlq`，等待人工/补偿处理。decode 失败同样进 DLX（消息格式错误，重试无意义）。dedup 检查失败（如 Redis 不可用）时 `Nack(requeue=true)` 重新入队，稍后重试——这是瞬态错误而非永久错误。
+- 去重实现当前为进程内 `MemoryDeduplicator`（demo 用），生产环境应替换为 Redis `SETNX` 或数据库去重表，以在消费者重启后保持幂等性。
 
 ## 性能证据
 

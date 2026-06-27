@@ -747,6 +747,42 @@ rtk bash scripts/validate-workspace.sh
 - 预算 Slider 仅做前端展示与本地数据模型更新，未真正回传后端重新筛选商品。
 - 商品图片使用示例 URL，本地无真实图片资源。
 
+## 2026-06-27：消费侧可靠性
+
+### AI 参与范围
+
+- 在 `feature/consumer-reliability` 独立 worktree 上实现 RabbitMQ 消费者可靠性，补上 publisher 侧完成后的架构最大缺口。
+- 新增 `backend/internal/event/rabbitmq/consumer.go`：`Consumer` 结构体声明 DLX exchange + DLQ queue + 主队列（`x-dead-letter-exchange` 参数），`QoS` prefetch 限流，`autoAck=false` 手动 ack。
+- 新增 `Handler` / `HandlerFunc` / `Deduplicator` / `Acknowledger` 接口：`Handler` 封装业务逻辑，`Deduplicator` 提供 `event_id` 幂等去重，`Acknowledger` 抽象 ack/nack 使消费逻辑可测试。
+- 新增 `MemoryDeduplicator`（进程内 map，demo 用，生产换 Redis/DB）。
+- 核心消费逻辑抽为 `processDelivery(ctx, body, acker)`，`amqp.Delivery` 天然实现 `Acknowledger` 接口，测试无需真实 AMQP channel。
+- 新增 `consumer_test.go`：5 个测试覆盖成功 ack+mark、handler 失败进 DLX、重复消息跳过、decode 错误进 DLX、dedup 瞬态错误 requeue。
+- 更新 ADR 0006 新增第 7 节「消费侧可靠性」、CHANGELOG。
+
+### 人工或主代理修正
+
+- 确认 `MarkProcessed` 在 `Ack` 之前执行的顺序：进程在 Ack 后、MarkProcessed 前崩溃 → redelivery 被 `IsDuplicate` 跳过；反过来会执行两次副作用。
+- decode 失败和 handler 失败均 `Nack(requeue=false)` 进 DLX（永久错误）；dedup 检查失败 `Nack(requeue=true)` 重新入队（瞬态错误）。
+- 范围严格限定在消费者基础设施：不实现具体业务 handler（通知/分析服务），不引入 Redis 去重实现，不实现 consumer auto-reconnect（与 publisher 相同模式，面试口述即可）。
+- 不修改 `event.go`，`Handler` / `Deduplicator` 接口放在 `consumer.go` 内，保持改动面最小。
+
+### 验证证据
+
+```bash
+rtk go build ./...
+rtk go vet ./...
+rtk go test ./internal/event/rabbitmq -v
+rtk go test ./...
+rtk bash scripts/validate-workspace.sh
+```
+
+### 剩余风险
+
+- `MemoryDeduplicator` 不持久化，消费者重启后去重失效；生产环境必须替换为 Redis `SETNX` 或数据库去重表。
+- Consumer 未实现 auto-reconnect（`NotifyClose` 监听），与 publisher 侧模式相同但代码未复制；生产环境需要补充。
+- 尚未实现具体业务消费者（通知服务、分析服务）；当前只有消费者基础设施。
+- DLX 路由用 fanout exchange + `#` binding key，所有死信消息进同一 DLQ；如需按错误类型分类，可改为 topic exchange + 不同 routing key。
+
 ## 2026-06-27：发布器可靠性加固
 
 ### AI 参与范围
