@@ -4,6 +4,13 @@
 
 ## [未发布] - 2026-06-08
 
+### 消费侧可靠性
+
+- 新增 RabbitMQ 消费者实现（`backend/internal/event/rabbitmq/consumer.go`）：手动 ack（至少一次语义）、QoS prefetch 限流、`event_id` 幂等去重、DLX 死信队列。
+- 新增 `Handler` / `Deduplicator` / `Acknowledger` 接口，使消费逻辑可测试且不耦合 AMQP SDK；`MemoryDeduplicator` 提供 demo 级进程内去重。
+- 新增 5 个 consumer 单元测试：成功 ack+mark、handler 失败进 DLX、重复消息跳过、decode 错误进 DLX、dedup 瞬态错误 requeue。
+- 更新 ADR 0006 新增第 7 节「消费侧可靠性」，记录手动 ack、prefetch、幂等顺序（MarkProcessed before Ack）和 DLX 路由决策。
+
 ### 发布器可靠性加固
 
 - outbox 表新增 `published_at` 列与 `idx_outbox_pending` 部分索引（`backend/migrations/0003_outbox_published_at.sql`）；已发布事件改为软标记而非删除，保留审计轨迹。
