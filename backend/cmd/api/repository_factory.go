@@ -51,7 +51,12 @@ func wrapRepositoryWithRedisSession(base application.Repository, logger *log.Log
 	if err != nil {
 		return nil, func() {}, fmt.Errorf("initialize redis session store: %w", err)
 	}
-	ttl, err := redisrepo.SessionTTLFromEnv(os.Getenv("REDIS_SESSION_TTL"))
+	accessTTL, err := redisrepo.AccessTokenTTLFromEnv(os.Getenv("REDIS_ACCESS_TOKEN_TTL"))
+	if err != nil {
+		_ = client.Close()
+		return nil, func() {}, err
+	}
+	refreshTTL, err := redisrepo.RefreshTokenTTLFromEnv(os.Getenv("REDIS_REFRESH_TOKEN_TTL"))
 	if err != nil {
 		_ = client.Close()
 		return nil, func() {}, err
@@ -62,10 +67,10 @@ func wrapRepositoryWithRedisSession(base application.Repository, logger *log.Log
 		return nil, func() {}, err
 	}
 	if logger != nil {
-		logger.Printf("redis repository wrapped on %s with session_ttl=%s catalog_ttl=%s", addr, ttl, catalogTTL)
+		logger.Printf("redis repository wrapped on %s with access_ttl=%s refresh_ttl=%s catalog_ttl=%s", addr, accessTTL, refreshTTL, catalogTTL)
 	}
 	withCatalog := redisrepo.NewCatalogCacheRepository(base, client, catalogTTL)
-	withSession := redisrepo.NewSessionRepository(withCatalog, client, ttl)
+	withSession := redisrepo.NewSessionRepository(withCatalog, client, accessTTL, refreshTTL)
 	return withSession, func() {
 		if err := client.Close(); err != nil && logger != nil {
 			logger.Printf("close redis client: %v", err)

@@ -15,6 +15,8 @@ const (
 	defaultWriteTimeout   = 1 * time.Second
 	defaultConnectTimeout = 5 * time.Second
 	defaultSessionTTL     = 24 * time.Hour
+	defaultAccessTokenTTL = 15 * time.Minute
+	defaultRefreshTokenTTL = 168 * time.Hour
 	defaultCatalogTTL     = 5 * time.Minute
 )
 
@@ -42,6 +44,14 @@ func NewClient(addr string) (*goredis.Client, error) {
 
 func SessionTTLFromEnv(raw string) (time.Duration, error) {
 	return ttlFromEnv(raw, defaultSessionTTL, "REDIS_SESSION_TTL")
+}
+
+func AccessTokenTTLFromEnv(raw string) (time.Duration, error) {
+	return ttlFromEnv(raw, defaultAccessTokenTTL, "REDIS_ACCESS_TOKEN_TTL")
+}
+
+func RefreshTokenTTLFromEnv(raw string) (time.Duration, error) {
+	return ttlFromEnv(raw, defaultRefreshTokenTTL, "REDIS_REFRESH_TOKEN_TTL")
 }
 
 func CatalogTTLFromEnv(raw string) (time.Duration, error) {

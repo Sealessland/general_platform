@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"database/sql"
+	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 )
 
@@ -40,34 +41,39 @@ func (r *Repository) GetUser(id int64) (domain.User, bool) {
 	return user, err == nil
 }
 
-func (r *Repository) SaveSession(accessToken, refreshToken string, userID int64) {
+func (r *Repository) SaveSession(accessToken, refreshToken string, userID int64) error {
 	r.sessionMu.Lock()
 	defer r.sessionMu.Unlock()
-	r.sessions[accessToken] = userID
+	r.sessions[accessToken] = sessionEntry{userID: userID, tokenType: application.TokenTypeAccess}
 	if refreshToken != "" {
-		r.sessions[refreshToken] = userID
+		r.sessions[refreshToken] = sessionEntry{userID: userID, tokenType: application.TokenTypeRefresh}
 	}
+	return nil
 }
 
-func (r *Repository) GetUserByToken(token string) (domain.User, bool) {
+func (r *Repository) GetUserByToken(token string) (domain.User, application.TokenType, bool) {
 	r.sessionMu.RLock()
-	userID, ok := r.sessions[token]
+	entry, ok := r.sessions[token]
 	r.sessionMu.RUnlock()
 	if !ok {
-		return domain.User{}, false
+		return domain.User{}, "", false
 	}
-	return r.GetUser(userID)
+	user, found := r.GetUser(entry.userID)
+	if !found {
+		return domain.User{}, "", false
+	}
+	return user, entry.tokenType, true
 }
 
 func (r *Repository) DeleteSession(token string) {
 	r.sessionMu.Lock()
 	defer r.sessionMu.Unlock()
-	userID, ok := r.sessions[token]
+	entry, ok := r.sessions[token]
 	if !ok {
 		return
 	}
-	for t, id := range r.sessions {
-		if id == userID {
+	for t, e := range r.sessions {
+		if e.userID == entry.userID {
 			delete(r.sessions, t)
 		}
 	}

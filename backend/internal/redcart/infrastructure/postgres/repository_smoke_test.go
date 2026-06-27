@@ -40,8 +40,10 @@ func TestRepositoryAgainstPostgres(t *testing.T) {
 		t.Fatal("expected user by phone")
 	}
 
-	repo.SaveSession("pg-token", "pg-refresh", user.ID)
-	if fetched, ok := repo.GetUserByToken("pg-token"); !ok || fetched.ID != user.ID {
+	if err := repo.SaveSession("pg-token", "pg-refresh", user.ID); err != nil {
+		t.Fatalf("save session: %v", err)
+	}
+	if fetched, _, ok := repo.GetUserByToken("pg-token"); !ok || fetched.ID != user.ID {
 		t.Fatal("expected user by token")
 	}
 
