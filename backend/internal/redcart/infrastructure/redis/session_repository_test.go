@@ -53,7 +53,7 @@ func newRedisPostgresFixture(t *testing.T) redisPostgresFixture {
 
 func TestSessionRepositoryRoundTrip(t *testing.T) {
 	fixture := newRedisPostgresFixture(t)
-	repo := NewSessionRepository(fixture.repo, fixture.client, time.Hour)
+	repo := NewSessionRepository(fixture.repo, fixture.client, time.Hour, 24*time.Hour)
 	service := application.NewService(repo, backendai.MockProvider{})
 
 	phone := uniqueRedisTestPhone()
@@ -70,18 +70,21 @@ func TestSessionRepositoryRoundTrip(t *testing.T) {
 		t.Fatalf("login: %v", err)
 	}
 
-	user, ok := repo.GetUserByToken(session.Token)
+	user, tokenType, ok := repo.GetUserByToken(session.Token)
 	if !ok {
 		t.Fatal("expected redis-backed session lookup")
 	}
 	if user.ID != session.User.ID || user.Phone != session.User.Phone || user.Role != session.User.Role {
 		t.Fatalf("unexpected session user: %+v", user)
 	}
+	if tokenType != application.TokenTypeAccess {
+		t.Fatalf("expected access token type, got %s", tokenType)
+	}
 }
 
 func TestSessionRepositoryDeleteInvalidatesTokens(t *testing.T) {
 	fixture := newRedisPostgresFixture(t)
-	repo := NewSessionRepository(fixture.repo, fixture.client, time.Hour)
+	repo := NewSessionRepository(fixture.repo, fixture.client, time.Hour, 24*time.Hour)
 	service := application.NewService(repo, backendai.MockProvider{})
 
 	phone := uniqueRedisTestPhone()
@@ -99,7 +102,7 @@ func TestSessionRepositoryDeleteInvalidatesTokens(t *testing.T) {
 	}
 
 	repo.DeleteSession(session.Token)
-	if _, ok := repo.GetUserByToken(session.Token); ok {
+	if _, _, ok := repo.GetUserByToken(session.Token); ok {
 		t.Fatal("expected access token invalidated after delete")
 	}
 }
@@ -125,6 +128,50 @@ func TestSessionTTLFromEnv(t *testing.T) {
 		t.Fatal("expected parse error")
 	}
 	if _, err := SessionTTLFromEnv("0s"); err == nil {
+		t.Fatal("expected positive ttl error")
+	}
+}
+
+func TestAccessTokenTTLFromEnv(t *testing.T) {
+	ttl, err := AccessTokenTTLFromEnv("")
+	if err != nil {
+		t.Fatalf("default access ttl: %v", err)
+	}
+	if ttl != defaultAccessTokenTTL {
+		t.Fatalf("expected default access ttl %s, got %s", defaultAccessTokenTTL, ttl)
+	}
+
+	ttl, err = AccessTokenTTLFromEnv("30m")
+	if err != nil {
+		t.Fatalf("custom access ttl: %v", err)
+	}
+	if ttl != 30*time.Minute {
+		t.Fatalf("expected 30m access ttl, got %s", ttl)
+	}
+
+	if _, err := AccessTokenTTLFromEnv("bad"); err == nil {
+		t.Fatal("expected parse error")
+	}
+}
+
+func TestRefreshTokenTTLFromEnv(t *testing.T) {
+	ttl, err := RefreshTokenTTLFromEnv("")
+	if err != nil {
+		t.Fatalf("default refresh ttl: %v", err)
+	}
+	if ttl != defaultRefreshTokenTTL {
+		t.Fatalf("expected default refresh ttl %s, got %s", defaultRefreshTokenTTL, ttl)
+	}
+
+	ttl, err = RefreshTokenTTLFromEnv("336h")
+	if err != nil {
+		t.Fatalf("custom refresh ttl: %v", err)
+	}
+	if ttl != 336*time.Hour {
+		t.Fatalf("expected 336h refresh ttl, got %s", ttl)
+	}
+
+	if _, err := RefreshTokenTTLFromEnv("0s"); err == nil {
 		t.Fatal("expected positive ttl error")
 	}
 }

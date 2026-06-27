@@ -20,7 +20,7 @@ type Repository struct {
 	Outbox *outboxStore
 
 	sessionMu sync.RWMutex
-	sessions  map[string]int64
+	sessions  map[string]sessionEntry
 }
 
 type gormSQL struct {
@@ -33,6 +33,11 @@ type gormTx struct {
 
 type gormResult struct {
 	rowsAffected int64
+}
+
+type sessionEntry struct {
+	userID    int64
+	tokenType application.TokenType
 }
 
 type dbQuerier interface {
@@ -119,7 +124,7 @@ func NewRepository(dsn string) (*Repository, error) {
 		gormDB:   db,
 		sqlDB:    sqlDB,
 		Outbox:   newOutboxStore(&gormSQL{db: sqlDB}),
-		sessions: make(map[string]int64),
+		sessions: make(map[string]sessionEntry),
 	}
 	if err := repo.migrate(ctx); err != nil {
 		_ = sqlDB.Close()

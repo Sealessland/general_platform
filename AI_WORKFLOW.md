@@ -747,6 +747,40 @@ rtk bash scripts/validate-workspace.sh
 - 预算 Slider 仅做前端展示与本地数据模型更新，未真正回传后端重新筛选商品。
 - 商品图片使用示例 URL，本地无真实图片资源。
 
+## 2026-06-27：Session Token 可靠性修复
+
+### AI 参与范围
+
+- 在 `fix/session-tokens` 独立 worktree 上修复 session 双 token 设计的 3 个缺陷。
+- 核心接口变更：`application.Repository` 新增 `TokenType` 类型（`access` / `refresh`）；`SaveSession` 签名改为返回 `error`；`GetUserByToken` 签名改为返回 `(domain.User, TokenType, bool)`。
+- PostgreSQL 实现：`sessions` map 值类型从 `int64` 改为 `sessionEntry{userID, tokenType}` 结构体。
+- Redis 实现：`sessionRecord` 新增 `TokenType` 字段；`SaveSession` 分别用 `accessTTL`（默认 15min）和 `refreshTTL`（默认 7d）存储两个 token，各自带独立 jitter；`NewSessionRepository` 签名改为接收两个 TTL。
+- 新增 `AccessTokenTTLFromEnv` / `RefreshTokenTTLFromEnv` 和 `defaultAccessTokenTTL` / `defaultRefreshTokenTTL` 常量。
+- 服务层：`Authenticate` 和 `Me` 校验 `TokenTypeAccess`；`RefreshSession` 校验 `TokenTypeRefresh`；`issueSession` 检查 `SaveSession` error。
+- 装配层和测试 helper 同步更新 `NewSessionRepository` 调用签名。
+- 新增 token 类型隔离断言（3 处）和 TTL 单元测试（2 个）。
+
+### 人工或主代理修正
+
+- 确认 `SessionTTLFromEnv` 和 `defaultSessionTTL` 保留在 `client.go` 中供向后兼容，但装配层不再调用——改用 `AccessTokenTTLFromEnv` / `RefreshTokenTTLFromEnv`。
+- `ttlWithJitter` 和 `negativeCacheTTL` 从方法改为包级函数，接收 base TTL 参数，避免依赖实例的单一 TTL。
+- `service_auth.go` 中 `TokenTypeAccess` / `TokenTypeRefresh` 不加 `application.` 前缀（同包）。
+
+### 验证证据
+
+```bash
+rtk go build ./...
+rtk go vet ./...
+rtk go test ./...
+rtk bash scripts/validate-workspace.sh
+```
+
+### 剩余风险
+
+- `MemoryDeduplicator` 不持久化的问题仍在（属于 consumer 侧，本次不修）。
+- access/refresh TTL 的 jitter 使用 `math/rand`（非 crypto 安全），对 TTL 来说可接受。
+- 现有 `REDIS_SESSION_TTL` 环境变量不再被装配层使用；如用户已配置该变量，需迁移到 `REDIS_ACCESS_TOKEN_TTL` / `REDIS_REFRESH_TOKEN_TTL`。
+
 ## 2026-06-27：消费侧可靠性
 
 ### AI 参与范围

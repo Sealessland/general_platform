@@ -50,12 +50,26 @@ func TestPostgresApplicationAuthSessionAndCatalogRegression(t *testing.T) {
 	if actor.Role != domain.RoleMerchant || actor.MerchantID != session.User.MerchantID {
 		t.Fatalf("expected merchant actor, got %+v", actor)
 	}
+
+	// Token type isolation: refresh token must not work as access token.
+	if _, err := service.Authenticate(session.RefreshToken); !isAppError(err, application.ErrorUnauthorized) {
+		t.Fatalf("expected refresh token rejected for Authenticate, got %v", err)
+	}
+	// Token type isolation: access token must not work as refresh token.
+	if _, err := service.RefreshSession(ctx, session.Token); !isAppError(err, application.ErrorUnauthorized) {
+		t.Fatalf("expected access token rejected for RefreshSession, got %v", err)
+	}
+
 	refreshed, err := service.RefreshSession(ctx, session.RefreshToken)
 	if err != nil {
 		t.Fatalf("refresh session: %v", err)
 	}
 	if refreshed.Token == session.Token || refreshed.RefreshToken == session.RefreshToken {
 		t.Fatal("expected refresh to rotate both tokens")
+	}
+	// Token type isolation: new refresh token must not work as access token.
+	if _, err := service.Authenticate(refreshed.RefreshToken); !isAppError(err, application.ErrorUnauthorized) {
+		t.Fatalf("expected new refresh token rejected for Authenticate, got %v", err)
 	}
 	if _, err := service.Authenticate(session.Token); !isAppError(err, application.ErrorUnauthorized) {
 		t.Fatalf("expected old token unauthorized, got %v", err)

@@ -53,12 +53,17 @@ func wrapPostgresRepoWithRedisForTest(t testing.TB, base application.Repository)
 	if err != nil {
 		t.Fatalf("new redis client: %v", err)
 	}
-	ttl, err := redisrepo.SessionTTLFromEnv(os.Getenv("REDIS_SESSION_TTL"))
+	accessTTL, err := redisrepo.AccessTokenTTLFromEnv(os.Getenv("REDIS_ACCESS_TOKEN_TTL"))
 	if err != nil {
 		_ = client.Close()
-		t.Fatalf("parse redis session ttl: %v", err)
+		t.Fatalf("parse redis access token ttl: %v", err)
 	}
-	return redisrepo.NewSessionRepository(base, client, ttl), func() {
+	refreshTTL, err := redisrepo.RefreshTokenTTLFromEnv(os.Getenv("REDIS_REFRESH_TOKEN_TTL"))
+	if err != nil {
+		_ = client.Close()
+		t.Fatalf("parse redis refresh token ttl: %v", err)
+	}
+	return redisrepo.NewSessionRepository(base, client, accessTTL, refreshTTL), func() {
 		if err := client.Close(); err != nil {
 			t.Fatalf("close redis client: %v", err)
 		}

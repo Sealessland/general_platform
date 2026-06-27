@@ -4,6 +4,14 @@
 
 ## [未发布] - 2026-06-08
 
+### Session Token 可靠性修复
+
+- 修复 access token 与 refresh token 使用相同 TTL 的问题：Redis 存储拆分为 `accessTTL`（默认 15min）和 `refreshTTL`（默认 7d），各自独立过期。新增 `REDIS_ACCESS_TOKEN_TTL` / `REDIS_REFRESH_TOKEN_TTL` 环境变量。
+- 修复 refresh token 可作为 access token 调用 API 的安全隐患：`sessionRecord` 新增 `TokenType` 字段，`GetUserByToken` 返回 token 类型；`Authenticate` 和 `Me` 拒绝 refresh token，`RefreshSession` 拒绝 access token。
+- 修复 `SaveSession` 不返回 error 的问题：接口签名改为 `SaveSession(...) error`，存储失败时 `issueSession` 返回错误而非静默成功。
+- 新增 `TestAccessTokenTTLFromEnv` 和 `TestRefreshTokenTTLFromEnv` 单元测试。
+- 在 `TestPostgresApplicationAuthSessionAndCatalogRegression` 中新增 token 类型隔离断言：refresh token 不能通过 `Authenticate`，access token 不能通过 `RefreshSession`。
+
 ### 消费侧可靠性
 
 - 新增 RabbitMQ 消费者实现（`backend/internal/event/rabbitmq/consumer.go`）：手动 ack（至少一次语义）、QoS prefetch 限流、`event_id` 幂等去重、DLX 死信队列。
