@@ -33,7 +33,9 @@
 - 订单事件继续随订单状态变更在同一个数据库事务中写入 `order_events` 表。
 - 新增 `outbox` 表，作为「需要被发布到 MQ 的事件」的可靠缓冲区。
 - side-effect 中不再直接调用 MQ，而是把事件写入 `outbox` 表，保证**业务状态变更与事件记录原子一致**。
-- 独立的 `outbox` 发布器定时轮询 `outbox` 表，将事件发送到 RabbitMQ，成功后删除或标记为已发布。
+- 独立的 `outbox` 发布器定时轮询 `outbox` 表，将事件发送到 RabbitMQ。已发布事件通过 `published_at` 列软标记（不删除），保留审计轨迹。
+- 轮询使用 `SELECT ... FOR UPDATE SKIP LOCKED` 在事务内加行锁，确保多个 relay 实例并发运行时不会重复发布同一事件。
+- 每个 relay 周期是一个原子事务：`BeginTx → PollPendingInTx → 逐条发布 → MarkPublishedInTx / MarkFailedInTx → Commit`；发布失败时整个事务回滚，事件留在 outbox 等待下一轮重试。
 - 行为事件同样先写 `behavior_events` 表，再同步写 `outbox` 表（同一事务）。
 
 ### 3. 事件分类与主题
@@ -75,8 +77,9 @@
 
 ### 6. 错误与重试
 
-- 发布器失败按指数退避重试，最大重试次数可配置。
-- 超过最大重试次数的事件进入死信队列（DLQ）或 `outbox_dead_letter` 表，等待人工/补偿处理。
+- RabbitMQ publisher 启用 **publisher confirm 模式**：每条消息调用 `PublishWithDeferredConfirmWithContext` 并 `WaitContext` 等待 broker 确认，未确认或 NACK 时标记为发布失败。
+- publisher 通过 `NotifyClose` 监听 channel/connection 断开，自动以 3 秒间隔重连，重连期间 `sync.Mutex` 保护 conn/channel 防止并发 publish 写入已关闭资源。
+- 发布器失败后在同一事务内调用 `MarkFailedInTx`，递增 `retry_count`；超过最大重试次数（当前 5 次）的事件移动到 `outbox_dead_letter` 表，等待人工/补偿处理。
 - 消费者处理失败时消息不确认（nack），由 RabbitMQ 重新投递；达到重试上限后进入死信队列。
 
 ## 性能证据

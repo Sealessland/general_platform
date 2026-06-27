@@ -11,9 +11,8 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/event"
 )
 
-// Publisher polls an OutboxStore and forwards pending events to a Publisher.
 type Publisher struct {
-	store     event.OutboxStore
+	store     event.OutboxRelayStore
 	publisher event.Publisher
 	interval  time.Duration
 	batchSize int
@@ -22,16 +21,13 @@ type Publisher struct {
 	stopped   chan struct{}
 }
 
-// Config configures the outbox publisher relay.
 type Config struct {
 	Interval  time.Duration
 	BatchSize int
 	Logger    *log.Logger
 }
 
-// NewPublisher returns a relay that is not yet running. Call Start to begin
-// polling and Stop to shut it down gracefully.
-func NewPublisher(store event.OutboxStore, publisher event.Publisher, cfg Config) *Publisher {
+func NewPublisher(store event.OutboxRelayStore, publisher event.Publisher, cfg Config) *Publisher {
 	if cfg.Interval <= 0 {
 		cfg.Interval = 5 * time.Second
 	}
@@ -52,12 +48,10 @@ func NewPublisher(store event.OutboxStore, publisher event.Publisher, cfg Config
 	}
 }
 
-// Start begins the background polling loop. It returns immediately.
 func (p *Publisher) Start() {
 	go p.loop()
 }
 
-// Stop signals the loop to exit and waits for it to finish.
 func (p *Publisher) Stop() {
 	close(p.stop)
 	<-p.stopped
@@ -68,7 +62,6 @@ func (p *Publisher) loop() {
 	ticker := time.NewTicker(p.interval)
 	defer ticker.Stop()
 
-	// Run once immediately on start.
 	p.tick(context.Background())
 
 	for {
@@ -82,7 +75,20 @@ func (p *Publisher) loop() {
 }
 
 func (p *Publisher) tick(ctx context.Context) {
-	events, err := p.store.PollPending(ctx, p.batchSize)
+	tx, err := p.store.BeginTx(ctx)
+	if err != nil {
+		p.logger.Printf("outbox begin tx failed: %v", err)
+		return
+	}
+
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	events, err := p.store.PollPendingInTx(ctx, tx, p.batchSize)
 	if err != nil {
 		p.logger.Printf("outbox poll failed: %v", err)
 		return
@@ -95,7 +101,7 @@ func (p *Publisher) tick(ctx context.Context) {
 	for _, evt := range events {
 		if err := p.publisher.Publish(ctx, evt); err != nil {
 			p.logger.Printf("outbox publish failed for event %d: %v", evt.ID, err)
-			if markErr := p.store.MarkFailed(ctx, evt.ID, fmt.Sprintf("publish: %v", err)); markErr != nil {
+			if markErr := p.store.MarkFailedInTx(ctx, tx, evt.ID, fmt.Sprintf("publish: %v", err)); markErr != nil {
 				p.logger.Printf("outbox mark failed for event %d: %v", evt.ID, markErr)
 			}
 			continue
@@ -104,8 +110,15 @@ func (p *Publisher) tick(ctx context.Context) {
 	}
 
 	if len(published) > 0 {
-		if err := p.store.MarkPublished(ctx, published); err != nil {
+		if err := p.store.MarkPublishedInTx(ctx, tx, published); err != nil {
 			p.logger.Printf("outbox mark published failed: %v", err)
+			return
 		}
 	}
+
+	if err := tx.Commit(); err != nil {
+		p.logger.Printf("outbox tx commit failed: %v", err)
+		return
+	}
+	committed = true
 }
