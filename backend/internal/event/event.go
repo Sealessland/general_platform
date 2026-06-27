@@ -109,6 +109,34 @@ type OutboxPoller interface {
 	MarkFailed(ctx context.Context, id int64, reason string) error
 }
 
+// OutboxRelayStore extends OutboxPoller with transaction-scoped operations for
+// the background relay. PollPendingInTx and MarkPublishedInTx run inside a
+// caller-managed transaction so the relay can lock rows, publish, and mark in
+// one atomic unit — preventing duplicate publishes across concurrent instances.
+type OutboxRelayStore interface {
+	OutboxPoller
+
+	// BeginTx starts a transaction for the relay cycle.
+	BeginTx(ctx context.Context) (OutboxTx, error)
+
+	// PollPendingInTx locks and returns up to limit unpublished events within
+	// the given transaction using SELECT ... FOR UPDATE SKIP LOCKED.
+	PollPendingInTx(ctx context.Context, tx OutboxTx, limit int) ([]Event, error)
+
+	// MarkPublishedInTx marks the given outbox records as published within the
+	// transaction (sets published_at rather than deleting).
+	MarkPublishedInTx(ctx context.Context, tx OutboxTx, ids []int64) error
+
+	// MarkFailedInTx records a failed publish attempt within the transaction.
+	MarkFailedInTx(ctx context.Context, tx OutboxTx, id int64, reason string) error
+}
+
+// OutboxTx is a transaction handle used by the relay store.
+type OutboxTx interface {
+	Commit() error
+	Rollback() error
+}
+
 // OutboxStore combines the write and read sides of the outbox.
 type OutboxStore interface {
 	Outbox

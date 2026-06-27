@@ -4,6 +4,16 @@
 
 ## [未发布] - 2026-06-08
 
+### 发布器可靠性加固
+
+- outbox 表新增 `published_at` 列与 `idx_outbox_pending` 部分索引（`backend/migrations/0003_outbox_published_at.sql`）；已发布事件改为软标记而非删除，保留审计轨迹。
+- outbox relay 改为事务内轮询：`BeginTx → PollPendingInTx（FOR UPDATE SKIP LOCKED）→ 逐条发布 → MarkPublishedInTx / MarkFailedInTx → Commit`，防止多实例并发重复发布。
+- 新增 `event.OutboxRelayStore` 与 `event.OutboxTx` 接口，提供事务感知的轮询与标记方法；`*Repository` 实现完整委托。
+- RabbitMQ publisher 启用 publisher confirm 模式（`PublishWithDeferredConfirmWithContext` + `WaitContext`），并通过 `NotifyClose` 自动重连（3 秒间隔），`sync.Mutex` 保护并发 publish。
+- 修复 `main.go` 中 `repo.(event.OutboxStore)` 类型断言始终失败的潜在 bug（`*Repository` 未实现完整 `OutboxStore`），改为 `event.OutboxRelayStore` 断言。
+- 新增 `TestPublisherNoDuplicatePublishUnderConcurrency`（2 relay × 50 事件，零重复）与 `TestPublisherRollbackOnPublishFailure` 测试。
+- 更新 ADR 0006 第 2、6 节，记录软标记、行锁、confirm 模式与自动重连决策。
+
 ### 工程
 
 - 删除内存仓储实现、内存仓储单元测试、handler-only HTTP benchmark、空 publisher outbox benchmark 和模拟下游延迟 benchmark；后端测试与性能证据收束到 PostgreSQL/Redis/RabbitMQ-backed 路径和 live HTTP benchmark。

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/example/redcart-copilot/backend/internal/event"
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 	"gorm.io/driver/postgres"
@@ -18,7 +17,7 @@ type Repository struct {
 	db     *gormSQL
 	gormDB *gorm.DB
 	sqlDB  *sql.DB
-	Outbox event.OutboxStore
+	Outbox *outboxStore
 
 	sessionMu sync.RWMutex
 	sessions  map[string]int64

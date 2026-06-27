@@ -6,52 +6,117 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
+	"sync"
+	"time"
 
 	"github.com/example/redcart-copilot/backend/internal/event"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-// Publisher sends events to RabbitMQ using topic exchanges.
+const (
+	reconnectDelay = 3 * time.Second
+	publishTimeout = 10 * time.Second
+)
+
 type Publisher struct {
-	conn     *amqp.Connection
-	channel  *amqp.Channel
+	addr     string
 	exchange string
+	logger   *log.Logger
+
+	mu      sync.Mutex
+	conn    *amqp.Connection
+	channel *amqp.Channel
+	closed  bool
 }
 
-// NewPublisher dials addr, declares the configured exchange and returns a
-// ready-to-use Publisher. The caller is responsible for calling Close.
 func NewPublisher(addr, exchange string) (*Publisher, error) {
-	conn, err := amqp.Dial(addr)
+	p := &Publisher{
+		addr:     addr,
+		exchange: exchange,
+		logger:   log.Default(),
+	}
+	if err := p.connect(); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+func (p *Publisher) connect() error {
+	conn, err := amqp.Dial(p.addr)
 	if err != nil {
-		return nil, fmt.Errorf("dial rabbitmq: %w", err)
+		return fmt.Errorf("dial rabbitmq: %w", err)
 	}
 	ch, err := conn.Channel()
 	if err != nil {
 		_ = conn.Close()
-		return nil, fmt.Errorf("open rabbitmq channel: %w", err)
+		return fmt.Errorf("open rabbitmq channel: %w", err)
 	}
 	if err := ch.ExchangeDeclare(
-		exchange,
+		p.exchange,
 		"topic",
-		true,  // durable
-		false, // auto-deleted
-		false, // internal
-		false, // no-wait
+		true,
+		false,
+		false,
+		false,
 		nil,
 	); err != nil {
 		_ = ch.Close()
 		_ = conn.Close()
-		return nil, fmt.Errorf("declare rabbitmq exchange: %w", err)
+		return fmt.Errorf("declare rabbitmq exchange: %w", err)
 	}
-	return &Publisher{
-		conn:     conn,
-		channel:  ch,
-		exchange: exchange,
-	}, nil
+	if err := ch.Confirm(false); err != nil {
+		_ = ch.Close()
+		_ = conn.Close()
+		return fmt.Errorf("enable publisher confirms: %w", err)
+	}
+
+	p.conn = conn
+	p.channel = ch
+
+	go p.watchClose()
+	return nil
 }
 
-// Publish serializes the event and sends it to the topic derived from the
-// event type. The context is used for cancellation of the AMQP publish.
+func (p *Publisher) watchClose() {
+	closeCh := p.channel.NotifyClose(make(chan *amqp.Error, 1))
+	err, ok := <-closeCh
+	if !ok {
+		return
+	}
+	p.mu.Lock()
+	if p.closed {
+		p.mu.Unlock()
+		return
+	}
+	p.logger.Printf("rabbitmq channel closed: %v; attempting reconnect", err)
+	p.mu.Unlock()
+
+	for {
+		time.Sleep(reconnectDelay)
+		p.mu.Lock()
+		if p.closed {
+			p.mu.Unlock()
+			return
+		}
+		if err := p.connect(); err != nil {
+			p.logger.Printf("rabbitmq reconnect failed: %v", err)
+			p.mu.Unlock()
+			continue
+		}
+		p.logger.Printf("rabbitmq reconnected successfully")
+		p.mu.Unlock()
+		return
+	}
+}
+
+func (p *Publisher) ensureConnected() error {
+	if p.channel != nil && !p.channel.IsClosed() {
+		return nil
+	}
+	return fmt.Errorf("rabbitmq channel unavailable")
+}
+
 func (p *Publisher) Publish(ctx context.Context, evt event.Event) error {
 	body, err := json.Marshal(map[string]any{
 		"event_id":       evt.ID,
@@ -64,24 +129,52 @@ func (p *Publisher) Publish(ctx context.Context, evt event.Event) error {
 	if err != nil {
 		return fmt.Errorf("marshal event: %w", err)
 	}
-	return p.channel.PublishWithContext(
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if err := p.ensureConnected(); err != nil {
+		return err
+	}
+
+	confSeq, err := p.channel.PublishWithDeferredConfirmWithContext(
 		ctx,
 		p.exchange,
 		evt.Topic,
-		true,  // mandatory
-		false, // immediate
+		true,
+		false,
 		amqp.Publishing{
 			ContentType:  "application/json",
 			DeliveryMode: amqp.Persistent,
 			Body:         body,
 		},
 	)
+	if err != nil {
+		return fmt.Errorf("publish to rabbitmq: %w", err)
+	}
+
+	confirmCtx, cancel := context.WithTimeout(ctx, publishTimeout)
+	defer cancel()
+
+	confirmed, err := confSeq.WaitContext(confirmCtx)
+	if err != nil {
+		return fmt.Errorf("wait publisher confirm: %w", err)
+	}
+	if !confirmed {
+		return fmt.Errorf("rabbitmq broker nack for event %d (topic %s)", evt.ID, evt.Topic)
+	}
+	return nil
 }
 
 func (p *Publisher) Close() error {
-	if err := p.channel.Close(); err != nil {
-		_ = p.conn.Close()
-		return err
+	p.mu.Lock()
+	p.closed = true
+	p.mu.Unlock()
+	if p.channel != nil {
+		_ = p.channel.Close()
 	}
-	return p.conn.Close()
+	if p.conn != nil {
+		return p.conn.Close()
+	}
+	return nil
 }

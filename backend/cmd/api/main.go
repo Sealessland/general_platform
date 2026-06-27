@@ -38,8 +38,8 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	if outboxStore, ok := repo.(event.OutboxStore); ok {
-		stopOutbox := startOutboxPublisher(outboxStore, log.Default())
+	if outboxRelay, ok := repo.(event.OutboxRelayStore); ok {
+		stopOutbox := startOutboxPublisher(outboxRelay, log.Default())
 		defer stopOutbox()
 	}
 
@@ -49,7 +49,7 @@ func main() {
 	}
 }
 
-func startOutboxPublisher(store event.OutboxStore, logger *log.Logger) func() {
+func startOutboxPublisher(store event.OutboxRelayStore, logger *log.Logger) func() {
 	addr := envOrDefault("RABBITMQ_ADDR", "")
 	if addr == "" {
 		return func() {}

@@ -747,6 +747,42 @@ rtk bash scripts/validate-workspace.sh
 - 预算 Slider 仅做前端展示与本地数据模型更新，未真正回传后端重新筛选商品。
 - 商品图片使用示例 URL，本地无真实图片资源。
 
+## 2026-06-27：发布器可靠性加固
+
+### AI 参与范围
+
+- 在 `feature/publisher-hardening` 独立 worktree 上重做 RabbitMQ publisher 可靠性加固（前一次迭代因 worktree 清理未提交而丢失）。
+- 新增迁移 `backend/migrations/0003_outbox_published_at.sql`：`published_at` 列 + `idx_outbox_pending` 部分索引 + `idx_outbox_dead_letter_failed_at` 索引。
+- 在 `event.go` 新增 `OutboxRelayStore` 与 `OutboxTx` 接口，提供 `BeginTx`、`PollPendingInTx`、`MarkPublishedInTx`、`MarkFailedInTx` 事务感知方法。
+- 重写 `outbox_repository.go`：`PollPending` / `PollPendingInTx` 过滤 `published_at IS NULL` 并使用 `FOR UPDATE SKIP LOCKED`；`MarkPublished` / `MarkPublishedInTx` 改为 `UPDATE SET published_at = NOW()`（软标记而非删除）；`*Repository` 新增完整委托方法实现 `OutboxRelayStore`。
+- 重写 `rabbitmq/publisher.go`：启用 publisher confirm 模式（`PublishWithDeferredConfirmWithContext` + `WaitContext`），`NotifyClose` 自动重连（3 秒延迟），`sync.Mutex` 保护 conn/channel。
+- 重写 `outbox/publisher.go`：`tick` 改为 `BeginTx → PollPendingInTx → 逐条发布 → MarkPublishedInTx / MarkFailedInTx → Commit`，失败时回滚。
+- 修复 `repository.go`：`Outbox` 字段类型从 `event.OutboxStore` 改为 `*outboxStore`，移除未使用的 `event` import。
+- 修复 `main.go`：类型断言从 `event.OutboxStore` 改为 `event.OutboxRelayStore`（原断言因 `*Repository` 未实现完整 `OutboxStore` 而始终失败）。
+- 更新 `publisher_test.go`：`memoryOutbox` 实现完整 `OutboxRelayStore`；新增 `TestPublisherNoDuplicatePublishUnderConcurrency` 与 `TestPublisherRollbackOnPublishFailure`。
+- 更新 ADR 0006 第 2、6 节与 CHANGELOG。
+
+### 人工或主代理修正
+
+- 确认 `appendOutboxEvent` 仍被 `order_repository.go` 事务内调用，保留该 helper 函数。
+- 确认 `*Repository` 通过新增委托方法同时满足 `application.Repository`、`event.OutboxStore` 与 `event.OutboxRelayStore` 三个接口。
+- 范围严格限定在 publisher 侧：不涉及消费者、队列声明或下游服务实现。
+
+### 验证证据
+
+```bash
+rtk go build ./...
+rtk go vet ./...
+rtk go test ./...
+rtk bash scripts/validate-workspace.sh
+```
+
+### 剩余风险
+
+- 尚未实现 RabbitMQ 消费者；通知、分析、库存等下游服务仍停留在规划阶段。
+- publisher confirm 超时为固定 10 秒，未做指数退避；网络长时间不可用时 relay 周期会被阻塞。
+- 自动重连为无限重试，没有最大重试次数或告警；生产环境需要补充监控。
+
 ## 2026-06-16：消息队列与事件驱动边界
 
 ### AI 参与范围
