@@ -71,9 +71,12 @@ func (s *Service) Logout(ctx context.Context, token string) error {
 
 func (s *Service) RefreshSession(ctx context.Context, refreshToken string) (*AuthSession, error) {
 	_ = ctx
-	user, ok := s.repo.GetUserByToken(refreshToken)
+	user, tokenType, ok := s.repo.GetUserByToken(refreshToken)
 	if !ok {
 		return nil, newError(ErrorUnauthorized, "invalid refresh token")
+	}
+	if tokenType != TokenTypeRefresh {
+		return nil, newError(ErrorUnauthorized, "not a refresh token")
 	}
 	s.repo.DeleteSession(refreshToken)
 	return s.issueSession(user)
@@ -81,8 +84,8 @@ func (s *Service) RefreshSession(ctx context.Context, refreshToken string) (*Aut
 
 func (s *Service) Me(ctx context.Context, token string) (*UserView, error) {
 	_ = ctx
-	user, ok := s.repo.GetUserByToken(token)
-	if !ok {
+	user, tokenType, ok := s.repo.GetUserByToken(token)
+	if !ok || tokenType != TokenTypeAccess {
 		return nil, newError(ErrorUnauthorized, "invalid token")
 	}
 	view := s.toUserView(user)
@@ -90,8 +93,8 @@ func (s *Service) Me(ctx context.Context, token string) (*UserView, error) {
 }
 
 func (s *Service) Authenticate(token string) (*Actor, error) {
-	user, ok := s.repo.GetUserByToken(token)
-	if !ok {
+	user, tokenType, ok := s.repo.GetUserByToken(token)
+	if !ok || tokenType != TokenTypeAccess {
 		return nil, newError(ErrorUnauthorized, "missing or invalid token")
 	}
 	actor := &Actor{
@@ -114,7 +117,9 @@ func (s *Service) issueSession(user domain.User) (*AuthSession, error) {
 	if err != nil {
 		return nil, fmt.Errorf("generate refresh token: %w", err)
 	}
-	s.repo.SaveSession(accessToken, refreshToken, user.ID)
+	if err := s.repo.SaveSession(accessToken, refreshToken, user.ID); err != nil {
+		return nil, fmt.Errorf("save session: %w", err)
+	}
 	view := s.toUserView(user)
 	return &AuthSession{
 		Token:        accessToken,

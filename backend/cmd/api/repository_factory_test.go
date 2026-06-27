@@ -61,7 +61,7 @@ func TestWrapRepositoryWithRedisSessionEnabled(t *testing.T) {
 	user := createRepositoryFactoryUser(t, base)
 	sessionRepo.SaveSession("wrapped-token", "wrapped-refresh", user.ID)
 
-	saved, ok := sessionRepo.GetUserByToken("wrapped-token")
+	saved, _, ok := sessionRepo.GetUserByToken("wrapped-token")
 	if !ok || saved.ID != user.ID {
 		t.Fatalf("expected redis-backed token lookup, got %+v ok=%v", saved, ok)
 	}

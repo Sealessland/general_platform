@@ -18,8 +18,9 @@ const sessionKeyPrefix = "redcart:session:"
 
 type SessionRepository struct {
 	application.Repository
-	client goredis.UniversalClient
-	ttl    time.Duration
+	client      goredis.UniversalClient
+	accessTTL   time.Duration
+	refreshTTL  time.Duration
 
 	cacheMu sync.RWMutex
 	cache   map[string]sessionCacheEntry
@@ -30,13 +31,14 @@ type SessionRepository struct {
 }
 
 type sessionRecord struct {
-	ID           int64         `json:"id"`
-	Nickname     string        `json:"nickname"`
-	Phone        string        `json:"phone"`
-	Role         string        `json:"role"`
-	Merchant     *merchantWire `json:"merchant,omitempty"`
-	AccessToken  string        `json:"access_token,omitempty"`
-	RefreshToken string        `json:"refresh_token,omitempty"`
+	ID           int64                 `json:"id"`
+	Nickname     string                `json:"nickname"`
+	Phone        string                `json:"phone"`
+	Role         string                `json:"role"`
+	Merchant     *merchantWire         `json:"merchant,omitempty"`
+	TokenType    application.TokenType `json:"token_type"`
+	AccessToken  string                `json:"access_token,omitempty"`
+	RefreshToken string                `json:"refresh_token,omitempty"`
 }
 
 type merchantWire struct {
@@ -53,18 +55,23 @@ type merchantState struct {
 
 type sessionCacheEntry struct {
 	user      domain.User
+	tokenType application.TokenType
 	expiresAt time.Time
 	found     bool
 }
 
-func NewSessionRepository(base application.Repository, client goredis.UniversalClient, ttl time.Duration) *SessionRepository {
-	if ttl <= 0 {
-		ttl = defaultSessionTTL
+func NewSessionRepository(base application.Repository, client goredis.UniversalClient, accessTTL, refreshTTL time.Duration) *SessionRepository {
+	if accessTTL <= 0 {
+		accessTTL = defaultAccessTokenTTL
+	}
+	if refreshTTL <= 0 {
+		refreshTTL = defaultRefreshTokenTTL
 	}
 	return &SessionRepository{
 		Repository:    base,
 		client:        client,
-		ttl:           ttl,
+		accessTTL:     accessTTL,
+		refreshTTL:    refreshTTL,
 		cache:         make(map[string]sessionCacheEntry),
 		merchantCache: make(map[int64]merchantState),
 	}
@@ -77,21 +84,20 @@ func (r *SessionRepository) Append(ctx context.Context, evt event.Event) (int64,
 	return 0, nil
 }
 
-func (r *SessionRepository) SaveSession(accessToken, refreshToken string, userID int64) {
+func (r *SessionRepository) SaveSession(accessToken, refreshToken string, userID int64) error {
 	if r.client == nil {
-		r.Repository.SaveSession(accessToken, refreshToken, userID)
-		return
+		return r.Repository.SaveSession(accessToken, refreshToken, userID)
 	}
 	if accessToken == "" || userID == 0 {
-		return
+		return nil
 	}
 
 	user, ok := r.Repository.GetUser(userID)
 	if !ok {
-		return
+		return nil
 	}
 
-	record := sessionRecord{
+	base := sessionRecord{
 		ID:           user.ID,
 		Nickname:     user.Nickname,
 		Phone:        user.Phone,
@@ -100,7 +106,7 @@ func (r *SessionRepository) SaveSession(accessToken, refreshToken string, userID
 		RefreshToken: refreshToken,
 	}
 	if merchant, ok := r.Repository.GetMerchantByUserID(userID); ok {
-		record.Merchant = &merchantWire{
+		base.Merchant = &merchantWire{
 			ID:          merchant.ID,
 			Name:        merchant.Name,
 			Description: merchant.Description,
@@ -110,28 +116,40 @@ func (r *SessionRepository) SaveSession(accessToken, refreshToken string, userID
 	} else {
 		r.saveMerchantCache(userID, merchantState{known: true})
 	}
-	payload, err := json.Marshal(record)
-	if err != nil {
-		return
-	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultWriteTimeout)
 	defer cancel()
-	ttl := r.ttlWithJitter()
-	_ = r.client.Set(ctx, sessionKey(accessToken), payload, ttl).Err()
-	r.saveCacheWithTTL(accessToken, user, ttl)
-	if refreshToken != "" {
-		_ = r.client.Set(ctx, sessionKey(refreshToken), payload, ttl).Err()
-		r.saveCacheWithTTL(refreshToken, user, ttl)
+
+	accessRecord := base
+	accessRecord.TokenType = application.TokenTypeAccess
+	accessPayload, err := json.Marshal(accessRecord)
+	if err != nil {
+		return fmt.Errorf("marshal access session: %w", err)
 	}
+	accessTTL := ttlWithJitter(r.accessTTL)
+	_ = r.client.Set(ctx, sessionKey(accessToken), accessPayload, accessTTL).Err()
+	r.saveCacheWithTTL(accessToken, user, application.TokenTypeAccess, accessTTL)
+
+	if refreshToken != "" {
+		refreshRecord := base
+		refreshRecord.TokenType = application.TokenTypeRefresh
+		refreshPayload, err := json.Marshal(refreshRecord)
+		if err != nil {
+			return fmt.Errorf("marshal refresh session: %w", err)
+		}
+		refreshTTL := ttlWithJitter(r.refreshTTL)
+		_ = r.client.Set(ctx, sessionKey(refreshToken), refreshPayload, refreshTTL).Err()
+		r.saveCacheWithTTL(refreshToken, user, application.TokenTypeRefresh, refreshTTL)
+	}
+	return nil
 }
 
-func (r *SessionRepository) GetUserByToken(token string) (domain.User, bool) {
+func (r *SessionRepository) GetUserByToken(token string) (domain.User, application.TokenType, bool) {
 	if token == "" {
-		return domain.User{}, false
+		return domain.User{}, "", false
 	}
-	if user, found, ok := r.loadCache(token); ok {
-		return user, found
+	if user, tokenType, found, ok := r.loadCache(token); ok {
+		return user, tokenType, found
 	}
 	if r.client == nil {
 		return r.Repository.GetUserByToken(token)
@@ -141,20 +159,18 @@ func (r *SessionRepository) GetUserByToken(token string) (domain.User, bool) {
 	defer cancel()
 	payload, err := r.client.Get(ctx, sessionKey(token)).Bytes()
 	if err == nil {
-		user, state, ok := decodeSessionUser(payload)
+		user, state, tokenType, ok := decodeSessionUser(payload)
 		if ok {
-			r.saveCache(token, user)
+			r.saveCache(token, user, tokenType)
 			r.saveMerchantCache(user.ID, state)
-			return user, true
+			return user, tokenType, true
 		}
 	}
 	if err == goredis.Nil {
-		// Cache penetration guard: remember missing tokens briefly to avoid
-		// hammering Redis with random/invalid tokens.
 		r.saveNegativeCache(token)
-		return domain.User{}, false
+		return domain.User{}, "", false
 	}
-	return domain.User{}, false
+	return domain.User{}, "", false
 }
 
 func (r *SessionRepository) DeleteSession(token string) {
@@ -196,13 +212,13 @@ func decodeSessionRecord(payload []byte) (sessionRecord, bool) {
 	return record, true
 }
 
-func decodeSessionUser(payload []byte) (domain.User, merchantState, bool) {
+func decodeSessionUser(payload []byte) (domain.User, merchantState, application.TokenType, bool) {
 	var record sessionRecord
 	if err := json.Unmarshal(payload, &record); err != nil {
-		return domain.User{}, merchantState{}, false
+		return domain.User{}, merchantState{}, "", false
 	}
 	if record.ID == 0 || record.Role == "" {
-		return domain.User{}, merchantState{}, false
+		return domain.User{}, merchantState{}, "", false
 	}
 	state := merchantState{known: true}
 	if record.Merchant != nil {
@@ -219,37 +235,42 @@ func decodeSessionUser(payload []byte) (domain.User, merchantState, bool) {
 		Nickname: record.Nickname,
 		Phone:    record.Phone,
 		Role:     record.Role,
-	}, state, true
+	}, state, record.TokenType, true
 }
 
 func sessionKey(token string) string {
 	return fmt.Sprintf("%s%s", sessionKeyPrefix, token)
 }
 
-func (r *SessionRepository) saveCacheWithTTL(token string, user domain.User, ttl time.Duration) {
+func (r *SessionRepository) saveCacheWithTTL(token string, user domain.User, tokenType application.TokenType, ttl time.Duration) {
 	r.cacheMu.Lock()
 	defer r.cacheMu.Unlock()
 	r.cache[token] = sessionCacheEntry{
 		user:      user,
+		tokenType: tokenType,
 		expiresAt: time.Now().Add(ttl),
 		found:     true,
 	}
 }
 
-func (r *SessionRepository) saveCache(token string, user domain.User) {
-	r.saveCacheWithTTL(token, user, r.ttlWithJitter())
+func (r *SessionRepository) saveCache(token string, user domain.User, tokenType application.TokenType) {
+	ttl := r.accessTTL
+	if tokenType == application.TokenTypeRefresh {
+		ttl = r.refreshTTL
+	}
+	r.saveCacheWithTTL(token, user, tokenType, ttlWithJitter(ttl))
 }
 
 func (r *SessionRepository) saveNegativeCache(token string) {
 	r.cacheMu.Lock()
 	defer r.cacheMu.Unlock()
 	r.cache[token] = sessionCacheEntry{
-		expiresAt: time.Now().Add(r.negativeCacheTTL()),
+		expiresAt: time.Now().Add(negativeCacheTTL(r.accessTTL)),
 		found:     false,
 	}
 }
 
-func (r *SessionRepository) loadCache(token string) (domain.User, bool, bool) {
+func (r *SessionRepository) loadCache(token string) (domain.User, application.TokenType, bool, bool) {
 	r.cacheMu.RLock()
 	session, ok := r.cache[token]
 	r.cacheMu.RUnlock()
@@ -259,9 +280,9 @@ func (r *SessionRepository) loadCache(token string) (domain.User, bool, bool) {
 			delete(r.cache, token)
 			r.cacheMu.Unlock()
 		}
-		return domain.User{}, false, false
+		return domain.User{}, "", false, false
 	}
-	return session.user, session.found, true
+	return session.user, session.tokenType, session.found, true
 }
 
 func (r *SessionRepository) invalidateCache(token string) {
@@ -270,16 +291,16 @@ func (r *SessionRepository) invalidateCache(token string) {
 	delete(r.cache, token)
 }
 
-func (r *SessionRepository) ttlWithJitter() time.Duration {
-	if r.ttl <= 0 {
-		return r.ttl
+func ttlWithJitter(base time.Duration) time.Duration {
+	if base <= 0 {
+		return base
 	}
-	jitter := time.Duration(rand.Int63n(int64(r.ttl) / 4))
-	return r.ttl + jitter
+	jitter := time.Duration(rand.Int63n(int64(base) / 4))
+	return base + jitter
 }
 
-func (r *SessionRepository) negativeCacheTTL() time.Duration {
-	ttl := r.ttl / 10
+func negativeCacheTTL(base time.Duration) time.Duration {
+	ttl := base / 10
 	if ttl < 5*time.Second {
 		ttl = 5 * time.Second
 	}
@@ -297,8 +318,6 @@ func (r *SessionRepository) GetMerchantByUserID(userID int64) (domain.Merchant, 
 		return state.merchant, true
 	}
 
-	// Cache breakdown guard: only one goroutine per userID reconstructs the
-	// merchant entry while others wait for the result.
 	mu, _ := r.merchantLocks.LoadOrStore(userID, &sync.Mutex{})
 	mu.(*sync.Mutex).Lock()
 	defer mu.(*sync.Mutex).Unlock()
