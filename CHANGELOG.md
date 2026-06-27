@@ -4,6 +4,14 @@
 
 ## [未发布] - 2026-06-08
 
+### 可观测性：Prometheus 指标采集
+
+- 新增 Prometheus 容器（`docker-compose.yml`），每 15 秒采集后端 `/metrics` 端点。
+- 新增 `prometheus.yml` scrape 配置，target 为 `127.0.0.1:18080`。
+- 新增 HTTP metrics 中间件（`backend/internal/redcart/interfaces/httpapi/middleware_prometheus.go`）：采集 `redcart_http_requests_total`（按 method/path/status 分维度的请求计数）和 `redcart_http_request_duration_seconds`（按 method/path 分维度的延迟直方图）。
+- 新增 `/metrics` 路由暴露 Prometheus 格式指标，包含 Go runtime 指标（goroutine 数、GC 耗时、内存使用）和自定义 HTTP 指标。
+- 中间件使用 `gin.Context.FullPath()` 作为 path 标签，确保路径稳定（如 `/api/orders/:id` 而非 `/api/orders/42`），避免高基数标签问题。
+
 ### 数据库查询优化
 
 - 修复订单列表 N+1 查询：`listOrders` 不再逐条调 `loadOrderItems`，改为 `loadOrderItemsBatch` 用 `WHERE order_id = ANY($1::bigint[])` 一次批量拉全部订单项，从 N+1 次查询降为 2 次。

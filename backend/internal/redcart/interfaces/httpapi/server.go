@@ -6,6 +6,7 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type Server struct {
@@ -29,7 +30,7 @@ func (s *Server) Handler() http.Handler {
 
 func (s *Server) registerRoutes() {
 	s.router.HandleMethodNotAllowed = true
-	s.router.Use(corsMiddleware())
+	s.router.Use(prometheusMiddleware(), corsMiddleware())
 	s.router.NoMethod(func(c *gin.Context) {
 		writeMethodNotAllowed(c.Writer)
 	})
@@ -88,4 +89,6 @@ func (s *Server) registerRoutes() {
 	s.router.POST("/api/ai/business-review", s.withAuth(true, requireMerchant(s.handleAIBusinessReview)))
 	s.router.POST("/api/ai/a2ui", s.withAuth(true, s.handleAIA2UISurface))
 	s.router.GET("/api/ai/tasks/:id", s.withAuth(true, s.handleAITaskByID))
+
+	s.router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 }
