@@ -12,7 +12,8 @@ import (
 func (s *Server) handleMerchantProducts(w http.ResponseWriter, r *http.Request, actor application.Actor) {
 	switch r.Method {
 	case http.MethodGet:
-		result, err := s.service.MerchantListProducts(r.Context(), actor)
+		limit, offset := parsePagination(r)
+		result, err := s.service.MerchantListProducts(r.Context(), actor, limit, offset)
 		if err != nil {
 			writeAppError(w, err)
 			return
@@ -137,7 +138,8 @@ func (s *Server) handleMerchantOrders(w http.ResponseWriter, r *http.Request, ac
 		writeMethodNotAllowed(w)
 		return
 	}
-	result, err := s.service.MerchantListOrders(r.Context(), actor)
+	limit, offset := parsePagination(r)
+	result, err := s.service.MerchantListOrders(r.Context(), actor, limit, offset)
 	if err != nil {
 		writeAppError(w, err)
 		return

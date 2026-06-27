@@ -14,7 +14,8 @@ func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
 		writeMethodNotAllowed(w)
 		return
 	}
-	result, err := s.service.ListNotes(r.Context())
+	limit, offset := parsePagination(r)
+	result, err := s.service.ListNotes(r.Context(), limit, offset)
 	if err != nil {
 		writeAppError(w, err)
 		return
@@ -49,7 +50,8 @@ func (s *Server) handleProducts(w http.ResponseWriter, r *http.Request) {
 		writeMethodNotAllowed(w)
 		return
 	}
-	result, err := s.service.ListProducts(r.Context())
+	limit, offset := parsePagination(r)
+	result, err := s.service.ListProducts(r.Context(), limit, offset)
 	if err != nil {
 		writeAppError(w, err)
 		return

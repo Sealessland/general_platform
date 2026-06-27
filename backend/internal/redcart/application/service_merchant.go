@@ -9,12 +9,12 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 )
 
-func (s *Service) MerchantListProducts(ctx context.Context, actor Actor) ([]ProductDetail, error) {
+func (s *Service) MerchantListProducts(ctx context.Context, actor Actor, limit, offset int) ([]ProductDetail, error) {
 	_ = ctx
 	if actor.Role != domain.RoleMerchant {
 		return nil, newError(ErrorForbidden, "merchant access required")
 	}
-	products := s.repo.ListProducts()
+	products := s.repo.ListProducts(limit, offset)
 	out := make([]ProductDetail, 0)
 	for _, product := range products {
 		if product.MerchantID != actor.MerchantID {
@@ -152,12 +152,12 @@ func (s *Service) MerchantSetProductStatus(ctx context.Context, actor Actor, pro
 	return &view, nil
 }
 
-func (s *Service) MerchantListOrders(ctx context.Context, actor Actor) ([]OrderView, error) {
+func (s *Service) MerchantListOrders(ctx context.Context, actor Actor, limit, offset int) ([]OrderView, error) {
 	_ = ctx
 	if actor.Role != domain.RoleMerchant {
 		return nil, newError(ErrorForbidden, "merchant access required")
 	}
-	orders := s.repo.ListOrdersByMerchant(actor.MerchantID)
+	orders := s.repo.ListOrdersByMerchant(actor.MerchantID, limit, offset)
 	out := make([]OrderView, 0, len(orders))
 	for _, order := range orders {
 		view, err := s.enrichOrderView(order)

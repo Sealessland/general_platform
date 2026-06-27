@@ -21,12 +21,12 @@ func (r *Repository) FindOrderByUserAndIdempotency(userID int64, idempotencyKey 
 	return r.GetOrder(orderID)
 }
 
-func (r *Repository) ListOrdersByUser(userID int64) []domain.Order {
-	return r.listOrders(`SELECT id, order_no, user_id, merchant_id, status, total_amount_cent, pay_amount_cent, discount_amount_cent, idempotency_key, receiver_name, receiver_phone, receiver_address, paid_at, cancelled_at, shipped_at, finished_at, created_at, updated_at FROM orders WHERE user_id = $1 ORDER BY id`, userID)
+func (r *Repository) ListOrdersByUser(userID int64, limit, offset int) []domain.Order {
+	return r.listOrders(`SELECT id, order_no, user_id, merchant_id, status, total_amount_cent, pay_amount_cent, discount_amount_cent, idempotency_key, receiver_name, receiver_phone, receiver_address, paid_at, cancelled_at, shipped_at, finished_at, created_at, updated_at FROM orders WHERE user_id = $1 ORDER BY id`, userID, limit, offset)
 }
 
-func (r *Repository) ListOrdersByMerchant(merchantID int64) []domain.Order {
-	return r.listOrders(`SELECT id, order_no, user_id, merchant_id, status, total_amount_cent, pay_amount_cent, discount_amount_cent, idempotency_key, receiver_name, receiver_phone, receiver_address, paid_at, cancelled_at, shipped_at, finished_at, created_at, updated_at FROM orders WHERE merchant_id = $1 ORDER BY id`, merchantID)
+func (r *Repository) ListOrdersByMerchant(merchantID int64, limit, offset int) []domain.Order {
+	return r.listOrders(`SELECT id, order_no, user_id, merchant_id, status, total_amount_cent, pay_amount_cent, discount_amount_cent, idempotency_key, receiver_name, receiver_phone, receiver_address, paid_at, cancelled_at, shipped_at, finished_at, created_at, updated_at FROM orders WHERE merchant_id = $1 ORDER BY id`, merchantID, limit, offset)
 }
 
 func (r *Repository) GetOrder(id int64) (domain.Order, bool) {
@@ -279,7 +279,10 @@ func nullTimeValue(t *time.Time) sql.NullTime {
 	return sql.NullTime{Time: *t, Valid: true}
 }
 
-func (r *Repository) listOrders(query string, arg int64) []domain.Order {
+func (r *Repository) listOrders(query string, arg int64, limit, offset int) []domain.Order {
+	if limit > 0 {
+		query = fmt.Sprintf("%s LIMIT %d OFFSET %d", query, limit, offset)
+	}
 	rows, err := r.db.Query(query, arg)
 	if err != nil {
 		return nil
@@ -291,9 +294,22 @@ func (r *Repository) listOrders(query string, arg int64) []domain.Order {
 		if err != nil {
 			return out
 		}
-		order.Items = r.loadOrderItems(order.ID)
 		out = append(out, order)
 	}
+	if len(out) == 0 {
+		return out
+	}
+
+	// Batch load order items for all orders in one query (eliminates N+1).
+	orderIDs := make([]int64, len(out))
+	for i := range out {
+		orderIDs[i] = out[i].ID
+	}
+	itemsByOrder := r.loadOrderItemsBatch(orderIDs)
+	for i := range out {
+		out[i].Items = itemsByOrder[out[i].ID]
+	}
+
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
 }
@@ -313,6 +329,32 @@ func (r *Repository) loadOrderItems(orderID int64) []domain.OrderItem {
 		out = append(out, item)
 	}
 	return out
+}
+
+// loadOrderItemsBatch fetches order items for multiple orders in a single
+// query, eliminating the N+1 problem where listOrders called loadOrderItems
+// once per order. Returns a map keyed by order_id.
+func (r *Repository) loadOrderItemsBatch(orderIDs []int64) map[int64][]domain.OrderItem {
+	if len(orderIDs) == 0 {
+		return nil
+	}
+	rows, err := r.db.Query(
+		`SELECT id, order_id, product_id, sku_id, product_title_snapshot, sku_name_snapshot, price_cent_snapshot, quantity, total_amount_cent, created_at, updated_at FROM order_items WHERE order_id = ANY($1::bigint[]) ORDER BY id`,
+		orderIDs,
+	)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	result := make(map[int64][]domain.OrderItem)
+	for rows.Next() {
+		var item domain.OrderItem
+		if err := rows.Scan(&item.ID, &item.OrderID, &item.ProductID, &item.SKUID, &item.ProductTitleSnapshot, &item.SKUNameSnapshot, &item.PriceCentSnapshot, &item.Quantity, &item.TotalAmountCent, &item.CreatedAt, &item.UpdatedAt); err != nil {
+			return result
+		}
+		result[item.OrderID] = append(result[item.OrderID], item)
+	}
+	return result
 }
 
 type orderScanner interface {
