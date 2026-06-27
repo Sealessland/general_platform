@@ -81,7 +81,7 @@ func TestPostgresApplicationAuthSessionAndCatalogRegression(t *testing.T) {
 		t.Fatalf("expected logged out token unauthorized, got %v", err)
 	}
 
-	notes, err := service.ListNotes(ctx)
+	notes, err := service.ListNotes(ctx, 0, 0)
 	if err != nil {
 		t.Fatalf("list notes: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestPostgresApplicationAuthSessionAndCatalogRegression(t *testing.T) {
 	if note.ViewCount <= notes[0].ViewCount {
 		t.Fatalf("expected note view count to increase, before=%d after=%d", notes[0].ViewCount, note.ViewCount)
 	}
-	products, err := service.ListProducts(ctx)
+	products, err := service.ListProducts(ctx, 0, 0)
 	if err != nil {
 		t.Fatalf("list products: %v", err)
 	}
@@ -175,7 +175,7 @@ func TestPostgresApplicationMerchantCatalogOrderAndAIRegression(t *testing.T) {
 	if _, err := service.MerchantSetProductStatus(ctx, merchant, product.ID, domain.ProductStatusOnline); err != nil {
 		t.Fatalf("online product: %v", err)
 	}
-	merchantProducts, err := service.MerchantListProducts(ctx, merchant)
+	merchantProducts, err := service.MerchantListProducts(ctx, merchant, 0, 0)
 	if err != nil {
 		t.Fatalf("merchant list products: %v", err)
 	}
@@ -211,14 +211,14 @@ func TestPostgresApplicationMerchantCatalogOrderAndAIRegression(t *testing.T) {
 	if paidAgain.Status != "PAID" {
 		t.Fatalf("expected idempotent paid status, got %+v", paidAgain)
 	}
-	orders, err := service.ListOrders(ctx, consumer)
+	orders, err := service.ListOrders(ctx, consumer, 0, 0)
 	if err != nil {
 		t.Fatalf("list orders: %v", err)
 	}
 	if len(orders) == 0 {
 		t.Fatal("expected consumer orders")
 	}
-	merchantOrders, err := service.MerchantListOrders(ctx, merchant)
+	merchantOrders, err := service.MerchantListOrders(ctx, merchant, 0, 0)
 	if err != nil {
 		t.Fatalf("merchant list orders: %v", err)
 	}

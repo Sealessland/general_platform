@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
+	"strconv"
 
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
@@ -108,9 +110,9 @@ func NewRepository(dsn string) (*Repository, error) {
 	if err != nil {
 		return nil, fmt.Errorf("get postgres sql db from gorm: %w", err)
 	}
-	sqlDB.SetMaxOpenConns(10)
-	sqlDB.SetMaxIdleConns(10)
-	sqlDB.SetConnMaxLifetime(30 * time.Minute)
+	sqlDB.SetMaxOpenConns(poolMaxOpenConns())
+	sqlDB.SetMaxIdleConns(poolMaxIdleConns())
+	sqlDB.SetConnMaxLifetime(poolConnMaxLifetime())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -188,4 +190,40 @@ func nullableJSON(payload []byte) any {
 		return nil
 	}
 	return string(payload)
+}
+
+const (
+	defaultMaxOpenConns     = 10
+	defaultMaxIdleConns     = 10
+	defaultConnMaxLifetime  = 30 * time.Minute
+)
+
+func poolMaxOpenConns() int {
+	return envInt("DB_MAX_OPEN_CONNS", defaultMaxOpenConns)
+}
+
+func poolMaxIdleConns() int {
+	return envInt("DB_MAX_IDLE_CONNS", defaultMaxIdleConns)
+}
+
+func poolConnMaxLifetime() time.Duration {
+	return envDuration("DB_CONN_MAX_LIFETIME", defaultConnMaxLifetime)
+}
+
+func envInt(key string, fallback int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return fallback
+}
+
+func envDuration(key string, fallback time.Duration) time.Duration {
+	if v := os.Getenv(key); v != "" {
+		if d, err := time.ParseDuration(v); err == nil && d > 0 {
+			return d
+		}
+	}
+	return fallback
 }

@@ -4,6 +4,13 @@
 
 ## [未发布] - 2026-06-08
 
+### 数据库查询优化
+
+- 修复订单列表 N+1 查询：`listOrders` 不再逐条调 `loadOrderItems`，改为 `loadOrderItemsBatch` 用 `WHERE order_id = ANY($1::bigint[])` 一次批量拉全部订单项，从 N+1 次查询降为 2 次。
+- 修复笔记列表 N+1 查询：`ListNotes` 不再逐条调 `loadNoteProductIDs`，改为 `loadNoteProductIDsBatch` 用 `WHERE note_id = ANY($1::bigint[])` 一次批量拉全部笔记关联商品。
+- 新增分页支持：`ListNotes`、`ListProducts`、`ListOrdersByUser`、`ListOrdersByMerchant` 接口增加 `limit, offset` 参数；HTTP 端点支持 `?limit=20&offset=0` 查询参数，默认 limit=20、上限 100；`limit=0` 表示无限制（dashboard 和 AI 内部调用使用）。
+- 连接池参数从硬编码改为环境变量可配：`DB_MAX_OPEN_CONNS`（默认 10）、`DB_MAX_IDLE_CONNS`（默认 10）、`DB_CONN_MAX_LIFETIME`（默认 30m）。
+
 ### Session Token 可靠性修复
 
 - 修复 access token 与 refresh token 使用相同 TTL 的问题：Redis 存储拆分为 `accessTTL`（默认 15min）和 `refreshTTL`（默认 7d），各自独立过期。新增 `REDIS_ACCESS_TOKEN_TTL` / `REDIS_REFRESH_TOKEN_TTL` 环境变量。

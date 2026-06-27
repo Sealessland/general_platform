@@ -42,7 +42,7 @@ func (s *Service) DashboardProducts(ctx context.Context, actor Actor) ([]Dashboa
 		return nil, newError(ErrorForbidden, "merchant access required")
 	}
 	stats := make(map[int64]*DashboardProductStat)
-	for _, product := range s.repo.ListProducts() {
+	for _, product := range s.repo.ListProducts(0, 0) {
 		if product.MerchantID != actor.MerchantID {
 			continue
 		}
@@ -91,7 +91,7 @@ func (s *Service) DashboardSummary(ctx context.Context, actor Actor) (*Dashboard
 		return nil, newError(ErrorForbidden, "merchant access required")
 	}
 	summary := &DashboardSummary{}
-	for _, product := range s.repo.ListProducts() {
+	for _, product := range s.repo.ListProducts(0, 0) {
 		if product.MerchantID != actor.MerchantID {
 			continue
 		}
@@ -105,7 +105,7 @@ func (s *Service) DashboardSummary(ctx context.Context, actor Actor) (*Dashboard
 			}
 		}
 	}
-	for _, order := range s.repo.ListOrdersByMerchant(actor.MerchantID) {
+	for _, order := range s.repo.ListOrdersByMerchant(actor.MerchantID, 0, 0) {
 		summary.OrderCount++
 		if order.Status == orderdomain.StatusPaid || order.Status == orderdomain.StatusShipped || order.Status == orderdomain.StatusFinished || order.Status == orderdomain.StatusRefunding || order.Status == orderdomain.StatusRefunded {
 			summary.PaidOrderCount++

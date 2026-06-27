@@ -20,7 +20,7 @@ func TestRepositoryAgainstPostgres(t *testing.T) {
 	}
 	defer repo.Close()
 
-	products := repo.ListProducts()
+	products := repo.ListProducts(0, 0)
 	if len(products) == 0 {
 		t.Fatal("expected seeded products")
 	}

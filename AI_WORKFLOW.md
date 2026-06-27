@@ -747,6 +747,39 @@ rtk bash scripts/validate-workspace.sh
 - 预算 Slider 仅做前端展示与本地数据模型更新，未真正回传后端重新筛选商品。
 - 商品图片使用示例 URL，本地无真实图片资源。
 
+## 2026-06-27：数据库查询优化
+
+### AI 参与范围
+
+- 在 `fix/db-optimization` 独立 worktree 上修复 3 个数据库查询问题：N+1 查询、无分页、连接池硬编码。
+- N+1 修复（订单）：`listOrders` 原先在循环中逐条调 `loadOrderItems(order.ID)`，改为先收集所有 order_id，用 `loadOrderItemsBatch` + `WHERE order_id = ANY($1::bigint[])` 一次查回所有订单项，按 order_id 分组后回填。从 N+1 次查询降为 2 次。
+- N+1 修复（笔记）：`ListNotes` 原先在循环中逐条调 `loadNoteProductIDs(note.ID)`，改为 `loadNoteProductIDsBatch` + `WHERE note_id = ANY($1::bigint[])` 一次查回所有笔记-商品关联，按 note_id 分组回填。
+- 分页：`application.Repository` 接口的 4 个 list 方法增加 `limit, offset int` 参数；PostgreSQL 实现在 `limit > 0` 时追加 `LIMIT $n OFFSET $m`；服务层透传；HTTP handler 用 `parsePagination` 解析 `?limit=&offset=` 查询参数，默认 limit=20、上限 100；`limit=0` 表示无限制，dashboard 和 AI 内部聚合调用传 `0, 0`。
+- 连接池：`NewRepository` 中 `SetMaxOpenConns(10)` / `SetMaxIdleConns(10)` / `SetConnMaxLifetime(30*time.Minute)` 改为从环境变量读取（`DB_MAX_OPEN_CONNS`、`DB_MAX_IDLE_CONNS`、`DB_CONN_MAX_LIFETIME`），默认值不变。
+- 更新所有内部调用方（dashboard、AI、merchant、catalog、order）和测试调用方。
+
+### 人工或主代理修正
+
+- `limit=0` 表示无限制的设计决策：dashboard 需要全量数据做聚合统计，不传分页参数；HTTP 端点默认 limit=20 防止全量拉取。
+- `loadOrderItems` 单条查询方法保留（`GetOrder`、`SaveOrder`、`UpdateOrderStatus` 仍用），只有 `listOrders` 批量路径改用 `loadOrderItemsBatch`。
+- `parsePagination` 放在 `response.go` 中与其他 HTTP helper 一起，上限 100 防止客户端请求过大 limit 导致数据库压力。
+
+### 验证证据
+
+```bash
+rtk go build ./...
+rtk go vet ./...
+rtk go test ./...
+rtk bash scripts/validate-workspace.sh
+```
+
+### 剩余风险
+
+- 分页使用 OFFSET 而非 cursor，大数据量下 OFFSET 扫描效率低；后续可改为 keyset pagination（`WHERE id > $cursor ORDER BY id LIMIT $n`）。
+- `OrderPreview` 仍多次查库（SKU + 商品 + 库存 + 购物车），本次未优化。
+- `behavior_events` 无分区或归档策略，本次未处理。
+- 未做 `EXPLAIN ANALYZE` 执行计划验证，索引命中基于 schema 分析推断。
+
 ## 2026-06-27：Session Token 可靠性修复
 
 ### AI 参与范围

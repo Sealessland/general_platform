@@ -68,9 +68,9 @@ func (s *Service) CreateOrder(ctx context.Context, actor Actor, idempotencyKey s
 	return &view, nil
 }
 
-func (s *Service) ListOrders(ctx context.Context, actor Actor) ([]OrderView, error) {
+func (s *Service) ListOrders(ctx context.Context, actor Actor, limit, offset int) ([]OrderView, error) {
 	_ = ctx
-	orders := s.repo.ListOrdersByUser(actor.UserID)
+	orders := s.repo.ListOrdersByUser(actor.UserID, limit, offset)
 	out := make([]OrderView, 0, len(orders))
 	for _, order := range orders {
 		view, err := s.enrichOrderView(order)

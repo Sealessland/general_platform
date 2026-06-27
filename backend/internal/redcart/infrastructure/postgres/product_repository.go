@@ -7,8 +7,12 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 )
 
-func (r *Repository) ListProducts() []domain.Product {
-	rows, err := r.db.Query(`SELECT id, merchant_id, title, description, cover_url, category_id, status, selling_points, created_at, updated_at FROM products ORDER BY id`)
+func (r *Repository) ListProducts(limit, offset int) []domain.Product {
+	query := `SELECT id, merchant_id, title, description, cover_url, category_id, status, selling_points, created_at, updated_at FROM products ORDER BY id`
+	if limit > 0 {
+		query = fmt.Sprintf("%s LIMIT %d OFFSET %d", query, limit, offset)
+	}
+	rows, err := r.db.Query(query)
 	if err != nil {
 		return nil
 	}

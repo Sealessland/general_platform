@@ -56,7 +56,7 @@ func TestRepositoryPostgresCRUDCoverage(t *testing.T) {
 		t.Fatalf("expected merchant by user id, got %+v ok=%v", fetched, ok)
 	}
 
-	notes := repo.ListNotes()
+	notes := repo.ListNotes(0, 0)
 	if len(notes) == 0 {
 		t.Fatal("expected seeded notes")
 	}
@@ -209,10 +209,10 @@ func TestRepositoryPostgresCRUDCoverage(t *testing.T) {
 	if existing, ok := repo.FindOrderByUserAndIdempotency(user.ID, order.IdempotencyKey); !ok || existing.ID != order.ID {
 		t.Fatalf("expected idempotent order lookup, got %+v ok=%v", existing, ok)
 	}
-	if orders := repo.ListOrdersByUser(user.ID); len(orders) == 0 {
+	if orders := repo.ListOrdersByUser(user.ID, 0, 0); len(orders) == 0 {
 		t.Fatal("expected orders by user")
 	}
-	if orders := repo.ListOrdersByMerchant(merchant.ID); len(orders) == 0 {
+	if orders := repo.ListOrdersByMerchant(merchant.ID, 0, 0); len(orders) == 0 {
 		t.Fatal("expected orders by merchant")
 	}
 	paidAt := now.Add(time.Minute)

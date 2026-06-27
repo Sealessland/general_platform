@@ -80,6 +80,30 @@ func writeMethodNotAllowed(w http.ResponseWriter) {
 	})
 }
 
+const (
+	defaultLimit  = 20
+	maxLimit      = 100
+)
+
+func parsePagination(r *http.Request) (int, int) {
+	limit := defaultLimit
+	offset := 0
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = n
+			if limit > maxLimit {
+				limit = maxLimit
+			}
+		}
+	}
+	if v := r.URL.Query().Get("offset"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			offset = n
+		}
+	}
+	return limit, offset
+}
+
 func writeAppError(w http.ResponseWriter, err error) {
 	appErr, ok := err.(*application.AppError)
 	if !ok {
