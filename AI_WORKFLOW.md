@@ -747,6 +747,45 @@ rtk bash scripts/validate-workspace.sh
 - 预算 Slider 仅做前端展示与本地数据模型更新，未真正回传后端重新筛选商品。
 - 商品图片使用示例 URL，本地无真实图片资源。
 
+## 2026-06-27：Prometheus 指标采集
+
+### AI 参与范围
+
+- 在 `feature/prometheus` 独立 worktree 上以最小侵入方式接入 Prometheus 指标采集。
+- 新增 `middleware_prometheus.go`：定义 `redcart_http_requests_total`（CounterVec，维度 method/path/status）和 `redcart_http_request_duration_seconds`（HistogramVec，维度 method/path），用 `promauto` 包级变量自动注册。
+- 中间件用 `gin.Context.FullPath()` 取路由模板作为 path 标签，避免 `/api/orders/42` 这样的高基数标签。
+- 在 `server.go` 的 `registerRoutes` 中挂载 `prometheusMiddleware()` 和 `/metrics` 路由（`gin.WrapH(promhttp.Handler())`）。
+- 新增 `prometheus.yml` scrape 配置和 `docker-compose.yml` 中的 Prometheus 容器（`network_mode: host`，15 秒采集间隔，7 天数据保留）。
+- 新增 Go 依赖 `github.com/prometheus/client_golang`。
+
+### 人工或主代理修正
+
+- 不引入 Grafana——当前只做指标采集和 Prometheus 自带 UI 查询，Grafana 面板后续按需加。
+- 不加分布式追踪（OpenTelemetry/Jaeger）——本次 scope 限定在 Prometheus metrics。
+- `/metrics` 端点不加鉴权——本地开发场景，生产环境应加 IP 白名单或 auth 中间件。
+- 不用 `gin.Logger()`——该 worktree 基于 main 分支，main 分支的 `gin.Logger()` 改动在主工作区 stash 中未提交。
+
+### 验证证据
+
+```bash
+rtk go build ./...
+rtk go vet ./...
+rtk go test ./...
+rtk docker compose up -d prometheus
+# 后端启动后
+curl http://127.0.0.1:18080/metrics              # 指标暴露
+curl http://127.0.0.1:9090/api/v1/targets         # target health=up
+curl 'http://127.0.0.1:9090/api/v1/query?query=redcart_http_requests_total'  # 指标可查
+rtk bash scripts/validate-workspace.sh
+```
+
+### 剩余风险
+
+- `/metrics` 端点无鉴权，生产环境需要保护。
+- 未加 Grafana 面板，当前只能通过 Prometheus API 或自带 UI 查询。
+- 未采集数据库连接池指标（`database/sql` 的 `db.Stats()`），后续可加 `redcart_db_open_connections` 等 gauge。
+- 未采集 Redis 和 RabbitMQ 指标，后续可加 exporter。
+
 ## 2026-06-27：数据库查询优化
 
 ### AI 参与范围

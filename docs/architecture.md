@@ -75,6 +75,8 @@ HTTP 入口当前由 Gin 负责路由和 method gate，但 Gin 只停留在产�
 
 运行时性能分析当前支持可选的 Grafana Pyroscope Go push mode。接入点位于后端启动装配层，依赖环境变量启用，不向应用层或领域层泄漏供应商类型。
 
+指标采集当前由 Prometheus 承担：后端通过 `/metrics` 端点暴露 Go runtime 指标和自定义 HTTP 指标（`redcart_http_requests_total` 按请求计数、`redcart_http_request_duration_seconds` 按延迟分布），Prometheus 容器每 15 秒采集一次。中间件位于产品接口层，不向应用层或领域层泄漏可观测性供应商类型。
+
 ## 扩展方式
 
 - 新增用户能力时，优先在产品接口层暴露公共入口，再调用稳定的运行编排或领域契约。
