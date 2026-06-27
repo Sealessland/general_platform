@@ -30,7 +30,8 @@ func (s *Server) handleOrderPreview(w http.ResponseWriter, r *http.Request, acto
 func (s *Server) handleOrders(w http.ResponseWriter, r *http.Request, actor application.Actor) {
 	switch r.Method {
 	case http.MethodGet:
-		result, err := s.service.ListOrders(r.Context(), actor)
+		limit, offset := parsePagination(r)
+	result, err := s.service.ListOrders(r.Context(), actor, limit, offset)
 		if err != nil {
 			writeAppError(w, err)
 			return

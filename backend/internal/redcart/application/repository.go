@@ -42,11 +42,11 @@ type Repository interface {
 	GetMerchant(id int64) (domain.Merchant, bool)
 	GetMerchantByUserID(userID int64) (domain.Merchant, bool)
 
-	ListNotes() []domain.Note
+	ListNotes(limit, offset int) []domain.Note
 	GetNote(id int64) (domain.Note, bool)
 	UpdateNote(note domain.Note) error
 
-	ListProducts() []domain.Product
+	ListProducts(limit, offset int) []domain.Product
 	GetProduct(id int64) (domain.Product, bool)
 	SaveProduct(product domain.Product) (domain.Product, error)
 
@@ -61,8 +61,8 @@ type Repository interface {
 	DeleteSelectedCartItems(userID int64) error
 
 	FindOrderByUserAndIdempotency(userID int64, idempotencyKey string) (domain.Order, bool)
-	ListOrdersByUser(userID int64) []domain.Order
-	ListOrdersByMerchant(merchantID int64) []domain.Order
+	ListOrdersByUser(userID int64, limit, offset int) []domain.Order
+	ListOrdersByMerchant(merchantID int64, limit, offset int) []domain.Order
 	GetOrder(id int64) (domain.Order, bool)
 	SaveOrder(order domain.Order) (domain.Order, error)
 	SaveOrderWithInventoryLocks(order domain.Order, locks []domain.InventoryLock) (domain.Order, error)

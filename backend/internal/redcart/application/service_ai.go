@@ -161,7 +161,7 @@ func (s *Service) enrichA2UIContext(ctx context.Context, input A2UISurfaceInput)
 		return input.ContextJSON, nil
 	}
 
-	products, err := s.ListProducts(ctx)
+	products, err := s.ListProducts(ctx, 0, 0)
 	if err != nil {
 		return "", err
 	}
@@ -214,7 +214,7 @@ func toA2UINotes(notes []NoteSummary) []map[string]any {
 
 func (s *Service) relatedNotes(ctx context.Context, productIDs []int64) []NoteSummary {
 	_ = ctx
-	allNotes := s.repo.ListNotes()
+	allNotes := s.repo.ListNotes(0, 0)
 	wanted := make(map[int64]struct{}, len(productIDs))
 	for _, id := range productIDs {
 		wanted[id] = struct{}{}

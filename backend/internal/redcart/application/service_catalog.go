@@ -6,9 +6,9 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 )
 
-func (s *Service) ListNotes(ctx context.Context) ([]NoteSummary, error) {
+func (s *Service) ListNotes(ctx context.Context, limit, offset int) ([]NoteSummary, error) {
 	_ = ctx
-	notes := s.repo.ListNotes()
+	notes := s.repo.ListNotes(limit, offset)
 	out := make([]NoteSummary, 0, len(notes))
 	for _, note := range notes {
 		out = append(out, s.toNoteSummary(note))
@@ -45,9 +45,9 @@ func (s *Service) GetNote(ctx context.Context, noteID int64, actor *Actor) (*Not
 	return &view, nil
 }
 
-func (s *Service) ListProducts(ctx context.Context) ([]ProductCard, error) {
+func (s *Service) ListProducts(ctx context.Context, limit, offset int) ([]ProductCard, error) {
 	_ = ctx
-	products := s.repo.ListProducts()
+	products := s.repo.ListProducts(limit, offset)
 	out := make([]ProductCard, 0, len(products))
 	for _, product := range products {
 		if product.Status != domain.ProductStatusOnline {
