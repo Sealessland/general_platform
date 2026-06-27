@@ -30,7 +30,7 @@ func (s *Server) Handler() http.Handler {
 
 func (s *Server) registerRoutes() {
 	s.router.HandleMethodNotAllowed = true
-	s.router.Use(prometheusMiddleware(), corsMiddleware())
+	s.router.Use(gin.Logger(), gin.Recovery(), prometheusMiddleware(), corsMiddleware())
 	s.router.NoMethod(func(c *gin.Context) {
 		writeMethodNotAllowed(c.Writer)
 	})
