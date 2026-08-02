@@ -51,7 +51,7 @@ func (s *Server) authenticate(r *http.Request) (*application.Actor, error) {
 	if authHeader == "" {
 		return nil, &application.AppError{Kind: application.ErrorUnauthorized, Message: "missing bearer token"}
 	}
-	return s.service.Authenticate(authHeader)
+	return s.service.Authenticate(r.Context(), authHeader)
 }
 
 func requireRole(role string, next authedHandler) authedHandler {

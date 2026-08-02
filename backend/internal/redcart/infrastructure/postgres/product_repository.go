@@ -28,6 +28,29 @@ func (r *Repository) ListProducts(limit, offset int) []domain.Product {
 	return out
 }
 
+func (r *Repository) ListProductsByMerchant(merchantID int64, limit, offset int) []domain.Product {
+	query := `SELECT id, merchant_id, title, description, cover_url, category_id, status, selling_points, created_at, updated_at FROM products WHERE merchant_id = $1 ORDER BY id`
+	args := []any{merchantID}
+	if limit > 0 {
+		query += " LIMIT $2 OFFSET $3"
+		args = append(args, limit, offset)
+	}
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	out := make([]domain.Product, 0)
+	for rows.Next() {
+		product, err := scanProduct(rows)
+		if err != nil {
+			return out
+		}
+		out = append(out, product)
+	}
+	return out
+}
+
 func (r *Repository) GetProduct(id int64) (domain.Product, bool) {
 	row := r.db.QueryRow(`SELECT id, merchant_id, title, description, cover_url, category_id, status, selling_points, created_at, updated_at FROM products WHERE id = $1`, id)
 	product, err := scanProduct(row)

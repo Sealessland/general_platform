@@ -18,6 +18,8 @@ RedCart Copilot 是一个面向内容电商场景的 AI Native 全栈项目，�
 
 ## 仓库结构
 
+第一次读后端时，先看 [`backend/README.md`](backend/README.md)；它按一次订单请求的调用顺序解释各目录职责和常见改动应该放在哪里。
+
 ```text
 backend/       Go API、领域模块、迁移、后端测试
 frontend/      静态前端演示应用与前端校验脚本
@@ -29,6 +31,8 @@ scripts/       校验、OpenAPI 检查、本地启动辅助脚本
 ```
 
 ## 快速开始
+
+第一次启动推荐跟随 [`docs/tutorials/local-distributed-runtime.md`](docs/tutorials/local-distributed-runtime.md)。CI、Runner 性能数据与镜像发布见 [`docs/tutorials/github-actions-ci-cd.md`](docs/tutorials/github-actions-ci-cd.md)。
 
 先执行仓库基础校验：
 
@@ -66,7 +70,7 @@ bash scripts/local-dev.sh
 
 ```bash
 cd backend
-POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable HTTP_PORT=18080 GOCACHE=/tmp/go-build-cache go run ./cmd/api
+POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable REDIS_ADDR=127.0.0.1:6380 JWT_SECRET=local-development-only-jwt-key-change-me HTTP_PORT=18080 GOCACHE=/tmp/go-build-cache go run ./cmd/api
 ```
 
 如需启用 Grafana Pyroscope Go push mode，可额外提供这些环境变量：
@@ -100,6 +104,8 @@ python3 -m http.server 4173 --bind 127.0.0.1
 - 后端地址：`http://127.0.0.1:18080`
 - 前端静态服务示例：`http://127.0.0.1:4173`
 - PostgreSQL 本地端口：`127.0.0.1:15432`
+- Redis 本地端口：`127.0.0.1:6380`
+- Kafka broker：`127.0.0.1:19092`
 - Pyroscope：`http://127.0.0.1:4040`
 
 内置演示账号：
@@ -109,12 +115,15 @@ python3 -m http.server 4173 --bind 127.0.0.1
 
 ## 当前实现说明
 
-当前 MVP 运行时采用 PostgreSQL + Redis + RabbitMQ 环境：
+当前 MVP 运行时采用 PostgreSQL + Redis + Kafka 环境：
 
-- 后端启动时必须提供 `POSTGRES_DSN` 与 `REDIS_ADDR`
-- RabbitMQ 通过 `RABBITMQ_ADDR` 可选启用；启用后，订单状态变更事件会通过事务性发件箱发布到 `RABBITMQ_EXCHANGE`（默认 `redcart.events`）
+- 后端启动时必须提供 `POSTGRES_DSN`、`REDIS_ADDR` 与至少 32 字节的 `JWT_SECRET`
+- 本地 Compose 默认启动两个后端实例（`18081`、`18082`），由 Nginx 在 `18080` 统一负载均衡；响应头 `X-RedCart-Upstream` 可观察实例切换
+- Kafka 通过 `KAFKA_BROKERS` 可选启用；启用后，订单状态变更事件会通过事务性发件箱发布到 `KAFKA_TOPIC`（默认 `redcart.events`）
 - 后端连接 PostgreSQL 后会自动执行初始化迁移与演示种子数据
-- Redis 读侧适配默认启用：认证 session 以 Redis 为真相源并带本地热缓存，商品/SKU/SKU 列表读路径会优先命中 Redis 缓存
+- Access/Refresh Token 使用 HS256 JWT；Access 身份本地验签，Redis 只保存一次性 Refresh 会话与 Access `jti` 撤销状态，使刷新和登出跨实例立即一致
+- Redis 读侧适配默认启用：商品/SKU/SKU 列表读路径会优先命中 Redis 缓存
+- Redis Lua 令牌桶保护认证写、AI 写和公开目录读：安全/成本敏感写请求在 Redis 故障时 fail-closed，目录读请求 fail-open；限流响应带 `Retry-After` 与剩余额度
 - AI 能力使用可重复的 Mock Provider
 - 消息队列与事件驱动边界见 `docs/adr/0006-message-queue-and-event-driven.md`
 
@@ -155,5 +164,5 @@ bash scripts/validate-workspace.sh
 <!-- BENCHMARK_RESULTS_START -->
 ## Performance
 
-_Runtime benchmark table is generated only from PostgreSQL/Redis/RabbitMQ-backed component benchmarks and live HTTP benchmarks against a running backend process._
+_Runtime benchmark table is generated only from PostgreSQL/Redis/Kafka-backed component benchmarks and live HTTP benchmarks against a running backend process._
 <!-- BENCHMARK_RESULTS_END -->

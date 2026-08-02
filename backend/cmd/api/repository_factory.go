@@ -5,20 +5,31 @@ import (
 	"log"
 	"os"
 
+	"github.com/example/redcart-copilot/backend/internal/event"
+	"github.com/example/redcart-copilot/backend/internal/ratelimit"
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
+	authrepo "github.com/example/redcart-copilot/backend/internal/redcart/infrastructure/auth"
 	postgresrepo "github.com/example/redcart-copilot/backend/internal/redcart/infrastructure/postgres"
 	redisrepo "github.com/example/redcart-copilot/backend/internal/redcart/infrastructure/redis"
 )
 
-func initRepository(logger *log.Logger) (application.Repository, func(), error) {
+type runtimeDependencies struct {
+	repository   application.Repository
+	tokenManager application.TokenManager
+	rateLimiter  ratelimit.Limiter
+	outbox       event.OutboxRelayStore
+	close        func()
+}
+
+func initDependencies(logger *log.Logger) (*runtimeDependencies, error) {
 	dsn := os.Getenv("POSTGRES_DSN")
 	if dsn == "" {
-		return nil, func() {}, fmt.Errorf("POSTGRES_DSN is required")
+		return nil, fmt.Errorf("POSTGRES_DSN is required")
 	}
 
 	repo, err := postgresrepo.NewRepository(dsn)
 	if err != nil {
-		return nil, func() {}, fmt.Errorf("initialize postgres repository: %w", err)
+		return nil, fmt.Errorf("initialize postgres repository: %w", err)
 	}
 	if logger != nil {
 		logger.Printf("postgres repository connected")
@@ -30,48 +41,54 @@ func initRepository(logger *log.Logger) (application.Repository, func(), error) 
 		}
 	}
 
-	wrapped, extraCleanup, err := wrapRepositoryWithRedisSession(repo, logger)
+	wrapped, tokenManager, limiter, extraCleanup, err := wrapRepositoryWithRedisSession(repo, logger)
 	if err != nil {
 		cleanup()
-		return nil, func() {}, err
+		return nil, err
 	}
-	return wrapped, func() {
-		extraCleanup()
-		cleanup()
+	return &runtimeDependencies{
+		repository:   wrapped,
+		tokenManager: tokenManager,
+		rateLimiter:  limiter,
+		outbox:       repo.Outbox,
+		close: func() {
+			extraCleanup()
+			cleanup()
+		},
 	}, nil
 }
 
-func wrapRepositoryWithRedisSession(base application.Repository, logger *log.Logger) (application.Repository, func(), error) {
+func wrapRepositoryWithRedisSession(base application.Repository, logger *log.Logger) (application.Repository, application.TokenManager, ratelimit.Limiter, func(), error) {
 	addr := envOrDefault("REDIS_ADDR", "")
 	if addr == "" {
-		return nil, func() {}, fmt.Errorf("REDIS_ADDR is required")
+		return nil, nil, nil, func() {}, fmt.Errorf("REDIS_ADDR is required")
 	}
 
 	client, err := redisrepo.NewClient(addr)
 	if err != nil {
-		return nil, func() {}, fmt.Errorf("initialize redis session store: %w", err)
+		return nil, nil, nil, func() {}, fmt.Errorf("initialize redis client: %w", err)
 	}
-	accessTTL, err := redisrepo.AccessTokenTTLFromEnv(os.Getenv("REDIS_ACCESS_TOKEN_TTL"))
+	jwtConfig, err := authrepo.ConfigFromEnv()
 	if err != nil {
 		_ = client.Close()
-		return nil, func() {}, err
+		return nil, nil, nil, func() {}, err
 	}
-	refreshTTL, err := redisrepo.RefreshTokenTTLFromEnv(os.Getenv("REDIS_REFRESH_TOKEN_TTL"))
+	tokenManager, err := authrepo.NewJWTManager(client, jwtConfig)
 	if err != nil {
 		_ = client.Close()
-		return nil, func() {}, err
+		return nil, nil, nil, func() {}, fmt.Errorf("initialize JWT manager: %w", err)
 	}
 	catalogTTL, err := redisrepo.CatalogTTLFromEnv(os.Getenv("REDIS_CATALOG_TTL"))
 	if err != nil {
 		_ = client.Close()
-		return nil, func() {}, err
+		return nil, nil, nil, func() {}, err
 	}
 	if logger != nil {
-		logger.Printf("redis repository wrapped on %s with access_ttl=%s refresh_ttl=%s catalog_ttl=%s", addr, accessTTL, refreshTTL, catalogTTL)
+		logger.Printf("redis shared state enabled on %s with jwt_access_ttl=%s jwt_refresh_ttl=%s catalog_ttl=%s", addr, jwtConfig.AccessTTL, jwtConfig.RefreshTTL, catalogTTL)
 	}
 	withCatalog := redisrepo.NewCatalogCacheRepository(base, client, catalogTTL)
-	withSession := redisrepo.NewSessionRepository(withCatalog, client, accessTTL, refreshTTL)
-	return withSession, func() {
+	limiter := redisrepo.NewRateLimiter(client)
+	return withCatalog, tokenManager, limiter, func() {
 		if err := client.Close(); err != nil && logger != nil {
 			logger.Printf("close redis client: %v", err)
 		}

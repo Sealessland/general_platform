@@ -1,6 +1,6 @@
 # 性能基线记录
 
-本记录只保存当前运行时性能基线。当前运行时是 Gin + PostgreSQL + Redis + RabbitMQ；内存仓储、空 publisher、模拟 sleep 和 handler-only 替代路径不允许进入本基线。
+本记录只保存当前运行时性能基线。当前运行时是 Gin + PostgreSQL + Redis + Kafka；内存仓储、空 publisher、模拟 sleep 和 handler-only 替代路径不允许进入本基线。
 
 ## 2026-06-06 Gin/GORM 迁移评估
 
@@ -141,7 +141,7 @@
 ## 评估结论
 
 - 本基线数据来自 Gin handler -> 应用层 -> PostgreSQL 仓储适配层 -> 本地 Docker Compose PostgreSQL 的真实运行路径。
-- README 性能表只允许 PostgreSQL/Redis/RabbitMQ-backed 组件 benchmark 和 `LIVE_HTTP_BASE_URL` 指向真实后端进程的 live HTTP benchmark。
+- README 性能表只允许 PostgreSQL/Redis/Kafka-backed 组件 benchmark 和 `LIVE_HTTP_BASE_URL` 指向真实后端进程的 live HTTP benchmark。
 - 历史 `backend-qps.txt`、内存仓储 benchmark、空 publisher benchmark 和模拟延迟 benchmark 已废弃，不再作为诊断数据、baseline 或简历指标来源。
 - 结算预览在 PostgreSQL-backed 路径约 6960 QPS，读路径表现明显好于上一次基线，仍可作为当前 MVP 的可演示基线。
 - 下单写路径约 71 QPS，主要覆盖多次查询、事务、条件更新、订单明细写入、库存锁写入和后续事件写入，仍然是后续优化的重点。

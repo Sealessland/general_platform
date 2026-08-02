@@ -7,6 +7,7 @@ import (
 	backendai "github.com/example/redcart-copilot/backend/internal/ai"
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
+	"github.com/example/redcart-copilot/backend/internal/redcart/testsupport"
 	"os"
 	"testing"
 	"time"
@@ -35,7 +36,7 @@ func newPostgresRepo(t *testing.T) *Repository {
 func newPostgresService(t *testing.T) (*Repository, *application.Service) {
 	t.Helper()
 	repo := newPostgresRepo(t)
-	return repo, application.NewService(repo, backendai.MockProvider{})
+	return repo, application.NewService(repo, backendai.MockProvider{}, testsupport.NewTokenManager())
 }
 
 func openRawConn(t *testing.T, dsn string) *sql.DB {

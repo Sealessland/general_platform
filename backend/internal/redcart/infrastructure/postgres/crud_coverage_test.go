@@ -95,6 +95,17 @@ func TestRepositoryPostgresCRUDCoverage(t *testing.T) {
 	if product.Status != domain.ProductStatusOnline || len(product.SellingPoints) != 2 {
 		t.Fatalf("expected updated product, got %+v", product)
 	}
+	merchantProducts := repo.ListProductsByMerchant(merchant.ID, 1, 0)
+	if len(merchantProducts) != 1 || merchantProducts[0].MerchantID != merchant.ID {
+		t.Fatalf("expected merchant-filtered product page, got %+v", merchantProducts)
+	}
+	allMerchantProducts := repo.ListProductsByMerchant(merchant.ID, 0, 0)
+	if len(allMerchantProducts) == 0 {
+		t.Fatal("expected unpaginated merchant products")
+	}
+	if got := repo.ListProductsByMerchant(-1, 20, 0); len(got) != 0 {
+		t.Fatalf("expected no products for unknown merchant, got %+v", got)
+	}
 
 	sku, err := repo.SaveSKU(domain.SKU{
 		ProductID:   product.ID,
@@ -305,5 +316,11 @@ func TestRepositoryPostgresCRUDCoverage(t *testing.T) {
 	fetchedTask, ok := repo.GetAITask(task.ID)
 	if !ok || fetchedTask.Status != domain.AITaskStatusCompleted || fetchedTask.Output["diagnosis"] != "updated" {
 		t.Fatalf("expected updated ai task, got %+v ok=%v", fetchedTask, ok)
+	}
+	if err := repo.Close(); err != nil {
+		t.Fatalf("close repository: %v", err)
+	}
+	if got := repo.ListProductsByMerchant(merchant.ID, 20, 0); got != nil {
+		t.Fatalf("expected nil merchant products after repository close, got %+v", got)
 	}
 }

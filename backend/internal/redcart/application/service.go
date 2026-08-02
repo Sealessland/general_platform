@@ -11,15 +11,17 @@ type Service struct {
 	repo       Repository
 	outbox     event.Outbox
 	aiProvider backendai.AIProvider
+	tokens     TokenManager
 	now        func() time.Time
 }
 
-func NewService(repo Repository, aiProvider backendai.AIProvider) *Service {
+func NewService(repo Repository, aiProvider backendai.AIProvider, tokens TokenManager) *Service {
 	outbox, _ := repo.(event.Outbox)
 	return &Service{
 		repo:       repo,
 		outbox:     outbox,
 		aiProvider: aiProvider,
+		tokens:     tokens,
 		now: func() time.Time {
 			return time.Now().UTC()
 		},

@@ -26,18 +26,23 @@ func (r *Repository) migrate(ctx context.Context) error {
 	}
 	for _, file := range files {
 		version := filepath.Base(file)
-		applied, err := r.isMigrationApplied(ctx, version)
-		if err != nil {
-			return fmt.Errorf("check migration %s: %w", version, err)
-		}
-		if applied {
-			continue
-		}
 		sqlText, err := os.ReadFile(file)
 		if err != nil {
 			return fmt.Errorf("read migration %s: %w", version, err)
 		}
 		if err := r.gormDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			// Every API replica may start at the same time. This transaction-level
+			// advisory lock lets only one replica inspect/apply this version.
+			if err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtext(?))`, "redcart-migration-"+version).Error; err != nil {
+				return err
+			}
+			var count int64
+			if err := tx.Raw(`SELECT COUNT(*) FROM schema_migrations WHERE version = ?`, version).Row().Scan(&count); err != nil {
+				return err
+			}
+			if count > 0 {
+				return nil
+			}
 			if err := tx.Exec(string(sqlText)).Error; err != nil {
 				return err
 			}
@@ -56,12 +61,6 @@ func (r *Repository) ensureSchemaMigrationsTable(ctx context.Context) error {
 			applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)
 	`).Error
-}
-
-func (r *Repository) isMigrationApplied(ctx context.Context, version string) (bool, error) {
-	var count int64
-	err := r.gormDB.WithContext(ctx).Raw(`SELECT COUNT(*) FROM schema_migrations WHERE version = ?`, version).Row().Scan(&count)
-	return count > 0, err
 }
 
 func resolveMigrationsDir() (string, error) {
@@ -114,15 +113,19 @@ func listMigrationFiles(dir string) ([]string, error) {
 }
 
 func (r *Repository) seed(ctx context.Context) error {
-	var count int
-	if err := r.gormDB.WithContext(ctx).Raw(`SELECT COUNT(*) FROM users`).Row().Scan(&count); err != nil {
-		return fmt.Errorf("count users: %w", err)
-	}
-	if count > 0 {
-		return nil
-	}
+	return r.gormDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtext('redcart-seed'))`).Error; err != nil {
+			return fmt.Errorf("lock seed data: %w", err)
+		}
+		var count int
+		if err := tx.Raw(`SELECT COUNT(*) FROM users`).Row().Scan(&count); err != nil {
+			return fmt.Errorf("count users: %w", err)
+		}
+		if count > 0 {
+			return nil
+		}
 
-	seedSQL := `
+		seedSQL := `
 INSERT INTO users (id, nickname, phone, password_hash, role) VALUES
   (1, 'Alice', '13800000001', '` + seededPasswordHash("consumer-demo") + `', 'consumer'),
   (2, 'Merchant Zoe', '13800000002', '` + seededPasswordHash("merchant-demo") + `', 'merchant')
@@ -221,10 +224,11 @@ SELECT setval(pg_get_serial_sequence('inventory_locks', 'id'), COALESCE((SELECT 
 SELECT setval(pg_get_serial_sequence('behavior_events', 'id'), COALESCE((SELECT MAX(id) FROM behavior_events), 1), true);
 `
 
-	if err := r.gormDB.WithContext(ctx).Exec(seedSQL).Error; err != nil {
-		return fmt.Errorf("seed postgres: %w", err)
-	}
-	return nil
+		if err := tx.Exec(seedSQL).Error; err != nil {
+			return fmt.Errorf("seed postgres: %w", err)
+		}
+		return nil
+	})
 }
 
 func seededPasswordHash(password string) string {

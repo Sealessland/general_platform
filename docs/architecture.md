@@ -65,13 +65,17 @@ RedCart Copilot 当前 MVP 的代码映射如下：
 - 产品接口层：`backend/cmd/api`、`backend/internal/redcart/interfaces/httpapi`、`frontend/`
 - 运行编排层：`backend/internal/redcart/application`
 - 领域能力层：`backend/internal/order/domain`、`backend/internal/redcart/domain`
-- 集成适配层：`backend/internal/redcart/infrastructure/postgres`、`backend/internal/redcart/infrastructure/redis`、`backend/internal/ai`
+- 集成适配层：`backend/internal/redcart/infrastructure/postgres`、`backend/internal/redcart/infrastructure/redis`、`backend/internal/redcart/infrastructure/auth`、`backend/internal/ai`
 
-当前运行时数据库是 PostgreSQL，运行时缓存/会话源是 Redis。后端启动必须同时提供 `POSTGRES_DSN` 与 `REDIS_ADDR`：PostgreSQL 仓储适配器负责迁移、种子数据和业务真相；Redis 读侧适配器包裹 PostgreSQL 仓储，认证 token 以 Redis 为共享会话源并带本地热缓存，商品、SKU 和 SKU 列表读路径优先命中 Redis。订单、库存、购物车和业务真相仍以 PostgreSQL 为准。仓储层不再保留内存适配器；服务层、HTTP 层和性能验证不得使用内存仓储替代 PostgreSQL/Redis/RabbitMQ 运行路径。
+当前运行时数据库是 PostgreSQL，共享缓存与协调源是 Redis。后端启动必须同时提供 `POSTGRES_DSN`、`REDIS_ADDR` 与 `JWT_SECRET`：PostgreSQL 仓储适配器负责迁移、种子数据和业务真相；JWT 适配器在本地校验 Access Token，把一次性 Refresh 会话和 Access `jti` 撤销状态保存在 Redis；商品、SKU 和 SKU 列表读路径也优先命中 Redis。Redis 还通过 Lua 原子令牌桶承担 HTTP 流量准入；限流契约位于 `backend/internal/ratelimit`，算法实现仍留在基础设施层。订单、库存、购物车和业务真相仍以 PostgreSQL 为准。仓储层不再保留 token session 或内存适配器；服务层、HTTP 层和性能验证不得使用内存仓储替代 PostgreSQL/Redis/Kafka 运行路径。
 
-HTTP 入口当前由 Gin 负责路由和 method gate，但 Gin 只停留在产品接口层；应用层和领域层不依赖 Gin 类型。AI 能力当前通过 `backend/internal/ai.AIProvider` 契约接入：默认使用进程内 `MockProvider`；当 `AI_PROVIDER=grpc` 时，后端通过 gRPC 调用独立的 `ai-service` 容器（`GenerateSellingPoints` / `GenerateBusinessReview` / `GenerateA2UISurface`）。gRPC schema 定义在 `api/proto/ai/v1/ai.proto`，生成代码分别提交到 `backend/internal/ai/gen/ai/v1` 与 `ai-service/app/ai/v1`；新增的 `A2UIService` 按 A2UI v0.9 协议返回声明式 UI JSON，供前端 `/a2ui` 页面渲染。Redis 当前只落地 session 与 catalog 热读适配，不承载库存预扣、购物车、幂等真相或订单事件总线职责。
+HTTP 入口当前由 Gin 负责路由和 method gate，但 Gin 只停留在产品接口层；应用层和领域层不依赖 Gin 类型。认证通过 `application.TokenManager` 反转依赖，`infrastructure/auth` 封装 JWT 与 Redis SDK。AI 能力当前通过 `backend/internal/ai.AIProvider` 契约接入：默认使用进程内 `MockProvider`；当 `AI_PROVIDER=grpc` 时，后端通过 gRPC 调用独立的 `ai-service` 容器（`GenerateSellingPoints` / `GenerateBusinessReview` / `GenerateA2UISurface`）。gRPC schema 定义在 `api/proto/ai/v1/ai.proto`，生成代码分别提交到 `backend/internal/ai/gen/ai/v1` 与 `ai-service/app/ai/v1`；新增的 `A2UIService` 按 A2UI v0.9 协议返回声明式 UI JSON，供前端 `/a2ui` 页面渲染。Redis 不承载库存预扣、购物车、幂等真相或订单事件总线职责。
 
-事件与异步边界当前由消息队列承担：订单状态变更（`ORDER_CREATED`、`ORDER_PAID`、`ORDER_CANCELLED`、`ORDER_SHIPPED`、`ORDER_FINISHED`、`ORDER_REFUND_REQUESTED`）和用户行为事件被写入数据库后，通过事务性发件箱（Transactional Outbox）发布到 RabbitMQ。发布器位于集成适配层，领域层和应用层只依赖 `backend/internal/event`（或 `backend/internal/mq`）定义的事件发布契约。RabbitMQ 是当前 Docker Compose MVP 的运行时依赖之一，详情见 `docs/adr/0006-message-queue-and-event-driven.md`。这一设计先把事件作为「逻辑服务」之间的边界，未来通知、分析、库存等消费者可以独立成进程，而订单核心服务仍保留在单体内部。
+本地分布式运行面由 Nginx `:18080`、两个等价 API 实例 `:18081/:18082` 组成。实例共享 PostgreSQL、Redis 和 Kafka：JWT 刷新/撤销与限流由 Redis 协调；数据库版本迁移使用 PostgreSQL transaction advisory lock；Outbox relay 使用 `FOR UPDATE SKIP LOCKED` 并发领取。这个拓扑只演示必要的一致性边界，不宣称具备 Redis/Kafka 高可用、自动扩缩容或跨地域容灾。详细决策见 `docs/adr/0007-jwt-and-multi-instance-runtime.md`。
+
+Agent 仍是提议中的下一层能力：中立 Planner/Tool/RunStore 契约将位于 `backend/internal/agent`，电商工具的权限和调度位于 Application 层，`ai-service` 只负责规划/生成而不持有业务库凭证。Agent Run/Step/Approval 以 PostgreSQL 为持久化真相，多实例 worker 使用 `FOR UPDATE SKIP LOCKED` 领取；A2UI 只负责渲染结果和审批卡片。边界与分阶段方案见 `docs/adr/0008-agent-copilot-runtime-boundary.md`，在代码、迁移和验证落地前不能描述成已实现。
+
+事件与异步边界当前由消息队列承担：订单状态变更（`ORDER_CREATED`、`ORDER_PAID`、`ORDER_CANCELLED`、`ORDER_SHIPPED`、`ORDER_FINISHED`、`ORDER_REFUND_REQUESTED`）被写入数据库后，通过事务性发件箱（Transactional Outbox）发布到 Kafka。所有事件进入默认物理 topic `redcart.events`，业务分类保留在 JSON 信封的 `event_topic` 中，`correlation_id` 作为分区 key。发布器位于集成适配层，领域层和应用层只依赖 `backend/internal/event` 定义的发布契约，不依赖 Kafka SDK。当前只实现生产侧；通知、分析等消费者仍是后续能力，不能把规划描述成已落地。可靠性边界见 `docs/adr/0006-message-queue-and-event-driven.md`。
 
 运行时性能分析当前支持可选的 Grafana Pyroscope Go push mode。接入点位于后端启动装配层，依赖环境变量启用，不向应用层或领域层泄漏供应商类型。
 

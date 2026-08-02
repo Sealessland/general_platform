@@ -85,6 +85,55 @@ func TestOutboxMarkFailedMovesToDeadLetter(t *testing.T) {
 	}
 }
 
+func TestOutboxRelayPublishesInsideTransaction(t *testing.T) {
+	repo := newPostgresRepo(t)
+	clearOutboxForTest(t, repo)
+	ctx := context.Background()
+	id, err := repo.Outbox.Append(ctx, event.Event{
+		Type:          event.TypeOrderPaid,
+		Topic:         event.TypeOrderPaid.Topic(),
+		CorrelationID: "outbox-relay-transaction",
+		Payload:       json.RawMessage(`{"order_id":99}`),
+		OccurredAt:    time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("append outbox: %v", err)
+	}
+
+	tx, err := repo.Outbox.BeginTx(ctx)
+	if err != nil {
+		t.Fatalf("begin relay transaction: %v", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+	pending, err := repo.Outbox.PollPendingInTx(ctx, tx, 10)
+	if err != nil {
+		t.Fatalf("poll in transaction: %v", err)
+	}
+	if _, ok := findOutboxEvent(pending, id); !ok {
+		t.Fatalf("expected event %d in relay batch, got %+v", id, pending)
+	}
+	if err := repo.Outbox.MarkPublishedInTx(ctx, tx, []int64{id}); err != nil {
+		t.Fatalf("mark published in transaction: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("commit relay transaction: %v", err)
+	}
+	committed = true
+
+	pending, err = repo.Outbox.PollPending(ctx, 10)
+	if err != nil {
+		t.Fatalf("poll after relay transaction: %v", err)
+	}
+	if _, ok := findOutboxEvent(pending, id); ok {
+		t.Fatalf("event %d remained pending after commit", id)
+	}
+}
+
 func clearOutboxForTest(t *testing.T, repo *Repository) {
 	t.Helper()
 	if _, err := repo.db.Exec(`DELETE FROM outbox_dead_letter`); err != nil {

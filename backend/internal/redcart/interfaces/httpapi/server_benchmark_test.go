@@ -13,6 +13,7 @@ import (
 	backendai "github.com/example/redcart-copilot/backend/internal/ai"
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 	postgresrepo "github.com/example/redcart-copilot/backend/internal/redcart/infrastructure/postgres"
+	"github.com/example/redcart-copilot/backend/internal/redcart/testsupport"
 )
 
 func BenchmarkHTTPPostgresOrderPreview(b *testing.B) {
@@ -143,7 +144,7 @@ func newPostgresTestHandlerWithBaseRepo(t testing.TB) (*postgresrepo.Repository,
 		t.Fatalf("new postgres repository: %v", err)
 	}
 	wrapped, redisCleanup := wrapPostgresRepoWithRedisForTest(t, repo)
-	service := application.NewService(wrapped, backendai.MockProvider{})
+	service := application.NewService(wrapped, backendai.MockProvider{}, testsupport.NewTokenManager())
 	return repo, NewServer(service).Handler(), func() {
 		redisCleanup()
 		if err := repo.Close(); err != nil {

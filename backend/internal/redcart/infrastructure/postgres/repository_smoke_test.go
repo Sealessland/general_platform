@@ -2,11 +2,43 @@ package postgres
 
 import (
 	"fmt"
-	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 	"os"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 )
+
+func TestConcurrentRepositoryStartup(t *testing.T) {
+	dsn := os.Getenv("POSTGRES_DSN")
+	if dsn == "" || os.Getenv("RUN_POSTGRES_INTEGRATION") != "1" {
+		t.Skip("POSTGRES_DSN not set")
+	}
+	start := make(chan struct{})
+	errors := make(chan error, 2)
+	var workers sync.WaitGroup
+	for range 2 {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			<-start
+			repo, err := NewRepository(dsn)
+			if err == nil {
+				err = repo.Close()
+			}
+			errors <- err
+		}()
+	}
+	close(start)
+	workers.Wait()
+	close(errors)
+	for err := range errors {
+		if err != nil {
+			t.Fatalf("concurrent repository startup: %v", err)
+		}
+	}
+}
 
 func TestRepositoryAgainstPostgres(t *testing.T) {
 	dsn := os.Getenv("POSTGRES_DSN")
@@ -38,13 +70,6 @@ func TestRepositoryAgainstPostgres(t *testing.T) {
 
 	if fetched, ok := repo.FindUserByPhone(user.Phone); !ok || fetched.ID != user.ID {
 		t.Fatal("expected user by phone")
-	}
-
-	if err := repo.SaveSession("pg-token", "pg-refresh", user.ID); err != nil {
-		t.Fatalf("save session: %v", err)
-	}
-	if fetched, _, ok := repo.GetUserByToken("pg-token"); !ok || fetched.ID != user.ID {
-		t.Fatal("expected user by token")
 	}
 
 	note, ok := repo.GetNote(1)

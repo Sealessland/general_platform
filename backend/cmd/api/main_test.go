@@ -14,14 +14,22 @@ func TestEnvOrDefault(t *testing.T) {
 	}
 }
 
+func TestSplitCSVRemovesEmptyKafkaBrokers(t *testing.T) {
+	got := splitCSV(" kafka-1:9092, ,kafka-2:9092 ")
+	if len(got) != 2 || got[0] != "kafka-1:9092" || got[1] != "kafka-2:9092" {
+		t.Fatalf("split brokers = %#v", got)
+	}
+}
+
+// Keep the historical test entrypoint because repository initialization is now
+// one explicit part of initDependencies rather than a separate hidden factory.
 func TestInitRepositoryRequiresPostgresDSN(t *testing.T) {
 	t.Setenv("POSTGRES_DSN", "")
-	repo, cleanup, err := initRepository(nil)
+	dependencies, err := initDependencies(nil)
 	if err == nil {
 		t.Fatal("expected missing POSTGRES_DSN error")
 	}
-	if repo != nil {
-		t.Fatalf("expected nil repository, got %T", repo)
+	if dependencies != nil {
+		t.Fatalf("expected nil dependencies, got %T", dependencies)
 	}
-	cleanup()
 }

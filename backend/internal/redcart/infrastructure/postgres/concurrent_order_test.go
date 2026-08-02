@@ -6,6 +6,7 @@ import (
 	backendai "github.com/example/redcart-copilot/backend/internal/ai"
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
+	"github.com/example/redcart-copilot/backend/internal/redcart/testsupport"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -24,7 +25,7 @@ func TestConcurrentCreateOrderReservesStockAtomically(t *testing.T) {
 		t.Fatalf("new postgres repository: %v", err)
 	}
 	defer repo.Close()
-	service := application.NewService(repo, backendai.MockProvider{})
+	service := application.NewService(repo, backendai.MockProvider{}, testsupport.NewTokenManager())
 
 	now := time.Now().UTC()
 	product, err := repo.SaveProduct(domain.Product{

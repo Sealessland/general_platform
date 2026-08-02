@@ -132,6 +132,17 @@ func (r *CatalogCacheRepository) SaveOrderWithInventoryLocks(order domain.Order,
 	return saved, nil
 }
 
+func (r *CatalogCacheRepository) UpdateOrderStatus(orderID int64, fromStatus, toStatus string, mutator func(*domain.Order) error, sideEffect func(application.OrderTx, domain.Order) error) (domain.Order, error) {
+	saved, err := r.Repository.UpdateOrderStatus(orderID, fromStatus, toStatus, mutator, sideEffect)
+	if err != nil {
+		return domain.Order{}, err
+	}
+	// Transaction side effects use the PostgreSQL OrderTx directly, so cache
+	// invalidation must happen here after commit rather than inside the tx.
+	r.invalidateOrderItems(saved.Items)
+	return saved, nil
+}
+
 func (r *CatalogCacheRepository) ListSKUsByProduct(productID int64) []domain.SKU {
 	if skus, ok := r.loadSKUListCache(productID); ok {
 		return skus

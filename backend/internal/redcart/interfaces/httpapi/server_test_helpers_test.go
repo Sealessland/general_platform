@@ -15,6 +15,7 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 	postgresrepo "github.com/example/redcart-copilot/backend/internal/redcart/infrastructure/postgres"
 	redisrepo "github.com/example/redcart-copilot/backend/internal/redcart/infrastructure/redis"
+	"github.com/example/redcart-copilot/backend/internal/redcart/testsupport"
 )
 
 var testUniqueCounter atomic.Int64
@@ -33,7 +34,7 @@ func newPostgresTestHandler(t testing.TB) (http.Handler, func()) {
 		t.Fatalf("new postgres repository: %v", err)
 	}
 	wrapped, redisCleanup := wrapPostgresRepoWithRedisForTest(t, repo)
-	service := application.NewService(wrapped, backendai.MockProvider{})
+	service := application.NewService(wrapped, backendai.MockProvider{}, testsupport.NewTokenManager())
 	return NewServer(service).Handler(), func() {
 		redisCleanup()
 		if err := repo.Close(); err != nil {
@@ -53,17 +54,12 @@ func wrapPostgresRepoWithRedisForTest(t testing.TB, base application.Repository)
 	if err != nil {
 		t.Fatalf("new redis client: %v", err)
 	}
-	accessTTL, err := redisrepo.AccessTokenTTLFromEnv(os.Getenv("REDIS_ACCESS_TOKEN_TTL"))
+	catalogTTL, err := redisrepo.CatalogTTLFromEnv(os.Getenv("REDIS_CATALOG_TTL"))
 	if err != nil {
 		_ = client.Close()
-		t.Fatalf("parse redis access token ttl: %v", err)
+		t.Fatalf("parse redis catalog ttl: %v", err)
 	}
-	refreshTTL, err := redisrepo.RefreshTokenTTLFromEnv(os.Getenv("REDIS_REFRESH_TOKEN_TTL"))
-	if err != nil {
-		_ = client.Close()
-		t.Fatalf("parse redis refresh token ttl: %v", err)
-	}
-	return redisrepo.NewSessionRepository(base, client, accessTTL, refreshTTL), func() {
+	return redisrepo.NewCatalogCacheRepository(base, client, catalogTTL), func() {
 		if err := client.Close(); err != nil {
 			t.Fatalf("close redis client: %v", err)
 		}

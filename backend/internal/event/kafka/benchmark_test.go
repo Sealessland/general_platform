@@ -1,28 +1,22 @@
-package rabbitmq
+package kafka
 
 import (
 	"context"
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/example/redcart-copilot/backend/internal/event"
 )
 
-// skipIfNoRabbitMQ skips the benchmark when RABBITMQ_ADDR is not set.
-func skipIfNoRabbitMQ(b *testing.B) string {
-	b.Helper()
-	addr := os.Getenv("RABBITMQ_ADDR")
-	if addr == "" {
-		b.Skip("RABBITMQ_ADDR not set")
+func BenchmarkKafkaPublish(b *testing.B) {
+	brokers := strings.Split(os.Getenv("KAFKA_BROKERS"), ",")
+	if len(brokers) == 1 && strings.TrimSpace(brokers[0]) == "" {
+		b.Skip("KAFKA_BROKERS is not set")
 	}
-	return addr
-}
-
-func BenchmarkRabbitMQPublish(b *testing.B) {
-	addr := skipIfNoRabbitMQ(b)
-	publisher, err := NewPublisher(addr, os.Getenv("RABBITMQ_EXCHANGE"))
+	publisher, err := NewPublisher(brokers, envOr("KAFKA_TOPIC", "redcart.events.bench"))
 	if err != nil {
 		b.Fatalf("create publisher: %v", err)
 	}
@@ -35,7 +29,6 @@ func BenchmarkRabbitMQPublish(b *testing.B) {
 		Payload:    json.RawMessage(`{"order_id":42}`),
 		OccurredAt: time.Now().UTC(),
 	}
-
 	ctx := context.Background()
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -44,4 +37,11 @@ func BenchmarkRabbitMQPublish(b *testing.B) {
 			b.Fatalf("publish: %v", err)
 		}
 	}
+}
+
+func envOr(key, fallback string) string {
+	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+		return value
+	}
+	return fallback
 }

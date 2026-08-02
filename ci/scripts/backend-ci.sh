@@ -42,9 +42,18 @@ if [[ "${RUN_POSTGRES_INTEGRATION:-0}" == "1" ]]; then
   awk '
 /^BenchmarkHTTPPostgres/ {
   bench=$1
-  ns=$3
-  qps=1000000000/ns
-  printf "%s qps=%.2f ns_per_op=%s\n", bench, qps, ns
+  sub(/-[0-9]+$/, "", bench)
+  if ($3 ~ /^[0-9.]+$/ && $4 == "ns\/op") {
+    ns=$3
+    printf "%s qps=%.2f ns_per_op=%s\n", bench, 1000000000/ns, ns
+    bench=""
+  }
+  next
+}
+bench != "" && $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9.]+$/ && $3 == "ns/op" {
+  ns=$2
+  printf "%s qps=%.2f ns_per_op=%s\n", bench, 1000000000/ns, ns
+  bench=""
 }
 ' "$ARTIFACT_DIR/backend-postgres-http-benchmark.txt" | tee "$ARTIFACT_DIR/backend-postgres-http-qps.txt"
 else
@@ -52,25 +61,25 @@ else
   printf 'postgres http qps skipped: RUN_POSTGRES_INTEGRATION is not 1\n' | tee "$ARTIFACT_DIR/backend-postgres-http-qps.txt"
 fi
 
-if [[ "${RUN_POSTGRES_INTEGRATION:-0}" == "1" && -n "${RABBITMQ_ADDR:-}" ]]; then
+if [[ "${RUN_POSTGRES_INTEGRATION:-0}" == "1" && -n "${KAFKA_BROKERS:-}" ]]; then
   POSTGRES_DSN="${POSTGRES_DSN:-postgres://postgres:postgres@127.0.0.1:5432/redcart_test?sslmode=disable}" \
     RUN_POSTGRES_INTEGRATION=1 \
-    RABBITMQ_ADDR="${RABBITMQ_ADDR}" \
-    RABBITMQ_EXCHANGE="${RABBITMQ_EXCHANGE:-redcart.events.bench}" \
-    go test ./internal/event/rabbitmq ./internal/event/outbox -run '^$' -bench 'BenchmarkRabbitMQPublish|BenchmarkPostgresRabbitMQOutboxRelay' -benchmem -count=1 -benchtime="${RABBITMQ_BENCHTIME:-1s}" \
-    | tee "$ARTIFACT_DIR/backend-rabbitmq-benchmark.txt"
+    KAFKA_BROKERS="${KAFKA_BROKERS}" \
+    KAFKA_TOPIC="${KAFKA_TOPIC:-redcart.events.bench}" \
+    go test ./internal/event/kafka ./internal/event/outbox -run '^$' -bench 'BenchmarkKafkaPublish|BenchmarkPostgresKafkaOutboxRelay' -benchmem -count=1 -benchtime="${KAFKA_BENCHTIME:-1s}" \
+    | tee "$ARTIFACT_DIR/backend-kafka-benchmark.txt"
 
   awk '
-/^Benchmark(RabbitMQ|PostgresRabbitMQ)/ {
+/^Benchmark(Kafka|PostgresKafka)/ {
   bench=$1
   ns=$3
   qps=1000000000/ns
   printf "%s qps=%.2f ns_per_op=%s\n", bench, qps, ns
 }
-' "$ARTIFACT_DIR/backend-rabbitmq-benchmark.txt" | tee "$ARTIFACT_DIR/backend-rabbitmq-qps.txt"
+' "$ARTIFACT_DIR/backend-kafka-benchmark.txt" | tee "$ARTIFACT_DIR/backend-kafka-qps.txt"
 else
-  printf 'rabbitmq benchmark skipped: RUN_POSTGRES_INTEGRATION is not 1 or RABBITMQ_ADDR is empty\n' | tee "$ARTIFACT_DIR/backend-rabbitmq-benchmark.txt"
-  printf 'rabbitmq qps skipped: RUN_POSTGRES_INTEGRATION is not 1 or RABBITMQ_ADDR is empty\n' | tee "$ARTIFACT_DIR/backend-rabbitmq-qps.txt"
+  printf 'kafka benchmark skipped: RUN_POSTGRES_INTEGRATION is not 1 or KAFKA_BROKERS is empty\n' | tee "$ARTIFACT_DIR/backend-kafka-benchmark.txt"
+  printf 'kafka qps skipped: RUN_POSTGRES_INTEGRATION is not 1 or KAFKA_BROKERS is empty\n' | tee "$ARTIFACT_DIR/backend-kafka-qps.txt"
 fi
 
 RUN_POSTGRES_INTEGRATION="${RUN_POSTGRES_INTEGRATION:-0}" bash "$ROOT_DIR/ci/scripts/backend-test-metrics.sh"

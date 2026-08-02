@@ -43,7 +43,7 @@ func TestPostgresApplicationAuthSessionAndCatalogRegression(t *testing.T) {
 		t.Fatalf("expected wrong password unauthorized, got %v", err)
 	}
 
-	actor, err := service.Authenticate(session.Token)
+	actor, err := service.Authenticate(ctx, session.Token)
 	if err != nil {
 		t.Fatalf("authenticate: %v", err)
 	}
@@ -52,7 +52,7 @@ func TestPostgresApplicationAuthSessionAndCatalogRegression(t *testing.T) {
 	}
 
 	// Token type isolation: refresh token must not work as access token.
-	if _, err := service.Authenticate(session.RefreshToken); !isAppError(err, application.ErrorUnauthorized) {
+	if _, err := service.Authenticate(ctx, session.RefreshToken); !isAppError(err, application.ErrorUnauthorized) {
 		t.Fatalf("expected refresh token rejected for Authenticate, got %v", err)
 	}
 	// Token type isolation: access token must not work as refresh token.
@@ -68,10 +68,10 @@ func TestPostgresApplicationAuthSessionAndCatalogRegression(t *testing.T) {
 		t.Fatal("expected refresh to rotate both tokens")
 	}
 	// Token type isolation: new refresh token must not work as access token.
-	if _, err := service.Authenticate(refreshed.RefreshToken); !isAppError(err, application.ErrorUnauthorized) {
+	if _, err := service.Authenticate(ctx, refreshed.RefreshToken); !isAppError(err, application.ErrorUnauthorized) {
 		t.Fatalf("expected new refresh token rejected for Authenticate, got %v", err)
 	}
-	if _, err := service.Authenticate(session.Token); !isAppError(err, application.ErrorUnauthorized) {
+	if _, err := service.Authenticate(ctx, session.Token); !isAppError(err, application.ErrorUnauthorized) {
 		t.Fatalf("expected old token unauthorized, got %v", err)
 	}
 	if err := service.Logout(ctx, refreshed.Token); err != nil {

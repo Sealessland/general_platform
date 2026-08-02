@@ -23,6 +23,11 @@
 - 排查故障：`workflows/debug.md`
 - 交付前验证：`workflows/validate.md`
 
+## 初学者教程
+
+- 本地分布式运行与 JWT 跨实例验证：`tutorials/local-distributed-runtime.md`
+- GitHub Actions CI/CD 与 Runner 性能数据：`tutorials/github-actions-ci-cd.md`
+
 ## 风险与测试记录
 
 - 测试策略：`testing/test-strategy.md`
@@ -39,6 +44,8 @@
 - AI Provider 抽象：`adr/0004-ai-provider-abstraction.md`
 - 服务边界与 RPC 使用场景：`adr/0005-service-boundaries-and-rpc.md`
 - 消息队列与事件驱动边界：`adr/0006-message-queue-and-event-driven.md`
+- JWT 与多实例运行边界：`adr/0007-jwt-and-multi-instance-runtime.md`
+- Agent Copilot 运行边界：`adr/0008-agent-copilot-runtime-boundary.md`
 
 ## 关键行为
 

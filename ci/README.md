@@ -40,6 +40,10 @@
 - 后端 CI 需要同时启动当前运行时依赖 PostgreSQL 与 Redis；两者都是 MVP 运行前置服务
 - Dependabot 只配置真实存在的依赖面：Go module、npm、Dockerfile 和 GitHub Actions
 - Pyroscope profile 查询不进入 GitHub Actions 门禁；CI 只覆盖 profiling 配置单测和常规后端门禁，profile 数据保留为本地人工/界面复核
+- `benchmark.yml` 手动运行只写 Job Summary 并上传 artifact；只有 `main` push 会回写 README 性能表，避免功能分支污染基线
+- `release.yml` 在 `vX.Y.Z` tag 或手动触发时发布三个 GHCR 镜像；当前没有绑定生产环境，发布镜像就是 CD 边界
+
+完整操作教程见 `docs/tutorials/github-actions-ci-cd.md`。
 
 ## QPS 输出
 
@@ -47,12 +51,12 @@
 
 - `backend-postgres-http-benchmark.txt`
 - `backend-postgres-http-qps.txt`
-- `backend-rabbitmq-benchmark.txt`
-- `backend-rabbitmq-qps.txt`
+- `backend-kafka-benchmark.txt`
+- `backend-kafka-qps.txt`
 
 `backend-postgres-http-benchmark.txt` 和 `backend-postgres-http-qps.txt` 只有在 `RUN_POSTGRES_INTEGRATION=1` 时执行，使用真实 PostgreSQL 仓储，覆盖 Gin -> 应用层 -> GORM/PostgreSQL 的读写路径。它们是评估 PostgreSQL/GORM 迁移后的运行时 QPS 基线。
 
-`backend-rabbitmq-benchmark.txt` 和 `backend-rabbitmq-qps.txt` 只有在同时提供 `RUN_POSTGRES_INTEGRATION=1` 与 `RABBITMQ_ADDR` 时执行，覆盖真实 RabbitMQ publish 与 PostgreSQL outbox -> RabbitMQ relay 路径。
+`backend-kafka-benchmark.txt` 和 `backend-kafka-qps.txt` 只有在同时提供 `RUN_POSTGRES_INTEGRATION=1` 与 `KAFKA_BROKERS` 时执行，覆盖真实 Kafka publish 与 PostgreSQL outbox -> Kafka relay 路径。
 
 所有 QPS 文件都会把 `ns/op` 换算成 QPS，便于在 GitHub Actions 或本地 CI 产物中直接查看。内存仓储、空 publisher 或模拟延迟 benchmark 不允许进入 CI artifact 或 README 性能表。
 
@@ -76,6 +80,6 @@
 - `MIN_DOMAIN_COVERAGE=95.0`
 - `MIN_BACKEND_TEST_COUNT=55`
 - `MIN_POSTGRES_BENCHMARK_COUNT=2`
-- `MIN_RABBITMQ_BENCHMARK_COUNT=2`
+- `MIN_KAFKA_BENCHMARK_COUNT=2`
 
 阈值按当前 MVP 的可稳定通过水平设置，目标是阻止测试规模和关键包覆盖率回退；后续应随功能稳定逐步提高阈值。

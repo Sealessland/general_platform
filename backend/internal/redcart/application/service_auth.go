@@ -2,8 +2,7 @@ package application
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -48,7 +47,7 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (*AuthSessi
 			return nil, err
 		}
 	}
-	return s.issueSession(user)
+	return s.issueSession(ctx, user)
 }
 
 func (s *Service) Login(ctx context.Context, input LoginInput) (*AuthSession, error) {
@@ -60,72 +59,61 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (*AuthSession, er
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(input.Password)); err != nil {
 		return nil, newError(ErrorUnauthorized, "invalid phone or password")
 	}
-	return s.issueSession(user)
+	return s.issueSession(ctx, user)
 }
 
-func (s *Service) Logout(ctx context.Context, token string) error {
-	_ = ctx
-	s.repo.DeleteSession(strings.TrimPrefix(strings.TrimSpace(token), "Bearer "))
+func (s *Service) Logout(ctx context.Context, rawAccessToken string) error {
+	credential := strings.TrimPrefix(strings.TrimSpace(rawAccessToken), "Bearer ")
+	if err := s.tokens.Revoke(ctx, credential); err != nil {
+		return mapTokenError(err, "revoke access token")
+	}
 	return nil
 }
 
 func (s *Service) RefreshSession(ctx context.Context, refreshToken string) (*AuthSession, error) {
-	_ = ctx
-	user, tokenType, ok := s.repo.GetUserByToken(refreshToken)
+	pair, principal, err := s.tokens.Rotate(ctx, refreshToken)
+	if err != nil {
+		return nil, mapTokenError(err, "rotate refresh token")
+	}
+	user, ok := s.repo.GetUser(principal.UserID)
 	if !ok {
 		return nil, newError(ErrorUnauthorized, "invalid refresh token")
 	}
-	if tokenType != TokenTypeRefresh {
-		return nil, newError(ErrorUnauthorized, "not a refresh token")
-	}
-	s.repo.DeleteSession(refreshToken)
-	return s.issueSession(user)
+	return s.authSession(pair, user), nil
 }
 
 func (s *Service) Me(ctx context.Context, token string) (*UserView, error) {
-	_ = ctx
-	user, tokenType, ok := s.repo.GetUserByToken(token)
-	if !ok || tokenType != TokenTypeAccess {
+	principal, err := s.tokens.Authenticate(ctx, token)
+	if err != nil {
+		return nil, mapTokenError(err, "authenticate access token")
+	}
+	user, ok := s.repo.GetUser(principal.UserID)
+	if !ok {
 		return nil, newError(ErrorUnauthorized, "invalid token")
 	}
 	view := s.toUserView(user)
 	return &view, nil
 }
 
-func (s *Service) Authenticate(token string) (*Actor, error) {
-	user, tokenType, ok := s.repo.GetUserByToken(token)
-	if !ok || tokenType != TokenTypeAccess {
-		return nil, newError(ErrorUnauthorized, "missing or invalid token")
+func (s *Service) Authenticate(ctx context.Context, token string) (*Actor, error) {
+	principal, err := s.tokens.Authenticate(ctx, token)
+	if err != nil {
+		return nil, mapTokenError(err, "authenticate access token")
 	}
-	actor := &Actor{
-		UserID:   user.ID,
-		Role:     user.Role,
-		Nickname: user.Nickname,
-	}
-	if merchant, ok := s.repo.GetMerchantByUserID(user.ID); ok {
-		actor.MerchantID = merchant.ID
-	}
-	return actor, nil
+	return &Actor{
+		UserID:     principal.UserID,
+		Role:       principal.Role,
+		Nickname:   principal.Nickname,
+		MerchantID: principal.MerchantID,
+	}, nil
 }
 
-func (s *Service) issueSession(user domain.User) (*AuthSession, error) {
-	accessToken, err := generateOpaqueToken()
+func (s *Service) issueSession(ctx context.Context, user domain.User) (*AuthSession, error) {
+	pair, err := s.tokens.Issue(ctx, s.tokenPrincipal(user))
 	if err != nil {
-		return nil, fmt.Errorf("generate access token: %w", err)
+		return nil, fmt.Errorf("issue JWT session: %w", err)
 	}
-	refreshToken, err := generateOpaqueToken()
-	if err != nil {
-		return nil, fmt.Errorf("generate refresh token: %w", err)
-	}
-	if err := s.repo.SaveSession(accessToken, refreshToken, user.ID); err != nil {
-		return nil, fmt.Errorf("save session: %w", err)
-	}
-	view := s.toUserView(user)
-	return &AuthSession{
-		Token:        accessToken,
-		RefreshToken: refreshToken,
-		User:         view,
-	}, nil
+	return s.authSession(pair, user), nil
 }
 
 func hashPassword(password string) (string, error) {
@@ -136,10 +124,25 @@ func hashPassword(password string) (string, error) {
 	return string(hash), nil
 }
 
-func generateOpaqueToken() (string, error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
+func (s *Service) tokenPrincipal(user domain.User) TokenPrincipal {
+	principal := TokenPrincipal{UserID: user.ID, Role: user.Role, Nickname: user.Nickname}
+	if merchant, ok := s.repo.GetMerchantByUserID(user.ID); ok {
+		principal.MerchantID = merchant.ID
 	}
-	return hex.EncodeToString(b), nil
+	return principal
+}
+
+func (s *Service) authSession(pair TokenPair, user domain.User) *AuthSession {
+	return &AuthSession{
+		Token:        pair.AccessToken,
+		RefreshToken: pair.RefreshToken,
+		User:         s.toUserView(user),
+	}
+}
+
+func mapTokenError(err error, operation string) error {
+	if errors.Is(err, ErrInvalidToken) {
+		return newError(ErrorUnauthorized, "missing or invalid token")
+	}
+	return fmt.Errorf("%s: %w", operation, err)
 }

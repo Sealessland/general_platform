@@ -13,6 +13,7 @@ import (
 	application "github.com/example/redcart-copilot/backend/internal/redcart/application"
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 	postgresrepo "github.com/example/redcart-copilot/backend/internal/redcart/infrastructure/postgres"
+	"github.com/example/redcart-copilot/backend/internal/redcart/testsupport"
 )
 
 func TestPostgresApplicationAuthCartCheckoutAndOrderLifecycle(t *testing.T) {
@@ -221,7 +222,7 @@ func newPostgresApplicationService(t *testing.T) (*postgresrepo.Repository, *app
 		t.Fatalf("new postgres repository: %v", err)
 	}
 	t.Cleanup(func() { _ = repo.Close() })
-	return repo, application.NewService(repo, backendai.MockProvider{})
+	return repo, application.NewService(repo, backendai.MockProvider{}, testsupport.NewTokenManager())
 }
 
 func createPostgresApplicationProductAndSKU(t *testing.T, repo *postgresrepo.Repository, stock int) (int64, int64) {

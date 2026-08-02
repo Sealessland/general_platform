@@ -5,7 +5,7 @@
 ## 约定
 
 - 基础地址：`http://127.0.0.1:18080`
-- 认证方式：`Authorization: Bearer <token>`
+- 认证方式：`Authorization: Bearer <Access JWT>`；Refresh JWT 只允许提交给刷新接口
 - `公开` 表示不需要登录。
 - `可选登录` 表示未登录可访问，登录后会记录行为或返回登录相关上下文。
 - 写操作必须使用表中声明的方法；状态变更接口不允许用 `GET` 触发。
@@ -16,8 +16,10 @@
 |---|---|---|---|---|---|
 | `GET` | `/healthz` | 公开 | 无 | `200` | 健康检查 |
 | `POST` | `/api/auth/register` | 公开 | `RegisterRequest` | `201` | 注册消费者或商家演示账号，并返回登录态 |
-| `POST` | `/api/auth/login` | 公开 | `LoginRequest` | `200` | 登录并获取 Bearer Token |
-| `GET` | `/api/auth/me` | 登录用户 | Bearer Token | `200` | 获取当前登录用户信息 |
+| `POST` | `/api/auth/login` | 公开 | `LoginRequest` | `200` | 登录并获取 Access JWT 与一次性 Refresh JWT |
+| `POST` | `/api/auth/refresh` | 公开 | `RefreshRequest` | `200` | 原子轮换两个 JWT；旧 Refresh 和关联 Access 立即失效 |
+| `POST` | `/api/auth/logout` | 登录用户 | Access JWT | `200` | 跨实例撤销当前 Access 与 Refresh 会话 |
+| `GET` | `/api/auth/me` | 登录用户 | Access JWT | `200` | 获取当前登录用户信息 |
 
 ## 内容与商品
 

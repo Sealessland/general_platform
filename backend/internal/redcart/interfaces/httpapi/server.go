@@ -3,6 +3,7 @@ package httpapi
 import (
 	"net/http"
 
+	"github.com/example/redcart-copilot/backend/internal/ratelimit"
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 	"github.com/gin-gonic/gin"
@@ -12,13 +13,23 @@ import (
 type Server struct {
 	service *application.Service
 	router  *gin.Engine
+	limiter ratelimit.Limiter
 }
 
-func NewServer(service *application.Service) *Server {
+type ServerOption func(*Server)
+
+func WithRateLimiter(limiter ratelimit.Limiter) ServerOption {
+	return func(server *Server) { server.limiter = limiter }
+}
+
+func NewServer(service *application.Service, options ...ServerOption) *Server {
 	gin.SetMode(gin.ReleaseMode)
 	s := &Server{
 		service: service,
 		router:  gin.New(),
+	}
+	for _, option := range options {
+		option(s)
 	}
 	s.registerRoutes()
 	return s
@@ -31,6 +42,9 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) registerRoutes() {
 	s.router.HandleMethodNotAllowed = true
 	s.router.Use(gin.Logger(), gin.Recovery(), prometheusMiddleware(), corsMiddleware())
+	if s.limiter != nil {
+		s.router.Use(rateLimitMiddleware(s.limiter))
+	}
 	s.router.NoMethod(func(c *gin.Context) {
 		writeMethodNotAllowed(c.Writer)
 	})

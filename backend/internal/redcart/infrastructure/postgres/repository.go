@@ -6,13 +6,12 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"sync"
-	"time"
 )
 
 type Repository struct {
@@ -20,9 +19,6 @@ type Repository struct {
 	gormDB *gorm.DB
 	sqlDB  *sql.DB
 	Outbox *outboxStore
-
-	sessionMu sync.RWMutex
-	sessions  map[string]sessionEntry
 }
 
 type gormSQL struct {
@@ -35,11 +31,6 @@ type gormTx struct {
 
 type gormResult struct {
 	rowsAffected int64
-}
-
-type sessionEntry struct {
-	userID    int64
-	tokenType application.TokenType
 }
 
 type dbQuerier interface {
@@ -122,11 +113,10 @@ func NewRepository(dsn string) (*Repository, error) {
 	}
 
 	repo := &Repository{
-		db:       &gormSQL{db: sqlDB},
-		gormDB:   db,
-		sqlDB:    sqlDB,
-		Outbox:   newOutboxStore(&gormSQL{db: sqlDB}),
-		sessions: make(map[string]sessionEntry),
+		db:     &gormSQL{db: sqlDB},
+		gormDB: db,
+		sqlDB:  sqlDB,
+		Outbox: newOutboxStore(&gormSQL{db: sqlDB}),
 	}
 	if err := repo.migrate(ctx); err != nil {
 		_ = sqlDB.Close()
@@ -193,9 +183,9 @@ func nullableJSON(payload []byte) any {
 }
 
 const (
-	defaultMaxOpenConns     = 10
-	defaultMaxIdleConns     = 10
-	defaultConnMaxLifetime  = 30 * time.Minute
+	defaultMaxOpenConns    = 10
+	defaultMaxIdleConns    = 10
+	defaultConnMaxLifetime = 30 * time.Minute
 )
 
 func poolMaxOpenConns() int {

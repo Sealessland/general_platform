@@ -24,7 +24,8 @@ jobs:
           --health-cmd "pg_isready -h 127.0.0.1 -U postgres -d redcart_test"
           --health-interval 10s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 20
+          --health-start-period 10s
 
       redis:
         image: redis:7
@@ -36,15 +37,25 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
-      rabbitmq:
-        image: rabbitmq:4-alpine
+      kafka:
+        image: apache/kafka:4.3.1
         env:
-          RABBITMQ_DEFAULT_USER: postgres
-          RABBITMQ_DEFAULT_PASS: postgres
+          CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+          KAFKA_NODE_ID: 1
+          KAFKA_PROCESS_ROLES: broker,controller
+          KAFKA_LISTENERS: PLAINTEXT://:19092,CONTROLLER://:19093
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://127.0.0.1:19092
+          KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+          KAFKA_CONTROLLER_QUORUM_VOTERS: 1@127.0.0.1:19093
+          KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+          KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+          KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+          KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
         ports:
-          - 5672:5672
+          - 19092:19092
         options: >-
-          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-cmd "/opt/kafka/bin/kafka-topics.sh --bootstrap-server 127.0.0.1:19092 --list"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -61,13 +72,14 @@ jobs:
         env:
           POSTGRES_DSN: postgres://postgres:postgres@127.0.0.1:5432/redcart_test?sslmode=disable
           REDIS_ADDR: 127.0.0.1:6379
-          RABBITMQ_ADDR: amqp://postgres:postgres@127.0.0.1:5672/
-          RABBITMQ_EXCHANGE: redcart.events.bench
+          JWT_SECRET: this-value-is-public-and-used-only-by-ci
+          KAFKA_BROKERS: 127.0.0.1:19092
+          KAFKA_TOPIC: redcart.events.bench
           RUN_POSTGRES_INTEGRATION: "1"
         run: |
-          go test ./internal/redcart/interfaces/httpapi ./internal/event/outbox ./internal/event/rabbitmq \
+          go test ./internal/redcart/interfaces/httpapi ./internal/event/outbox ./internal/event/kafka \
             -run '^$' \
-            -bench 'BenchmarkHTTPPostgresOrderPreview|BenchmarkHTTPPostgresCreateOrder|BenchmarkHTTPPostgresCreateOrderWithOutbox|BenchmarkPostgresRabbitMQOutboxRelay|BenchmarkRabbitMQPublish' \
+            -bench 'BenchmarkHTTPPostgresOrderPreview|BenchmarkHTTPPostgresCreateOrder|BenchmarkHTTPPostgresCreateOrderWithOutbox|BenchmarkPostgresKafkaOutboxRelay|BenchmarkKafkaPublish' \
             -benchtime=1s \
             -benchmem \
             -count=1 \
@@ -96,7 +108,21 @@ jobs:
       - name: Update README with benchmark results
         run: python3 ci/scripts/update-benchmark-readme.py < backend/benchmark.txt
 
+      - name: Publish benchmark summary
+        run: |
+          sed -n '/<!-- BENCHMARK_RESULTS_START -->/,/<!-- BENCHMARK_RESULTS_END -->/p' README.md \
+            | sed '1d;$d' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.run_id }}
+          path: |
+            backend/benchmark.txt
+            README.md
+
       - name: Commit benchmark results
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "docs: update benchmark results [skip ci]"

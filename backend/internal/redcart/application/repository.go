@@ -9,15 +9,6 @@ import (
 
 var ErrInsufficientStock = errors.New("stock is insufficient")
 
-// TokenType distinguishes access tokens from refresh tokens so the service
-// layer can reject refresh tokens used for API access and vice versa.
-type TokenType string
-
-const (
-	TokenTypeAccess  TokenType = "access"
-	TokenTypeRefresh TokenType = "refresh"
-)
-
 // OrderTx exposes repository operations that can be performed inside the
 // transaction scoped to an order status transition. It is passed to the
 // sideEffect callback of UpdateOrderStatus so that inventory changes and
@@ -35,9 +26,6 @@ type Repository interface {
 	CreateUser(user domain.User) (domain.User, error)
 	FindUserByPhone(phone string) (domain.User, bool)
 	GetUser(id int64) (domain.User, bool)
-	SaveSession(accessToken, refreshToken string, userID int64) error
-	GetUserByToken(token string) (domain.User, TokenType, bool)
-	DeleteSession(token string)
 	CreateMerchant(merchant domain.Merchant) (domain.Merchant, error)
 	GetMerchant(id int64) (domain.Merchant, bool)
 	GetMerchantByUserID(userID int64) (domain.Merchant, bool)
@@ -47,6 +35,7 @@ type Repository interface {
 	UpdateNote(note domain.Note) error
 
 	ListProducts(limit, offset int) []domain.Product
+	ListProductsByMerchant(merchantID int64, limit, offset int) []domain.Product
 	GetProduct(id int64) (domain.Product, bool)
 	SaveProduct(product domain.Product) (domain.Product, error)
 

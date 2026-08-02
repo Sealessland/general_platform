@@ -20,7 +20,7 @@ MIN_AI_COVERAGE="${MIN_AI_COVERAGE:-95.0}"
 MIN_DOMAIN_COVERAGE="${MIN_DOMAIN_COVERAGE:-95.0}"
 MIN_BACKEND_TEST_COUNT="${MIN_BACKEND_TEST_COUNT:-55}"
 MIN_POSTGRES_BENCHMARK_COUNT="${MIN_POSTGRES_BENCHMARK_COUNT:-2}"
-MIN_RABBITMQ_BENCHMARK_COUNT="${MIN_RABBITMQ_BENCHMARK_COUNT:-2}"
+MIN_KAFKA_BENCHMARK_COUNT="${MIN_KAFKA_BENCHMARK_COUNT:-2}"
 
 if [[ "${RUN_POSTGRES_INTEGRATION:-0}" == "1" ]]; then
   MIN_POSTGRES_REPOSITORY_COVERAGE="${MIN_POSTGRES_REPOSITORY_COVERAGE:-75.0}"
@@ -86,7 +86,7 @@ domain_coverage="$(coverage_for_package "github.com/example/redcart-copilot/back
 
 test_count="$(go test ./... -list '^Test' | tee "$TEST_LIST" | awk '/^Test/ {count++} END {print count + 0}')"
 postgres_benchmark_count="$(awk '/^BenchmarkHTTPPostgres/ {count++} END {print count + 0}' "$ARTIFACT_DIR/backend-postgres-http-benchmark.txt" 2>/dev/null || printf '0')"
-rabbitmq_benchmark_count="$(awk '/^Benchmark(RabbitMQ|PostgresRabbitMQ)/ {count++} END {print count + 0}' "$ARTIFACT_DIR/backend-rabbitmq-benchmark.txt" 2>/dev/null || printf '0')"
+kafka_benchmark_count="$(awk '/^Benchmark(Kafka|PostgresKafka)/ {count++} END {print count + 0}' "$ARTIFACT_DIR/backend-kafka-benchmark.txt" 2>/dev/null || printf '0')"
 
 require_number_at_least "total coverage" "$total_coverage" "$MIN_TOTAL_COVERAGE"
 require_number_at_least "application package coverage" "$application_coverage" "$MIN_APPLICATION_COVERAGE"
@@ -97,8 +97,8 @@ require_number_at_least "domain package coverage" "$domain_coverage" "$MIN_DOMAI
 require_number_at_least "backend test count" "$test_count" "$MIN_BACKEND_TEST_COUNT"
 if [[ "${RUN_POSTGRES_INTEGRATION:-0}" == "1" ]]; then
   require_number_at_least "postgres benchmark count" "$postgres_benchmark_count" "$MIN_POSTGRES_BENCHMARK_COUNT"
-  if [[ -n "${RABBITMQ_ADDR:-}" ]]; then
-    require_number_at_least "rabbitmq benchmark count" "$rabbitmq_benchmark_count" "$MIN_RABBITMQ_BENCHMARK_COUNT"
+  if [[ -n "${KAFKA_BROKERS:-}" ]]; then
+    require_number_at_least "kafka benchmark count" "$kafka_benchmark_count" "$MIN_KAFKA_BENCHMARK_COUNT"
   fi
 fi
 
@@ -112,7 +112,7 @@ ai_coverage=$ai_coverage threshold=$MIN_AI_COVERAGE
 domain_coverage=$domain_coverage threshold=$MIN_DOMAIN_COVERAGE
 test_count=$test_count threshold=$MIN_BACKEND_TEST_COUNT
 postgres_benchmark_count=$postgres_benchmark_count threshold=$MIN_POSTGRES_BENCHMARK_COUNT run_postgres_integration=${RUN_POSTGRES_INTEGRATION:-0}
-rabbitmq_benchmark_count=$rabbitmq_benchmark_count threshold=$MIN_RABBITMQ_BENCHMARK_COUNT rabbitmq_addr_set=$([[ -n "${RABBITMQ_ADDR:-}" ]] && printf true || printf false)
+kafka_benchmark_count=$kafka_benchmark_count threshold=$MIN_KAFKA_BENCHMARK_COUNT kafka_brokers_set=$([[ -n "${KAFKA_BROKERS:-}" ]] && printf true || printf false)
 EOF
 
 cat >"$METRICS_JSON" <<EOF
@@ -130,8 +130,8 @@ cat >"$METRICS_JSON" <<EOF
   "test_count_threshold": $MIN_BACKEND_TEST_COUNT,
   "postgres_benchmark_count": $postgres_benchmark_count,
   "postgres_benchmark_count_threshold": $MIN_POSTGRES_BENCHMARK_COUNT,
-  "rabbitmq_benchmark_count": $rabbitmq_benchmark_count,
-  "rabbitmq_benchmark_count_threshold": $MIN_RABBITMQ_BENCHMARK_COUNT,
+  "kafka_benchmark_count": $kafka_benchmark_count,
+  "kafka_benchmark_count_threshold": $MIN_KAFKA_BENCHMARK_COUNT,
   "run_postgres_integration": "${RUN_POSTGRES_INTEGRATION:-0}"
 }
 EOF

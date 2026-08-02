@@ -9,16 +9,20 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 README = ROOT / "README.md"
 
-BENCH_RE = re.compile(
+COMPLETE_BENCH_RE = re.compile(
     r"^(Benchmark\w+)-\d+\s+(\d+)\s+([\d.]+)\s+ns/op\s+([\d.]+)\s+B/op\s+([\d.]+)\s+allocs/op"
+)
+BENCH_START_RE = re.compile(r"^(Benchmark\w+)-\d+")
+SPLIT_RESULT_RE = re.compile(
+    r"^\s*(\d+)\s+([\d.]+)\s+ns/op\s+([\d.]+)\s+B/op\s+([\d.]+)\s+allocs/op"
 )
 
 ALLOWED_BENCHMARKS = {
     "BenchmarkHTTPPostgresOrderPreview",
     "BenchmarkHTTPPostgresCreateOrder",
     "BenchmarkHTTPPostgresCreateOrderWithOutbox",
-    "BenchmarkPostgresRabbitMQOutboxRelay",
-    "BenchmarkRabbitMQPublish",
+    "BenchmarkPostgresKafkaOutboxRelay",
+    "BenchmarkKafkaPublish",
     "BenchmarkLiveHTTPHealthz",
     "BenchmarkLiveHTTPOrderPreview",
     "BenchmarkLiveHTTPCreateOrder",
@@ -36,11 +40,22 @@ def format_qps(ns_per_op: float) -> str:
 
 def parse_benchmarks(text: str) -> list[dict]:
     results = []
+    pending_name = None
     for line in text.splitlines():
-        match = BENCH_RE.match(line)
-        if not match:
-            continue
-        name, _, ns, b, allocs = match.groups()
+        match = COMPLETE_BENCH_RE.match(line)
+        if match:
+            name, _, ns, b, allocs = match.groups()
+            pending_name = None
+        else:
+            start = BENCH_START_RE.match(line)
+            if start:
+                pending_name = start.group(1)
+            split = SPLIT_RESULT_RE.match(line) if pending_name else None
+            if not split:
+                continue
+            _, ns, b, allocs = split.groups()
+            name = pending_name
+            pending_name = None
         if name not in ALLOWED_BENCHMARKS:
             raise ValueError(f"refusing non-runtime benchmark result: {name}")
         results.append(
@@ -117,7 +132,7 @@ def render_table(results: list[dict]) -> str:
 
     lines.append("")
     lines.append(
-        "_Only PostgreSQL/Redis/RabbitMQ-backed component benchmarks and live HTTP "
+        "_Only PostgreSQL/Redis/Kafka-backed component benchmarks and live HTTP "
         "benchmarks from a running backend process are accepted._"
     )
 

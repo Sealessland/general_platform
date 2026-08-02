@@ -20,7 +20,8 @@ jobs:
           --health-cmd="pg_isready -h 127.0.0.1 -U postgres -d redcart_test"
           --health-interval=10s
           --health-timeout=5s
-          --health-retries=5
+          --health-retries=20
+          --health-start-period=10s
       redis:
         image: redis:7
         ports:
@@ -30,15 +31,25 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
-      rabbitmq:
-        image: rabbitmq:4-alpine
+      kafka:
+        image: apache/kafka:4.3.1
         env:
-          RABBITMQ_DEFAULT_USER: redcart
-          RABBITMQ_DEFAULT_PASS: redcart
+          CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+          KAFKA_NODE_ID: 1
+          KAFKA_PROCESS_ROLES: broker,controller
+          KAFKA_LISTENERS: PLAINTEXT://:19092,CONTROLLER://:19093
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://127.0.0.1:19092
+          KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+          KAFKA_CONTROLLER_QUORUM_VOTERS: 1@127.0.0.1:19093
+          KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+          KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+          KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+          KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
         ports:
-          - 5672:5672
+          - 19092:19092
         options: >-
-          --health-cmd="rabbitmq-diagnostics -q ping"
+          --health-cmd="/opt/kafka/bin/kafka-topics.sh --bootstrap-server 127.0.0.1:19092 --list"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
@@ -51,8 +62,8 @@ jobs:
         env:
           POSTGRES_DSN: postgres://postgres:postgres@127.0.0.1:5432/redcart_test?sslmode=disable
           REDIS_ADDR: 127.0.0.1:6379
-          RABBITMQ_ADDR: amqp://redcart:redcart@127.0.0.1:5672/
-          RABBITMQ_EXCHANGE: redcart.events.ci
+          KAFKA_BROKERS: 127.0.0.1:19092
+          KAFKA_TOPIC: redcart.events.ci
           RUN_POSTGRES_INTEGRATION: "1"
         run: bash ci/scripts/backend-ci.sh
       - name: Upload backend artifacts
@@ -70,5 +81,5 @@ jobs:
             ci/artifacts/backend-postgres-http-integration.txt
             ci/artifacts/backend-postgres-http-benchmark.txt
             ci/artifacts/backend-postgres-http-qps.txt
-            ci/artifacts/backend-rabbitmq-benchmark.txt
-            ci/artifacts/backend-rabbitmq-qps.txt
+            ci/artifacts/backend-kafka-benchmark.txt
+            ci/artifacts/backend-kafka-qps.txt

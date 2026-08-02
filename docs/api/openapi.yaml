@@ -10,7 +10,7 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
-      bearerFormat: token
+      bearerFormat: JWT
   parameters:
     ID:
       name: id
@@ -19,6 +19,30 @@ components:
       schema:
         type: integer
         format: int64
+  responses:
+    TooManyRequests:
+      description: Redis 令牌桶拒绝请求
+      headers:
+        Retry-After:
+          description: 建议等待的秒数
+          schema:
+            type: integer
+            minimum: 1
+        RateLimit-Remaining:
+          description: 当前令牌桶剩余额度
+          schema:
+            type: integer
+            minimum: 0
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    RateLimitUnavailable:
+      description: 安全或成本敏感接口无法在 Redis 异常时完成准入判断
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
   schemas:
     ErrorResponse:
       type: object
@@ -38,6 +62,29 @@ components:
           type: string
         password:
           type: string
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+          format: jwt
+          description: 一次性 Refresh JWT；成功轮换后立即失效
+    AuthSession:
+      type: object
+      required: [token, refresh_token, user]
+      properties:
+        token:
+          type: string
+          format: jwt
+          description: HS256 Access JWT，默认有效期 15 分钟
+        refresh_token:
+          type: string
+          format: jwt
+          description: HS256 Refresh JWT，默认有效期 7 天且只能轮换一次
+        user:
+          type: object
+          additionalProperties: true
     RegisterRequest:
       type: object
       required: [nickname, phone, password, role]
@@ -209,9 +256,17 @@ paths:
       responses:
         "201":
           description: 注册成功并返回登录态
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSession"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/RateLimitUnavailable"
   /api/auth/login:
     post:
-      summary: 登录并获取 Bearer Token
+      summary: 登录并获取 Access JWT 与 Refresh JWT
       security: []
       requestBody:
         required: true
@@ -222,6 +277,45 @@ paths:
       responses:
         "200":
           description: 登录成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSession"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/RateLimitUnavailable"
+  /api/auth/refresh:
+    post:
+      summary: 原子轮换一次性 Refresh JWT
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: 轮换成功，旧 Refresh JWT 和关联 Access JWT 均失效
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSession"
+        "401":
+          description: Refresh JWT 无效、过期或已使用
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/RateLimitUnavailable"
+  /api/auth/logout:
+    post:
+      summary: 撤销当前 Access JWT 及其 Refresh 会话
+      responses:
+        "200":
+          description: 登出成功；撤销状态在所有 API 实例间共享
+        "401":
+          description: Access JWT 无效或已撤销
   /api/auth/me:
     get:
       summary: 获取当前登录用户信息
@@ -235,6 +329,8 @@ paths:
       responses:
         "200":
           description: 返回笔记列表
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
   /api/notes/{id}:
     get:
       summary: 获取笔记详情，并在已登录时记录浏览事件
@@ -246,6 +342,8 @@ paths:
       responses:
         "200":
           description: 返回笔记详情
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
   /api/products:
     get:
       summary: 获取上架商品列表
@@ -253,6 +351,8 @@ paths:
       responses:
         "200":
           description: 返回商品卡片列表
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
   /api/products/{id}:
     get:
       summary: 获取商品详情
@@ -264,6 +364,8 @@ paths:
       responses:
         "200":
           description: 返回商品详情
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
   /api/products/{id}/skus:
     get:
       summary: 获取商品 SKU 列表
@@ -273,6 +375,8 @@ paths:
       responses:
         "200":
           description: 返回 SKU 列表
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
   /api/cart:
     get:
       summary: 获取当前购物车
@@ -536,6 +640,10 @@ paths:
       responses:
         "200":
           description: 返回 AI 任务结果
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/RateLimitUnavailable"
   /api/ai/business-review:
     post:
       summary: 生成经营复盘草案
@@ -548,6 +656,10 @@ paths:
       responses:
         "200":
           description: 返回 AI 任务结果
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/RateLimitUnavailable"
   /api/ai/tasks/{id}:
     get:
       summary: 获取 AI 任务详情
@@ -572,3 +684,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/A2UISurfaceResponse"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/RateLimitUnavailable"

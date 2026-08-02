@@ -14,12 +14,9 @@ func (s *Service) MerchantListProducts(ctx context.Context, actor Actor, limit, 
 	if actor.Role != domain.RoleMerchant {
 		return nil, newError(ErrorForbidden, "merchant access required")
 	}
-	products := s.repo.ListProducts(limit, offset)
-	out := make([]ProductDetail, 0)
+	products := s.repo.ListProductsByMerchant(actor.MerchantID, limit, offset)
+	out := make([]ProductDetail, 0, len(products))
 	for _, product := range products {
-		if product.MerchantID != actor.MerchantID {
-			continue
-		}
 		out = append(out, s.toProductDetail(product))
 	}
 	return out, nil

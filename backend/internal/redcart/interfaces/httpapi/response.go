@@ -81,8 +81,8 @@ func writeMethodNotAllowed(w http.ResponseWriter) {
 }
 
 const (
-	defaultLimit  = 20
-	maxLimit      = 100
+	defaultLimit = 20
+	maxLimit     = 100
 )
 
 func parsePagination(r *http.Request) (int, int) {

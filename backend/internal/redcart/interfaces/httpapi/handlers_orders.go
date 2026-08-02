@@ -31,7 +31,7 @@ func (s *Server) handleOrders(w http.ResponseWriter, r *http.Request, actor appl
 	switch r.Method {
 	case http.MethodGet:
 		limit, offset := parsePagination(r)
-	result, err := s.service.ListOrders(r.Context(), actor, limit, offset)
+		result, err := s.service.ListOrders(r.Context(), actor, limit, offset)
 		if err != nil {
 			writeAppError(w, err)
 			return

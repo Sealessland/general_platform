@@ -2,6 +2,48 @@
 
 这份文档记录 RedCart Copilot 中 AI 参与需求、设计、实现、测试、审查和交付的方式。AI 输出只能作为草案，最终决策、代码合并和验收结论必须由人工或主代理复核。
 
+## 2026-08-02：初学者友好结构、Kafka 与 Redis 限流
+
+### AI 参与范围
+
+- 根据“项目结构优先、初学者友好”的要求，把后端主阅读路径收敛为接口、应用、领域、基础设施和事件适配五个边界，并新增 `backend/README.md`。
+- 将 RabbitMQ 运行时替换为 Kafka/KRaft，新增 franz-go producer、稳定 JSON envelope、真实 Kafka benchmark，并同步 Compose、CI、ADR 和当前架构事实。
+- 参考本地 `sea-music` 的 Redis Lua 令牌桶思路，实现 Redis server time、原子补充/扣减/过期、Bearer 摘要 key、按接口错误成本区分 fail-open/fail-closed。
+- 先写 Kafka 映射/错误测试、HTTP 限流行为测试和 Redis 并发 burst 测试，再实现对应代码。
+- 按后续“引入标准 JWT、做分布式”的要求，增加 `application.TokenManager` 中立契约和 `infrastructure/auth` JWT + Redis 实现；先写标准 claims、算法限制、Refresh 重放与跨实例撤销测试，再接入运行时。
+- 将本地运行面扩展为 Nginx + 两个 API 实例，并用 PostgreSQL advisory lock 保护多实例并发迁移；新增 ADR 0007 解释共享状态、失败语义和非目标。
+- 根据“想想在哪里加入 Agent”的追加要求审计现有 AI Task/A2UI 路径，新增 ADR 0008；选择 Application 层工具调度 + 中立 Agent runtime + 无数据库权限的 AI Planner，并把商家只读诊断作为第一阶段。
+
+### 主代理修正
+
+- 没有照搬 `sea-music` 的目录和全部消费框架；Kafka SDK 只留在 `internal/event/kafka`，Redis 算法留在现有 `infrastructure/redis`，减少新概念数量。
+- 删除没有真实业务调用方的 RabbitMQ Consumer/DLX demo，不把“通用基础设施存在”描述成消费链路已落地。
+- 明确 Outbox 到 Kafka 是 at-least-once：producer 幂等不能覆盖 broker ack 成功但数据库提交前崩溃的窗口，未来 consumer 仍需持久化 Inbox 去重。
+- 限流只覆盖认证写、AI 写和公开目录读三类路由，避免为每个 endpoint 建配置对象；原始 Bearer token 不进入 Redis key 或日志。
+- 没有继续保留旧 Redis session repository 或本地 token 热缓存：Access JWT 本地验签，Redis key 只使用随机 `jti`；这样跨实例登出不会被实例内缓存延迟。
+- 分布式范围收敛到可执行的双 API 实例、共享认证/限流、迁移锁与 Outbox 并发协调；没有把单体业务强行拆成缺少独立数据边界的微服务。
+- Agent 只形成架构提案，没有把 A2UI 或单次 AI 调用冒充已实现 Agent；写工具被明确后置到预览、审批、幂等执行和验证链路之后。
+
+### 验证证据
+
+```bash
+rtk go test ./...
+rtk go test -race ./internal/redcart/infrastructure/auth ./internal/redcart/testsupport
+rtk go vet ./...
+rtk bash scripts/check-openapi.sh
+rtk env POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable RUN_POSTGRES_INTEGRATION=1 REDIS_ADDR=127.0.0.1:16380 KAFKA_BROKERS=127.0.0.1:19092 bash ci/scripts/backend-ci.sh
+rtk bash scripts/validate-workspace.sh
+rtk docker compose config --quiet
+rtk bash scripts/verify-distributed-auth.sh
+```
+
+- 完整后端门禁通过：94 个测试，总代码覆盖率 69.0%，应用层 80.0%，HTTP 层 64.5%，PostgreSQL 仓储 77.9%，JWT 适配器 80.5%。
+- Redis 并发令牌桶测试使用真实 Redis 通过；Kafka producer 与 PostgreSQL Outbox → Kafka benchmark 使用真实 Kafka 通过，并通过 Kafka CLI 独立消费确认事件 envelope。
+- 修复验收中发现的商家商品分页问题，并增加 PostgreSQL 与 HTTP 回归覆盖。
+- JWT 包单元测试与竞态检查通过；实际并发启动两个 API 进程后，完成“实例 A 登录 → 实例 B 鉴权/登出 → 实例 A 拒绝旧 token”的跨实例验证。
+- Nginx `:18080` 连续请求通过 `X-RedCart-Upstream` 确认交替分发到 `:18081` 与 `:18082`；验证后已停止本次 API 进程和容器。
+- 首次完整 CI 发现订单事务内库存补偿绕过缓存包装器，导致取消/退款后 SKU 缓存未失效；在 `CatalogCacheRepository.UpdateOrderStatus` 提交成功后按订单项失效缓存，原失败 HTTP 用例与完整 CI 复跑通过。
+
 ## 适用范围
 
 以下情况必须记录 AI 使用过程：
@@ -966,3 +1008,17 @@ rtk bash scripts/validate-workspace.sh
 - 行为事件（`behavior.*`）尚未接入发件箱，仍直接写入 `behavior_events` 表。
 - 死信队列目前只写到 `outbox_dead_letter` 表，没有自动重放或告警机制。
 - 未引入服务发现、API 网关、链路追踪、Service Mesh；这些按 ADR 0005 继续后置。
+## 2026-08-02：分布式教程、CI/CD 与 Runner 性能证据
+
+- AI 根据仓库现有 PostgreSQL、Redis、Kafka、双后端和 JWT 实现编写初学者教程，以请求路径和可执行验证脚本为主线。
+- 将 Release workflow 从仅打印 changelog 升级为发布三个 GHCR 镜像；因为仓库没有生产环境与凭据，明确把 CD 边界停在可部署镜像，不虚构线上部署。
+- 审查本地 benchmark artifact 时发现 Gin 日志拆分结果行，旧 awk 会把日期误认为 `ns/op`；更新 shell/Python 解析器，并要求以 GitHub Runner artifact 和 Job Summary 作为性能证据。
+
+### 验证证据
+
+```bash
+rtk bash scripts/validate-workspace.sh
+rtk bash scripts/check-openapi.sh
+rtk go test ./...
+rtk go vet ./...
+```

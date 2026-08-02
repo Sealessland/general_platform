@@ -4,6 +4,24 @@
 
 ## [未发布] - 2026-06-08
 
+### 后端结构与中间件边界
+
+- 新增本地分布式运行与 GitHub Actions CI/CD 初学者教程；Release workflow 可发布 backend、frontend、ai-service 的 GHCR 镜像并生成 SBOM/provenance。
+- 修复 Gin 日志打断 benchmark 行时 QPS 解析错误；手动 Runner benchmark 现在写入 Job Summary 并上传原始 artifact，且不会回写 `main`。
+- 认证由随机 session token 升级为标准 HS256 JWT：校验 `iss/sub/aud/exp/iat/jti`、固定算法白名单并隔离 Access/Refresh token 类型；`JWT_SECRET` 最少 32 字节。
+- 新增 `application.TokenManager` 与 `infrastructure/auth`：Access 身份本地验签，Redis 只保存一次性 Refresh 会话和 Access `jti` 撤销状态；Lua 原子轮换会同时撤销旧 Access，并拒绝 Refresh 重放。
+- 删除旧 Redis session repository 和 PostgreSQL 进程内 session map，让业务 Repository 回归业务数据职责。
+- Docker Compose 增加 Nginx 网关和第二个后端实例；两个实例共享 PostgreSQL、Redis、Kafka，响应头 `X-RedCart-Upstream` 可观察负载分发。
+- 数据库迁移按版本使用 PostgreSQL transaction advisory lock，避免两个实例启动时重复执行 DDL；新增并发 Repository 启动测试。
+- 修复订单事务内库存补偿提交后未失效 SKU 缓存的问题，取消订单和退款审批后不再短暂返回旧 `locked_stock`。
+- 新增 ADR 0008，确定 Agent 位于 Application 工具调度与 AI Planner 之间；第一阶段为只读商家经营诊断，Run/Step/Approval 持久化、多实例领取、预算、审批和 eval 边界均已定义，但尚未宣称代码已实现。
+- 新增 `backend/README.md`，用五层目录图、一次下单链路和“改动放哪里”表格提供初学者阅读入口。
+- 消息运行时从 RabbitMQ 迁移到 Kafka/KRaft：新增 `internal/event/kafka` 的 JSON codec 与 producer，保留 `event.Publisher` 中立契约和 PostgreSQL Transactional Outbox；所有事件进入一个物理 topic，业务分类保留在 `event_topic`。
+- 删除未被业务进程使用的 RabbitMQ 通用 Consumer/DLX demo，明确当前只交付真实生产侧；未来消费者必须连同真实 handler、持久化 Inbox 去重和失败隔离一起实现。
+- 新增 Redis Lua 原子令牌桶：认证写和 AI 写 fail-closed，公开商品/笔记读取 fail-open；Bearer token 只以 SHA-256 摘要进入限流 key，响应暴露 `Retry-After`、剩余额度和 Prometheus 指标。
+- Docker Compose、GitHub Actions、benchmark、CI artifact、OpenAPI、架构与测试文档统一迁移到 PostgreSQL + Redis + Kafka 口径。
+- 修复商家商品分页顺序错误：原实现先对全站商品分页再按商家过滤，商品 ID 超出首个全站分页时会返回空列表；改为 PostgreSQL 先按 `merchant_id` 过滤再分页。
+
 ### 可观测性：Prometheus 指标采集
 
 - 新增 Prometheus 容器（`docker-compose.yml`），每 15 秒采集后端 `/metrics` 端点。
@@ -27,26 +45,19 @@
 - 新增 `TestAccessTokenTTLFromEnv` 和 `TestRefreshTokenTTLFromEnv` 单元测试。
 - 在 `TestPostgresApplicationAuthSessionAndCatalogRegression` 中新增 token 类型隔离断言：refresh token 不能通过 `Authenticate`，access token 不能通过 `RefreshSession`。
 
-### 消费侧可靠性
-
-- 新增 RabbitMQ 消费者实现（`backend/internal/event/rabbitmq/consumer.go`）：手动 ack（至少一次语义）、QoS prefetch 限流、`event_id` 幂等去重、DLX 死信队列。
-- 新增 `Handler` / `Deduplicator` / `Acknowledger` 接口，使消费逻辑可测试且不耦合 AMQP SDK；`MemoryDeduplicator` 提供 demo 级进程内去重。
-- 新增 5 个 consumer 单元测试：成功 ack+mark、handler 失败进 DLX、重复消息跳过、decode 错误进 DLX、dedup 瞬态错误 requeue。
-- 更新 ADR 0006 新增第 7 节「消费侧可靠性」，记录手动 ack、prefetch、幂等顺序（MarkProcessed before Ack）和 DLX 路由决策。
-
 ### 发布器可靠性加固
 
 - outbox 表新增 `published_at` 列与 `idx_outbox_pending` 部分索引（`backend/migrations/0003_outbox_published_at.sql`）；已发布事件改为软标记而非删除，保留审计轨迹。
 - outbox relay 改为事务内轮询：`BeginTx → PollPendingInTx（FOR UPDATE SKIP LOCKED）→ 逐条发布 → MarkPublishedInTx / MarkFailedInTx → Commit`，防止多实例并发重复发布。
 - 新增 `event.OutboxRelayStore` 与 `event.OutboxTx` 接口，提供事务感知的轮询与标记方法；`*Repository` 实现完整委托。
-- RabbitMQ publisher 启用 publisher confirm 模式（`PublishWithDeferredConfirmWithContext` + `WaitContext`），并通过 `NotifyClose` 自动重连（3 秒间隔），`sync.Mutex` 保护并发 publish。
+- Kafka producer 等待 broker acknowledgement 后才标记 outbox 已发布；franz-go 默认幂等 producer 降低单会话网络重试重复。
 - 修复 `main.go` 中 `repo.(event.OutboxStore)` 类型断言始终失败的潜在 bug（`*Repository` 未实现完整 `OutboxStore`），改为 `event.OutboxRelayStore` 断言。
 - 新增 `TestPublisherNoDuplicatePublishUnderConcurrency`（2 relay × 50 事件，零重复）与 `TestPublisherRollbackOnPublishFailure` 测试。
 - 更新 ADR 0006 第 2、6 节，记录软标记、行锁、confirm 模式与自动重连决策。
 
 ### 工程
 
-- 删除内存仓储实现、内存仓储单元测试、handler-only HTTP benchmark、空 publisher outbox benchmark 和模拟下游延迟 benchmark；后端测试与性能证据收束到 PostgreSQL/Redis/RabbitMQ-backed 路径和 live HTTP benchmark。
+- 删除内存仓储实现、内存仓储单元测试、handler-only HTTP benchmark、空 publisher outbox benchmark 和模拟下游延迟 benchmark；后端测试与性能证据收束到 PostgreSQL/Redis/Kafka-backed 路径和 live HTTP benchmark。
 - 新增 live HTTP benchmark，要求 `LIVE_HTTP_BASE_URL` 指向已启动后端进程，通过真实 TCP 请求验证 `/healthz`、结算预览和下单写路径；README 性能表更新脚本拒绝非真实运行时 benchmark 名称。
 - 建立本地 `main` 分支作为集成主干；删除已合并或停滞的 `feature/*` 分支以及过期的 `ai/live-*`、`ai/codex-*` 会话分支；清理所有非主工作区的 worktree；将 `.aidev-local/` 加入 `.gitignore`，保持主工作区干净。
 

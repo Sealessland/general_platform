@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"os"
@@ -19,7 +18,7 @@ func TestWrapRepositoryWithRedisSessionMissingAddr(t *testing.T) {
 	base := newRepositoryFactoryPostgresRepo(t)
 	t.Setenv("REDIS_ADDR", "")
 
-	_, cleanup, err := wrapRepositoryWithRedisSession(base, log.Default())
+	_, _, _, cleanup, err := wrapRepositoryWithRedisSession(base, log.Default())
 	if cleanup == nil {
 		t.Fatal("expected non-nil cleanup")
 	}
@@ -36,46 +35,37 @@ func TestWrapRepositoryWithRedisSessionEnabled(t *testing.T) {
 		t.Skip("REDIS_ADDR is not set")
 	}
 	t.Setenv("REDIS_ADDR", addr)
-	t.Setenv("REDIS_SESSION_TTL", "45m")
+	t.Setenv("JWT_SECRET", "0123456789abcdef0123456789abcdef")
+	t.Setenv("JWT_ACCESS_TTL", "45m")
 	t.Setenv("REDIS_CATALOG_TTL", "2m")
 
-	repo, cleanup, err := wrapRepositoryWithRedisSession(base, log.Default())
+	repo, tokens, limiter, cleanup, err := wrapRepositoryWithRedisSession(base, log.Default())
 	if err != nil {
 		t.Fatalf("wrap repository: %v", err)
 	}
 	t.Cleanup(cleanup)
-
-	sessionRepo, ok := repo.(*redisrepo.SessionRepository)
-	if !ok {
-		t.Fatalf("expected redis session repository, got %T", repo)
+	if limiter == nil {
+		t.Fatal("expected Redis rate limiter")
+	}
+	if tokens == nil {
+		t.Fatal("expected JWT manager")
 	}
 
-	catalogRepo, ok := sessionRepo.Repository.(*redisrepo.CatalogCacheRepository)
+	catalogRepo, ok := repo.(*redisrepo.CatalogCacheRepository)
 	if !ok {
-		t.Fatalf("expected catalog cache repository under session repository, got %T", sessionRepo.Repository)
+		t.Fatalf("expected catalog cache repository, got %T", repo)
 	}
 	if catalogRepo.Repository != base {
 		t.Fatal("expected catalog cache repository to wrap base repository")
 	}
 
 	user := createRepositoryFactoryUser(t, base)
-	sessionRepo.SaveSession("wrapped-token", "wrapped-refresh", user.ID)
-
-	saved, _, ok := sessionRepo.GetUserByToken("wrapped-token")
-	if !ok || saved.ID != user.ID {
-		t.Fatalf("expected redis-backed token lookup, got %+v ok=%v", saved, ok)
-	}
-	client, err := redisrepo.NewClient(addr)
+	pair, err := tokens.Issue(t.Context(), application.TokenPrincipal{UserID: user.ID, Role: user.Role, Nickname: user.Nickname})
 	if err != nil {
-		t.Fatalf("new redis client: %v", err)
+		t.Fatalf("issue JWT pair: %v", err)
 	}
-	t.Cleanup(func() {
-		_ = client.FlushDB(context.Background()).Err()
-		_ = client.Close()
-	})
-	ttl := client.TTL(context.Background(), "redcart:session:wrapped-token").Val()
-	if ttl < 45*time.Minute || ttl > 56*time.Minute {
-		t.Fatalf("expected ttl around 45m with jitter, got %s", ttl)
+	if _, err := tokens.Authenticate(t.Context(), pair.AccessToken); err != nil {
+		t.Fatalf("authenticate issued JWT: %v", err)
 	}
 }
 
@@ -116,4 +106,4 @@ func createRepositoryFactoryUser(t *testing.T, repo *postgresrepo.Repository) do
 	return user
 }
 
-var _ application.Repository = (*redisrepo.SessionRepository)(nil)
+var _ application.Repository = (*redisrepo.CatalogCacheRepository)(nil)

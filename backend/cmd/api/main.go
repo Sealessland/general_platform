@@ -4,13 +4,14 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	backendai "github.com/example/redcart-copilot/backend/internal/ai"
 	aigrpc "github.com/example/redcart-copilot/backend/internal/ai/grpc"
 	"github.com/example/redcart-copilot/backend/internal/event"
+	kafkaevent "github.com/example/redcart-copilot/backend/internal/event/kafka"
 	"github.com/example/redcart-copilot/backend/internal/event/outbox"
-	rabbitmqevent "github.com/example/redcart-copilot/backend/internal/event/rabbitmq"
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 	"github.com/example/redcart-copilot/backend/internal/redcart/interfaces/httpapi"
 )
@@ -22,26 +23,24 @@ func main() {
 	}
 	defer stopProfiler()
 
-	repo, cleanup, err := initRepository(log.Default())
+	dependencies, err := initDependencies(log.Default())
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer cleanup()
+	defer dependencies.close()
 	aiProvider, err := newAIProvider()
 	if err != nil {
 		log.Fatal(err)
 	}
-	service := application.NewService(repo, aiProvider)
+	service := application.NewService(dependencies.repository, aiProvider, dependencies.tokenManager)
 	server := &http.Server{
 		Addr:              ":" + envOrDefault("PORT", envOrDefault("HTTP_PORT", "18080")),
-		Handler:           httpapi.NewServer(service).Handler(),
+		Handler:           httpapi.NewServer(service, httpapi.WithRateLimiter(dependencies.rateLimiter)).Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	if outboxRelay, ok := repo.(event.OutboxRelayStore); ok {
-		stopOutbox := startOutboxPublisher(outboxRelay, log.Default())
-		defer stopOutbox()
-	}
+	stopOutbox := startOutboxPublisher(dependencies.outbox, log.Default())
+	defer stopOutbox()
 
 	log.Printf("redcart api listening on %s", server.Addr)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -50,13 +49,13 @@ func main() {
 }
 
 func startOutboxPublisher(store event.OutboxRelayStore, logger *log.Logger) func() {
-	addr := envOrDefault("RABBITMQ_ADDR", "")
-	if addr == "" {
+	brokers := splitCSV(os.Getenv("KAFKA_BROKERS"))
+	if len(brokers) == 0 {
 		return func() {}
 	}
-	publisher, err := rabbitmqevent.NewPublisher(addr, envOrDefault("RABBITMQ_EXCHANGE", "redcart.events"))
+	publisher, err := kafkaevent.NewPublisher(brokers, envOrDefault("KAFKA_TOPIC", "redcart.events"))
 	if err != nil {
-		logger.Printf("rabbitmq publisher disabled: %v", err)
+		logger.Printf("kafka publisher disabled: %v", err)
 		return func() {}
 	}
 	relay := outbox.NewPublisher(store, publisher, outbox.Config{
@@ -65,7 +64,18 @@ func startOutboxPublisher(store event.OutboxRelayStore, logger *log.Logger) func
 		Logger:    logger,
 	})
 	relay.Start()
-	return func() { relay.Stop(); _ = publisher.Close() }
+	return func() { relay.Stop(); publisher.Close() }
+}
+
+func splitCSV(raw string) []string {
+	parts := strings.Split(raw, ",")
+	values := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if value := strings.TrimSpace(part); value != "" {
+			values = append(values, value)
+		}
+	}
+	return values
 }
 
 func newAIProvider() (backendai.AIProvider, error) {

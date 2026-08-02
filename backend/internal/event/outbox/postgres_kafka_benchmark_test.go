@@ -7,16 +7,17 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/example/redcart-copilot/backend/internal/event"
-	rabbitmqevent "github.com/example/redcart-copilot/backend/internal/event/rabbitmq"
+	kafkaevent "github.com/example/redcart-copilot/backend/internal/event/kafka"
 	postgresrepo "github.com/example/redcart-copilot/backend/internal/redcart/infrastructure/postgres"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-func BenchmarkPostgresRabbitMQOutboxRelay(b *testing.B) {
+func BenchmarkPostgresKafkaOutboxRelay(b *testing.B) {
 	if os.Getenv("RUN_POSTGRES_INTEGRATION") != "1" {
 		b.Skip("RUN_POSTGRES_INTEGRATION is not set")
 	}
@@ -24,9 +25,9 @@ func BenchmarkPostgresRabbitMQOutboxRelay(b *testing.B) {
 	if dsn == "" {
 		b.Skip("POSTGRES_DSN is not set")
 	}
-	addr := os.Getenv("RABBITMQ_ADDR")
-	if addr == "" {
-		b.Skip("RABBITMQ_ADDR is not set")
+	brokers := strings.Split(os.Getenv("KAFKA_BROKERS"), ",")
+	if len(brokers) == 1 && strings.TrimSpace(brokers[0]) == "" {
+		b.Skip("KAFKA_BROKERS is not set")
 	}
 
 	repo, err := postgresrepo.NewRepository(dsn)
@@ -34,9 +35,9 @@ func BenchmarkPostgresRabbitMQOutboxRelay(b *testing.B) {
 		b.Fatalf("new postgres repository: %v", err)
 	}
 	defer repo.Close()
-	publisher, err := rabbitmqevent.NewPublisher(addr, os.Getenv("RABBITMQ_EXCHANGE"))
+	publisher, err := kafkaevent.NewPublisher(brokers, kafkaTopicForBenchmark())
 	if err != nil {
-		b.Fatalf("new rabbitmq publisher: %v", err)
+		b.Fatalf("new Kafka publisher: %v", err)
 	}
 	defer publisher.Close()
 
@@ -77,8 +78,13 @@ func BenchmarkPostgresRabbitMQOutboxRelay(b *testing.B) {
 	}
 }
 
+func kafkaTopicForBenchmark() string {
+	if topic := strings.TrimSpace(os.Getenv("KAFKA_TOPIC")); topic != "" {
+		return topic
+	}
+	return "redcart.events.bench"
+}
+
 type ioDiscard struct{}
 
-func (ioDiscard) Write(p []byte) (int, error) {
-	return len(p), nil
-}
+func (ioDiscard) Write(p []byte) (int, error) { return len(p), nil }

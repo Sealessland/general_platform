@@ -2,7 +2,7 @@
 
 本记录归档 HTTP 测试按主题拆分后的本地验证状态，以及项目专用 Codex hook 的交付前检查口径。
 
-> 2026-06-17 更新：本页中涉及内存仓储覆盖率、内存诊断 benchmark 和内存仓储测试的口径已废弃。当前性能与质量证据只接受 PostgreSQL/Redis/RabbitMQ-backed 路径和 live HTTP benchmark；当前口径见 `test-strategy.md` 与 `performance-baseline.md`。
+> 2026-08-02 更新：本页中涉及内存仓储覆盖率、内存诊断 benchmark 和 RabbitMQ 的口径已废弃。当前性能与质量证据只接受 PostgreSQL/Redis/Kafka-backed 路径和 live HTTP benchmark；当前口径见 `test-strategy.md` 与 `performance-baseline.md`。
 
 ## 当前状态
 
