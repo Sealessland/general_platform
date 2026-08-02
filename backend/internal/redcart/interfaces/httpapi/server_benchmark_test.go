@@ -79,6 +79,10 @@ func BenchmarkHTTPPostgresCreateOrder(b *testing.B) {
 func BenchmarkHTTPPostgresCreateOrderWithOutbox(b *testing.B) {
 	repo, handler, cleanup := newPostgresTestHandlerWithBaseRepo(b)
 	defer cleanup()
+	before, err := repo.Outbox.PollPending(context.Background(), 1_000_000)
+	if err != nil {
+		b.Fatalf("poll initial outbox: %v", err)
+	}
 
 	suffix := uniqueSuffix()
 	consumerToken := registerAndGetToken(b, handler, "pg-bench-order-outbox-consumer-"+suffix, "consumer")
@@ -110,12 +114,12 @@ func BenchmarkHTTPPostgresCreateOrderWithOutbox(b *testing.B) {
 
 	// Verify that the outbox captured the expected number of events. This
 	// confirms the transactional outbox path is exercised by the benchmark.
-	pending, err := repo.Outbox.PollPending(context.Background(), b.N+10)
+	pending, err := repo.Outbox.PollPending(context.Background(), len(before)+b.N+10)
 	if err != nil {
 		b.Fatalf("poll pending outbox: %v", err)
 	}
-	if len(pending) != b.N {
-		b.Fatalf("expected %d outbox events, got %d", b.N, len(pending))
+	if len(pending)-len(before) != b.N {
+		b.Fatalf("expected %d new outbox events, got %d", b.N, len(pending)-len(before))
 	}
 }
 

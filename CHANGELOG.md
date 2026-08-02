@@ -8,6 +8,7 @@
 
 - 新增本地分布式运行与 GitHub Actions CI/CD 初学者教程；Release workflow 可发布 backend、frontend、ai-service 的 GHCR 镜像并生成 SBOM/provenance。
 - 修复 Gin 日志打断 benchmark 行时 QPS 解析错误；手动 Runner benchmark 现在写入 Job Summary 并上传原始 artifact，且不会回写 `main`。
+- 修复 Outbox benchmark 依赖空数据库的问题，并显式启用 shell `pipefail`，避免测试失败被 `tee` 掩盖成绿色 Action。
 - 认证由随机 session token 升级为标准 HS256 JWT：校验 `iss/sub/aud/exp/iat/jti`、固定算法白名单并隔离 Access/Refresh token 类型；`JWT_SECRET` 最少 32 字节。
 - 新增 `application.TokenManager` 与 `infrastructure/auth`：Access 身份本地验签，Redis 只保存一次性 Refresh 会话和 Access `jti` 撤销状态；Lua 原子轮换会同时撤销旧 Access，并拒绝 Refresh 重放。
 - 删除旧 Redis session repository 和 PostgreSQL 进程内 session map，让业务 Repository 回归业务数据职责。

@@ -1013,6 +1013,7 @@ rtk bash scripts/validate-workspace.sh
 - AI 根据仓库现有 PostgreSQL、Redis、Kafka、双后端和 JWT 实现编写初学者教程，以请求路径和可执行验证脚本为主线。
 - 将 Release workflow 从仅打印 changelog 升级为发布三个 GHCR 镜像；因为仓库没有生产环境与凭据，明确把 CD 边界停在可部署镜像，不虚构线上部署。
 - 审查本地 benchmark artifact 时发现 Gin 日志拆分结果行，旧 awk 会把日期误认为 `ns/op`；更新 shell/Python 解析器，并要求以 GitHub Runner artifact 和 Job Summary 作为性能证据。
+- 首次 Runner artifact 暴露 `CreateOrderWithOutbox` 会读到同一数据库中的旧事件，同时 workflow 被 `tee` 掩盖退出码；修正为比较运行前后 Outbox 增量，并显式启用 `set -euo pipefail` 后重新运行。
 
 ### 验证证据
 
