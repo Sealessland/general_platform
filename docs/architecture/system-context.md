@@ -14,7 +14,7 @@ RedCart Copilot 面向四类直接可见的使用面：
 - `ai-service`：提示词与 AI Provider 占位实现
 - `postgresql`：当前 MVP 的运行时业务数据源
 - `redis`：当前用于认证 session 共享与商品/SKU 热读缓存；购物车、库存预扣、幂等仍是后续适配目标
-- `rabbitmq`：规划中的订单、库存、分析事件总线适配目标
+- `rabbitmq`：已接入的订单事件总线适配，经事务性发件箱（outbox）发布
 
 ## 当前 MVP 的运行边界
 

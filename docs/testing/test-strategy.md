@@ -35,7 +35,7 @@
 | AI 包覆盖率 | 95.0% | `backend/internal/ai` |
 | 领域模型覆盖率 | 95.0% | `backend/internal/redcart/domain` |
 | 后端测试数量 | 55 | `go test ./... -list '^Test'` 中的 `Test*` 数量 |
-| PostgreSQL benchmark 数量 | 2 | `BenchmarkHTTPPostgresOrderPreview`、`BenchmarkHTTPPostgresCreateOrder`，仅 `RUN_POSTGRES_INTEGRATION=1` 时要求 |
+| PostgreSQL benchmark 数量 | 3 | `BenchmarkHTTPPostgresOrderPreview`、`BenchmarkHTTPPostgresCreateOrder`、`BenchmarkHTTPPostgresCreateOrderWithOutbox`，与 `ci/scripts/backend-test-metrics.sh` 的 `^BenchmarkHTTPPostgres` 口径一致，仅 `RUN_POSTGRES_INTEGRATION=1` 时要求 |
 | RabbitMQ benchmark 数量 | 2 | `BenchmarkRabbitMQPublish`、`BenchmarkPostgresRabbitMQOutboxRelay`，仅 `RUN_POSTGRES_INTEGRATION=1` 且提供 `RABBITMQ_ADDR` 时要求 |
 
 阈值按当前 MVP 稳定通过水平设置，目标是阻断覆盖率、测试规模和 benchmark 产物回退；后续功能稳定后应逐步提高阈值。

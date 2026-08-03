@@ -21,8 +21,13 @@
 - `POST /api/ai/product-selling-points`
 - `POST /api/ai/business-review`
 - `GET /api/ai/tasks/{id}`
+- `POST /api/ai/a2ui`
 
 当前后端会把请求记录为 AI 任务，并返回可重复的 mock 草案结果，保证前端、测试和流程演示都可稳定运行。
+
+### A2UI 界面生成
+
+`POST /api/ai/a2ui` 接收 `surface_id`、`user_intent` 与可选 `context_json`，返回 `surface_id` 与 `a2ui_json`。`a2ui_json` 是 A2UI v0.9 的多行 NDJSON 指令流，逐行包含 `createSurface` / `updateComponents` / `updateDataModel` 指令；服务端在 `backend/internal/redcart/application/service_ai.go` 的 `GenerateA2UISurface` 中先做上下文富化（预算换算与相关笔记），再调用 `backend/internal/ai` 的 `AIProvider` 生成。前端 `frontend/src/app.ts` 的 `a2uiView` / `a2uiRenderPanel` 逐行解析 JSONL 并按指令装配组件树，支持文本、图片、列表、滑块与加购动作。
 
 ## 记录内容
 
