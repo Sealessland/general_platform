@@ -213,7 +213,7 @@ function currentRoleLabel() {
 }
 
 // 把路径拆成段，例如 /merchant/products/3/edit -> ["merchant","products","3","edit"]。
-function idsFromRoute() {
+function routeParts() {
   return routePath()
     .split("/")
     .filter(Boolean);
@@ -373,7 +373,7 @@ async function renderRoute() {
   }
 
   const path = routePath();
-  const parts = idsFromRoute();
+  const parts = routeParts();
 
   if (!store.user && path !== "/login") {
     go("/login");

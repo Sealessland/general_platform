@@ -1458,11 +1458,11 @@ function renderRoute() {
     if (path === "/home") view = homeView();
     else if (path === "/notes") view = notesView();
     else if (parts[0] === "notes" && parts[1]) view = noteDetailView(parts[1]);
-    else if (parts[0] === "product" && parts[1]) view = productDetailView(parts[1]);
+    else if (parts[0] === "products" && parts[1]) view = productDetailView(parts[1]);
     else if (path === "/cart") view = cartView();
     else if (path === "/checkout") view = checkoutView();
     else if (path === "/orders") view = ordersView();
-    else if (parts[0] === "order" && parts[1]) view = orderDetailView(parts[1]);
+    else if (parts[0] === "orders" && parts[1]) view = orderDetailView(parts[1]);
     else view = homeView();
   } else {
     if (path === "/merchant/dashboard") view = dashboardView();
@@ -1528,7 +1528,7 @@ function homeView() {
     card.appendChild(chips);
     var btn = h("button", { class: "btn primary", text: "查看详情" });
     // 跳转到商品详情页
-    btn.addEventListener("click", function () { go("/product/" + p.id); });
+    btn.addEventListener("click", function () { go("/products/" + p.id); });
     card.appendChild(h("div", { class: "actions" }, [btn]));
     grid.appendChild(card);
   });
@@ -1553,7 +1553,7 @@ function notesView() {
       if (!p) return;
       var chip = h("button", { class: "chip", text: (PRODUCT_CN[pid] || p.title) });
       // 点击商品 chip：跳转到商品详情
-      chip.addEventListener("click", function () { go("/product/" + pid); });
+      chip.addEventListener("click", function () { go("/products/" + pid); });
       links.appendChild(chip);
     });
     card.appendChild(links);
@@ -1592,7 +1592,7 @@ function noteDetailView(id) {
     card.appendChild(chips);
     var btn = h("button", { class: "btn primary", text: "进入商品详情" });
     // 跳转到商品详情页
-    btn.addEventListener("click", function () { go("/product/" + pid); });
+    btn.addEventListener("click", function () { go("/products/" + pid); });
     card.appendChild(h("div", { class: "actions" }, [btn]));
     grid.appendChild(card);
   });
@@ -1799,7 +1799,7 @@ function checkoutView() {
         h("div", { class: "actions" }, [h("button", { class: "btn mini", text: "查看订单" }, )]),
       ]));
       // 跳转到原订单详情
-      resultBox.querySelector("button").addEventListener("click", function () { go("/order/" + result.order.id); });
+      resultBox.querySelector("button").addEventListener("click", function () { go("/orders/" + result.order.id); });
       return { ok: true, duplicate: true };
     }
     setNotice("订单已创建，可继续支付或取消。", "ok");
@@ -1810,7 +1810,7 @@ function checkoutView() {
     panel.appendChild(h("div", { class: "muted", text: "后端通过 uk_user_idempotency_key 唯一约束保证：同一幂等键重复提交不会创建第二个订单。" }));
     var goOrder = h("button", { class: "btn primary mini", text: "查看订单" });
     // 跳转到新订单详情
-    goOrder.addEventListener("click", function () { go("/order/" + result.order.id); });
+    goOrder.addEventListener("click", function () { go("/orders/" + result.order.id); });
     var retryIdem = h("button", { class: "btn mini", text: "用同一幂等键再次提交（应被拦截）" });
     // 用同一幂等键再次提交，验证幂等拦截
     retryIdem.addEventListener("click", function () { submitOrder(key); });
@@ -1916,7 +1916,7 @@ function ordersView() {
     var actionCell = h("td");
     var detail = h("button", { class: "btn mini", text: "详情" });
     // 跳转到订单详情
-    detail.addEventListener("click", function () { go("/order/" + order.id); });
+    detail.addEventListener("click", function () { go("/orders/" + order.id); });
     actionCell.appendChild(detail);
     consumerOrderActions(order, actionCell, function () { renderRoute(); });
     row.appendChild(actionCell);
