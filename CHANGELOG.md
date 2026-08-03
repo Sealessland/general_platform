@@ -4,6 +4,13 @@
 
 ## [未发布] - 2026-06-08
 
+### 接口限流：Redis 令牌桶
+
+- 新增基于 Redis Lua 脚本的令牌桶限流（`backend/internal/redcart/infrastructure/redis/ratelimit.go`）：原子执行「读取桶 → 按时间补充 → 扣减或拒绝 → 回写并过期」，key 前缀 `redcart:ratelimit:`，写入即自动过期。
+- 新增限流中间件（`backend/internal/redcart/interfaces/httpapi/middleware_ratelimit.go`）：身份优先取已认证用户 ID，否则回退客户端 IP；超限返回 429 并带 `Retry-After` / `RateLimit-Remaining` 响应头；Redis 故障时 fail-open 并记日志。
+- 策略按类别配置：订单创建/支付等关键写接口默认 5 QPS / 桶容量 10（`RATE_LIMIT_WRITE_RATE` / `RATE_LIMIT_WRITE_BURST`），AI 生成接口默认 1 QPS / 桶容量 3（`RATE_LIMIT_AI_RATE` / `RATE_LIMIT_AI_BURST`），全局读接口不限流。
+- 新增限流指标 `redcart_rate_limit_allowed_total` / `redcart_rate_limit_rejected_total` / `redcart_rate_limit_backend_errors_total`（按 class 标签），经 `/metrics` 暴露给 Prometheus。
+
 ### 可观测性：Prometheus 指标采集
 
 - 新增 Prometheus 容器（`docker-compose.yml`），每 15 秒采集后端 `/metrics` 端点。

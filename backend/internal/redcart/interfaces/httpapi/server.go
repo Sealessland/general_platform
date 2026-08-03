@@ -9,18 +9,26 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// Server 持有应用服务与 gin 路由引擎，是 HTTP 接口层入口。
+// Server 持有应用服务、限流中间件与 gin 路由引擎，是 HTTP 接口层入口。
 type Server struct {
-	service *application.Service
-	router  *gin.Engine
+	service   *application.Service
+	rateLimit *RateLimitMiddleware // 为空时全部路由不做限流（测试或未接 Redis 的回退路径）
+	router    *gin.Engine
 }
 
-// NewServer 以生产模式创建 gin 引擎并注册全部路由。
+// NewServer 创建不带限流的服务，作为无 Redis 或测试环境的回退路径。
 func NewServer(service *application.Service) *Server {
+	return NewServerWithRateLimit(service, nil)
+}
+
+// NewServerWithRateLimit 以生产模式创建 gin 引擎并注册全部路由；
+// rateLimit 非空时对关键写接口与 AI 接口按类别限流。
+func NewServerWithRateLimit(service *application.Service, rateLimit *RateLimitMiddleware) *Server {
 	gin.SetMode(gin.ReleaseMode)
 	s := &Server{
-		service: service,
-		router:  gin.New(),
+		service:   service,
+		rateLimit: rateLimit,
+		router:    gin.New(),
 	}
 	s.registerRoutes()
 	return s
@@ -66,14 +74,14 @@ func (s *Server) registerRoutes() {
 	s.router.PUT("/api/cart/items/:id", s.withAuth(true, requireRole(domain.RoleConsumer, s.handleCartItemByID)))
 	s.router.DELETE("/api/cart/items/:id", s.withAuth(true, requireRole(domain.RoleConsumer, s.handleCartItemByID)))
 
-	s.router.POST("/api/orders/preview", s.withAuth(true, requireRole(domain.RoleConsumer, s.handleOrderPreview)))
+	s.router.POST("/api/orders/preview", s.withAuth(true, requireRole(domain.RoleConsumer, s.limit(rateLimitClassWrite, s.handleOrderPreview))))
 	s.router.GET("/api/orders", s.withAuth(true, requireRole(domain.RoleConsumer, s.handleOrders)))
-	s.router.POST("/api/orders", s.withAuth(true, requireRole(domain.RoleConsumer, s.handleOrders)))
+	s.router.POST("/api/orders", s.withAuth(true, requireRole(domain.RoleConsumer, s.limit(rateLimitClassWrite, s.handleOrders))))
 	s.router.GET("/api/orders/:id", s.withAuth(true, requireRole(domain.RoleConsumer, s.handleOrderByID)))
-	s.router.POST("/api/orders/:id/pay", s.withAuth(true, requireRole(domain.RoleConsumer, s.handleOrderByID)))
-	s.router.POST("/api/orders/:id/cancel", s.withAuth(true, requireRole(domain.RoleConsumer, s.handleOrderByID)))
-	s.router.POST("/api/orders/:id/finish", s.withAuth(true, requireRole(domain.RoleConsumer, s.handleOrderByID)))
-	s.router.POST("/api/orders/:id/refund", s.withAuth(true, requireRole(domain.RoleConsumer, s.handleOrderByID)))
+	s.router.POST("/api/orders/:id/pay", s.withAuth(true, requireRole(domain.RoleConsumer, s.limit(rateLimitClassWrite, s.handleOrderByID))))
+	s.router.POST("/api/orders/:id/cancel", s.withAuth(true, requireRole(domain.RoleConsumer, s.limit(rateLimitClassWrite, s.handleOrderByID))))
+	s.router.POST("/api/orders/:id/finish", s.withAuth(true, requireRole(domain.RoleConsumer, s.limit(rateLimitClassWrite, s.handleOrderByID))))
+	s.router.POST("/api/orders/:id/refund", s.withAuth(true, requireRole(domain.RoleConsumer, s.limit(rateLimitClassWrite, s.handleOrderByID))))
 
 	s.router.GET("/api/merchant/products", s.withAuth(true, requireMerchant(s.handleMerchantProducts)))
 	s.router.POST("/api/merchant/products", s.withAuth(true, requireMerchant(s.handleMerchantProducts)))
@@ -90,10 +98,18 @@ func (s *Server) registerRoutes() {
 	s.router.GET("/api/merchant/dashboard/products", s.withAuth(true, requireMerchant(s.handleMerchantDashboardProducts)))
 	s.router.GET("/api/merchant/dashboard/summary", s.withAuth(true, requireMerchant(s.handleMerchantDashboardSummary)))
 
-	s.router.POST("/api/ai/product-selling-points", s.withAuth(true, requireMerchant(s.handleAISellingPoints)))
-	s.router.POST("/api/ai/business-review", s.withAuth(true, requireMerchant(s.handleAIBusinessReview)))
-	s.router.POST("/api/ai/a2ui", s.withAuth(true, s.handleAIA2UISurface))
+	s.router.POST("/api/ai/product-selling-points", s.withAuth(true, requireMerchant(s.limit(rateLimitClassAI, s.handleAISellingPoints))))
+	s.router.POST("/api/ai/business-review", s.withAuth(true, requireMerchant(s.limit(rateLimitClassAI, s.handleAIBusinessReview))))
+	s.router.POST("/api/ai/a2ui", s.withAuth(true, s.limit(rateLimitClassAI, s.handleAIA2UISurface)))
 	s.router.GET("/api/ai/tasks/:id", s.withAuth(true, s.handleAITaskByID))
 
 	s.router.GET("/metrics", gin.WrapH(promhttp.Handler()))
+}
+
+// limit 按类别给 authedHandler 链接入限流中间件；未配置限流中间件时原样放行。
+func (s *Server) limit(class string, next authedHandler) authedHandler {
+	if s.rateLimit == nil {
+		return next
+	}
+	return s.rateLimit.limit(class, next)
 }

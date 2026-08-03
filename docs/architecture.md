@@ -69,7 +69,7 @@ RedCart Copilot 当前 MVP 的代码映射如下：
 
 当前运行时数据库是 PostgreSQL，运行时缓存/会话源是 Redis。后端启动必须同时提供 `POSTGRES_DSN` 与 `REDIS_ADDR`：PostgreSQL 仓储适配器负责迁移、种子数据和业务真相；Redis 读侧适配器包裹 PostgreSQL 仓储，认证 token 以 Redis 为共享会话源并带本地热缓存，商品、SKU 和 SKU 列表读路径优先命中 Redis。订单、库存、购物车和业务真相仍以 PostgreSQL 为准。仓储层不再保留内存适配器；服务层、HTTP 层和性能验证不得使用内存仓储替代 PostgreSQL/Redis/RabbitMQ 运行路径。
 
-HTTP 入口当前由 Gin 负责路由和 method gate，但 Gin 只停留在产品接口层；应用层和领域层不依赖 Gin 类型。AI 能力当前通过 `backend/internal/ai.AIProvider` 契约接入：默认使用进程内 `MockProvider`；当 `AI_PROVIDER=grpc` 时，后端通过 gRPC 调用独立的 `ai-service` 容器（`GenerateSellingPoints` / `GenerateBusinessReview` / `GenerateA2UISurface`）。gRPC schema 定义在 `api/proto/ai/v1/ai.proto`，生成代码分别提交到 `backend/internal/ai/gen/ai/v1` 与 `ai-service/app/ai/v1`；新增的 `A2UIService` 按 A2UI v0.9 协议返回声明式 UI JSON，供前端 `/a2ui` 页面渲染。Redis 当前只落地 session 与 catalog 热读适配，不承载库存预扣、购物车、幂等真相或订单事件总线职责。
+HTTP 入口当前由 Gin 负责路由和 method gate，但 Gin 只停留在产品接口层；应用层和领域层不依赖 Gin 类型。AI 能力当前通过 `backend/internal/ai.AIProvider` 契约接入：默认使用进程内 `MockProvider`；当 `AI_PROVIDER=grpc` 时，后端通过 gRPC 调用独立的 `ai-service` 容器（`GenerateSellingPoints` / `GenerateBusinessReview` / `GenerateA2UISurface`）。gRPC schema 定义在 `api/proto/ai/v1/ai.proto`，生成代码分别提交到 `backend/internal/ai/gen/ai/v1` 与 `ai-service/app/ai/v1`；新增的 `A2UIService` 按 A2UI v0.9 协议返回声明式 UI JSON，供前端 `/a2ui` 页面渲染。Redis 当前只落地 session 与 catalog 热读适配，不承载库存预扣、购物车、幂等真相或订单事件总线职责。Redis 额外承载基于 Lua 脚本的令牌桶限流计数（key 前缀 `redcart:ratelimit:`，写入即自动过期），限流策略与身份识别由产品接口层中间件决定，Redis 故障时中间件 fail-open。
 
 商家经营看板由后端进程内实现：`backend/internal/redcart/application` 的 Service 直接提供 `DashboardFunnel`、`DashboardProducts` 和 `DashboardSummary` 方法，进程内读取 PostgreSQL 仓储计算，无独立服务。该实现只承担商家看板查询，不接管订单状态迁移、库存锁、购物车或认证会话，避免破坏 PostgreSQL 强事务边界。
 
@@ -77,7 +77,7 @@ HTTP 入口当前由 Gin 负责路由和 method gate，但 Gin 只停留在产�
 
 运行时性能分析当前支持可选的 Grafana Pyroscope Go push mode。接入点位于后端启动装配层，依赖环境变量启用，不向应用层或领域层泄漏供应商类型。
 
-指标采集当前由 Prometheus 承担：后端通过 `/metrics` 端点暴露 Go runtime 指标和自定义 HTTP 指标（`redcart_http_requests_total` 按请求计数、`redcart_http_request_duration_seconds` 按延迟分布），Prometheus 容器每 15 秒采集一次。中间件位于产品接口层，不向应用层或领域层泄漏可观测性供应商类型。
+指标采集当前由 Prometheus 承担：后端通过 `/metrics` 端点暴露 Go runtime 指标和自定义 HTTP 指标（`redcart_http_requests_total` 按请求计数、`redcart_http_request_duration_seconds` 按延迟分布），以及限流指标（`redcart_rate_limit_allowed_total` / `redcart_rate_limit_rejected_total` / `redcart_rate_limit_backend_errors_total`，按 class 标签），Prometheus 容器每 15 秒采集一次。中间件位于产品接口层，不向应用层或领域层泄漏可观测性供应商类型。
 
 ## 扩展方式
 

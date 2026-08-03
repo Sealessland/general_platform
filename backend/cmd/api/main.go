@@ -14,6 +14,7 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/event/outbox"
 	rabbitmqevent "github.com/example/redcart-copilot/backend/internal/event/rabbitmq"
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
+	redisrepo "github.com/example/redcart-copilot/backend/internal/redcart/infrastructure/redis"
 	"github.com/example/redcart-copilot/backend/internal/redcart/interfaces/httpapi"
 )
 
@@ -25,7 +26,7 @@ func main() {
 	}
 	defer stopProfiler()
 
-	repo, cleanup, err := initRepository(log.Default())
+	repo, limiter, cleanup, err := initRepository(log.Default())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -35,9 +36,13 @@ func main() {
 		log.Fatal(err)
 	}
 	service := application.NewService(repo, aiProvider)
+	rateLimit, err := newRateLimitMiddleware(limiter, log.Default())
+	if err != nil {
+		log.Fatal(err)
+	}
 	server := &http.Server{
 		Addr:              ":" + envOrDefault("PORT", envOrDefault("HTTP_PORT", "18080")),
-		Handler:           httpapi.NewServer(service).Handler(),
+		Handler:           httpapi.NewServerWithRateLimit(service, rateLimit).Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -84,6 +89,28 @@ func newAIProvider() (backendai.AIProvider, error) {
 	default:
 		return backendai.MockProvider{}, nil
 	}
+}
+
+// newRateLimitMiddleware 从环境变量解析写接口与 AI 接口的限流策略并构造
+// 中间件；策略非法时返回错误（启动即失败，避免带病运行）。
+func newRateLimitMiddleware(limiter *redisrepo.Limiter, logger *log.Logger) (*httpapi.RateLimitMiddleware, error) {
+	writePolicy, err := redisrepo.RateLimitPolicyFromEnv(
+		"RATE_LIMIT_WRITE",
+		os.Getenv("RATE_LIMIT_WRITE_RATE"), os.Getenv("RATE_LIMIT_WRITE_BURST"),
+		redisrepo.Policy{RatePerSecond: redisrepo.DefaultWriteRate, Burst: redisrepo.DefaultWriteBurst},
+	)
+	if err != nil {
+		return nil, err
+	}
+	aiPolicy, err := redisrepo.RateLimitPolicyFromEnv(
+		"RATE_LIMIT_AI",
+		os.Getenv("RATE_LIMIT_AI_RATE"), os.Getenv("RATE_LIMIT_AI_BURST"),
+		redisrepo.Policy{RatePerSecond: redisrepo.DefaultAIRate, Burst: redisrepo.DefaultAIBurst},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return httpapi.NewRateLimitMiddleware(limiter, logger, writePolicy, aiPolicy), nil
 }
 
 // envOrDefault 读取环境变量，未设置或值为空时返回 fallback。
