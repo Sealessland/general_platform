@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
+# 仓库结构验证：检查必需文件清单、关键文档/契约内容冒烟、Codex hook 自检与密钥扫描。
+# 是仓库的门禁入口之一（ci.yml 调用），用于尽早发现结构或文档回退。
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
+# 必需文件清单：新增核心文件时应同步更新此处
 required_files=(
   "README.md"
   "AGENTS.md"
@@ -77,12 +80,12 @@ required_files=(
   "ai-service/app/check_prompts.py"
   "scripts/check-openapi.sh"
   "scripts/git-worktree.sh"
-  "scripts/scan-secrets.sh"
   "scripts/update-branch-status.py"
   "scripts/validate-workspace.sh"
 )
 
 missing=0
+# 逐个校验必需文件是否存在
 for path in "${required_files[@]}"; do
   if [[ ! -f "$path" ]]; then
     printf 'missing required file: %s\n' "$path" >&2
@@ -94,6 +97,7 @@ if [[ "$missing" -ne 0 ]]; then
   exit 1
 fi
 
+# 关键文档内容冒烟：防止核心契约/说明文件被清空或误删关键段落
 grep -q "依赖方向" docs/architecture.md
 grep -q "RedCart Copilot" README.md
 grep -q "项目约束" docs/project-constraints.md
@@ -120,8 +124,10 @@ grep -q "PostToolUse" .codex/config.toml
 grep -q "Project-scoped Codex hook" .codex/hooks/redcart_project_hook.py
 grep -q "项目专用 Codex Hook" docs/testing/2026-06-08-validation-status.md
 
+# Codex 项目 hook 自检（--self-test 验证 hook 可加载）
 python3 .codex/hooks/redcart_project_hook.py --self-test >/tmp/redcart-hook-self-test.out
 
+# 密钥泄露扫描（复用 scan-secrets.sh 作为全仓库门禁的一部分）
 bash ci/scripts/scan-secrets.sh
 
 printf 'redcart copilot portfolio validation passed\n'
