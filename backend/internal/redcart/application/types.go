@@ -58,15 +58,10 @@ type NoteSummary struct {
 	LinkedProducts []ProductCard `json:"linked_products"`
 }
 
-// NoteDetail 笔记详情视图，字段与 NoteSummary 完全一致（当前仅语义区分）。
+// NoteDetail 笔记详情视图：字段与 NoteSummary 完全一致，直接内嵌复用（JSON 输出保持扁平展开）。
+// 保留独立类型仅用于表达"详情"语义，未来详情字段扩展时再解耦。
 type NoteDetail struct {
-	ID             int64         `json:"id"`
-	Title          string        `json:"title"`
-	Content        string        `json:"content"`
-	CoverURL       string        `json:"cover_url"`
-	ViewCount      int64         `json:"view_count"`
-	LikeCount      int64         `json:"like_count"`
-	LinkedProducts []ProductCard `json:"linked_products"`
+	NoteSummary
 }
 
 type ProductCard struct {
@@ -102,6 +97,8 @@ type ProductDetail struct {
 	SKUs          []SKUView `json:"skus"`
 }
 
+// CartItemInput 加购入参（SKU + 数量）。与 OrderLineInput 结构相同，但语义分属"加购"与"下单"两个阶段，
+// 刻意分开定义，便于两侧入参独立演进（如加购未来可能增加勾选/备注等字段）。
 type CartItemInput struct {
 	SKUID    int64 `json:"sku_id"`
 	Quantity int   `json:"quantity"`
@@ -135,6 +132,8 @@ type CartView struct {
 	SelectedAmountCent int64          `json:"selected_amount_cent"`
 }
 
+// OrderLineInput 下单明细行（SKU + 数量）。与 CartItemInput 结构相同，但语义分属"下单"与"加购"，
+// 刻意分开定义，避免两个流程的入参演进互相牵连。
 type OrderLineInput struct {
 	SKUID    int64 `json:"sku_id"`
 	Quantity int   `json:"quantity"`
@@ -249,16 +248,18 @@ type DashboardFunnel struct {
 }
 
 type DashboardProductStat struct {
-	ProductID      int64  `json:"product_id"`
-	Title          string `json:"title"`
-	Status         string `json:"status"`
-	Exposure       int    `json:"exposure"`
-	Clicks         int    `json:"clicks"`
-	AddToCart      int    `json:"add_to_cart"`
-	Orders         int    `json:"orders"`
-	Paid           int    `json:"paid"`
-	Refunds        int    `json:"refunds"`
-	AvailableStock int    `json:"available_stock"`
+	ProductID int64  `json:"product_id"`
+	Title     string `json:"title"`
+	Status    string `json:"status"`
+	Exposure  int    `json:"exposure"`
+	Clicks    int    `json:"clicks"`
+	AddToCart int    `json:"add_to_cart"`
+	Orders    int    `json:"orders"`
+	Paid      int    `json:"paid"`
+	Refunds   int    `json:"refunds"`
+	// AvailableStock 商家视角库存合计：按总库存口径统计（未扣减锁定库存），
+	// 与消费者侧 ProductCard.Stock（总库存 - 锁定库存）口径不同。
+	AvailableStock int `json:"available_stock"`
 }
 
 // DashboardSummary 经营汇总：商品/订单数量、GMV（分）、退款数与库存预警 SKU 数。

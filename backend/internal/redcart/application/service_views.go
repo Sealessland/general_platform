@@ -35,17 +35,9 @@ func (s *Service) toNoteSummary(note domain.Note) NoteSummary {
 	}
 }
 
-// toNoteDetail 将笔记领域对象转为详情视图。
+// toNoteDetail 将笔记领域对象转为详情视图；详情与列表摘要同构，直接复用 toNoteSummary。
 func (s *Service) toNoteDetail(note domain.Note) NoteDetail {
-	return NoteDetail{
-		ID:             note.ID,
-		Title:          note.Title,
-		Content:        note.Content,
-		CoverURL:       note.CoverURL,
-		ViewCount:      note.ViewCount,
-		LikeCount:      note.LikeCount,
-		LinkedProducts: s.productCards(note.ProductIDs),
-	}
+	return NoteDetail{NoteSummary: s.toNoteSummary(note)}
 }
 
 // productCards 按 ID 批量拉取商品卡片视图，缺失的商品静默跳过。
@@ -113,4 +105,13 @@ func (s *Service) toSKUView(sku domain.SKU) SKUView {
 		LockedStock: sku.LockedStock,
 		Status:      sku.Status,
 	}
+}
+
+// currentOrderView 直接以订单当前状态渲染视图，供幂等分支使用：重复操作不报错，而是返回现状。
+func (s *Service) currentOrderView(order domain.Order) (*OrderView, error) {
+	view, err := s.enrichOrderView(order)
+	if err != nil {
+		return nil, err
+	}
+	return &view, nil
 }

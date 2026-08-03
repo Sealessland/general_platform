@@ -222,14 +222,14 @@ func (s *Service) MerchantShipOrder(ctx context.Context, actor Actor, orderID in
 }
 
 // MerchantApproveRefund 商家审批退款：事务内将已确认的库存返还（Stock += Quantity），
-// 幂等分支直接返回当前视图；重复审批由 refundApproveAlreadyApplied 守卫拦截。
+// 幂等分支直接返回当前视图；重复审批由 refundApprovalAlreadyApplied 守卫拦截。
 func (s *Service) MerchantApproveRefund(ctx context.Context, actor Actor, orderID int64) (*OrderView, error) {
 	_ = ctx
 	order, ok := s.repo.GetOrder(orderID)
 	if !ok || order.MerchantID != actor.MerchantID {
 		return nil, newError(ErrorNotFound, "order not found")
 	}
-	if refundApproveAlreadyApplied(order) {
+	if refundApprovalAlreadyApplied(order) {
 		return s.currentOrderView(order)
 	}
 	if err := orderdomain.Transition(order.Status, orderdomain.StatusRefunded); err != nil {
@@ -260,7 +260,7 @@ func (s *Service) MerchantApproveRefund(ctx context.Context, actor Actor, orderI
 	})
 	if err != nil {
 		current, ok := s.repo.GetOrder(order.ID)
-		if ok && refundApproveAlreadyApplied(current) {
+		if ok && refundApprovalAlreadyApplied(current) {
 			return s.currentOrderView(current)
 		}
 		return nil, newError(ErrorConflict, err.Error())

@@ -285,7 +285,7 @@ func (s *Service) RequestRefund(ctx context.Context, actor Actor, orderID int64,
 	if !ok || order.UserID != actor.UserID {
 		return nil, newError(ErrorNotFound, "order not found")
 	}
-	if refundAlreadyApplied(order) {
+	if refundRequestAlreadyApplied(order) {
 		return s.currentOrderView(order)
 	}
 	if err := orderdomain.Transition(order.Status, orderdomain.StatusRefunding); err != nil {
@@ -300,7 +300,7 @@ func (s *Service) RequestRefund(ctx context.Context, actor Actor, orderID int64,
 	}, nil)
 	if err != nil {
 		current, ok := s.repo.GetOrder(order.ID)
-		if ok && refundAlreadyApplied(current) {
+		if ok && refundRequestAlreadyApplied(current) {
 			return s.currentOrderView(current)
 		}
 		return nil, newError(ErrorConflict, err.Error())
