@@ -11,7 +11,7 @@
 
 ## 实现形态
 
-- `MockAIProvider`：用于本地演示、测试和 CI
+- `MockProvider`：后端进程内当前实现的确定性规则适配器（`backend/internal/ai`），用于本地演示、测试和 CI；ai-service 侧对应实现为 `RuleBasedProvider`
 - `OpenAIProvider`：规划中的真实线上适配器
 - `QwenProvider`：规划中的备选适配器
 - `LocalModelProvider`：规划中的本地推理适配器
@@ -23,7 +23,7 @@
 - `GET /api/ai/tasks/{id}`
 - `POST /api/ai/a2ui`
 
-当前后端会把请求记录为 AI 任务，并返回可重复的 mock 草案结果，保证前端、测试和流程演示都可稳定运行。
+当前后端会把请求记录为 AI 任务，并默认由进程内 `MockProvider`（`AI_PROVIDER=grpc` 时为 ai-service 的 `RuleBasedProvider`）返回可重复的规则生成草案结果，保证前端、测试和流程演示都可稳定运行。
 
 ### A2UI 界面生成
 

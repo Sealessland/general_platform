@@ -2,6 +2,8 @@
 
 这个仓库按稳定职责分层组织，而不是围绕某个具体框架堆代码。
 
+> 提示：本文件与 `docs/architecture/` 目录同名不同物。本文件是分层与依赖方向的权威说明；目录内是各专题设计文档（系统上下文、订单状态机、库存设计、AI Copilot 设计等），详见 `docs/index.md` 的「架构专题」。
+
 ## 分层
 
 ### 1. 产品接口层
@@ -73,7 +75,7 @@ HTTP 入口当前由 Gin 负责路由和 method gate，但 Gin 只停留在产�
 
 商家经营看板由后端进程内实现：`backend/internal/redcart/application` 的 Service 直接提供 `DashboardFunnel`、`DashboardProducts` 和 `DashboardSummary` 方法，进程内读取 PostgreSQL 仓储计算，无独立服务。该实现只承担商家看板查询，不接管订单状态迁移、库存锁、购物车或认证会话，避免破坏 PostgreSQL 强事务边界。
 
-事件与异步边界当前由消息队列承担：订单状态变更（`ORDER_CREATED`、`ORDER_PAID`、`ORDER_CANCELLED`、`ORDER_SHIPPED`、`ORDER_FINISHED`、`ORDER_REFUND_REQUESTED`）和用户行为事件被写入数据库后，通过事务性发件箱（Transactional Outbox）发布到 RabbitMQ。发布器位于集成适配层，领域层和应用层只依赖 `backend/internal/event`（或 `backend/internal/mq`）定义的事件发布契约。RabbitMQ 是当前 Docker Compose MVP 的运行时依赖之一，详情见 `docs/adr/0006-message-queue-and-event-driven.md`。这一设计先把事件作为「逻辑服务」之间的边界，未来通知、分析、库存等消费者可以独立成进程，而订单核心服务仍保留在单体内部。
+事件与异步边界当前由消息队列承担：订单状态变更（`ORDER_CREATED`、`ORDER_PAID`、`ORDER_CANCELLED`、`ORDER_SHIPPED`、`ORDER_FINISHED`、`ORDER_REFUND_REQUESTED`）和用户行为事件被写入数据库后，通过事务性发件箱（Transactional Outbox）发布到 RabbitMQ。发布器位于集成适配层，领域层和应用层只依赖 `backend/internal/event` 定义的事件发布契约。RabbitMQ 是当前 Docker Compose MVP 的运行时依赖之一，详情见 `docs/adr/0006-message-queue-and-event-driven.md`。这一设计先把事件作为「逻辑服务」之间的边界，未来通知、分析、库存等消费者可以独立成进程，而订单核心服务仍保留在单体内部。
 
 运行时性能分析当前支持可选的 Grafana Pyroscope Go push mode。接入点位于后端启动装配层，依赖环境变量启用，不向应用层或领域层泄漏供应商类型。
 

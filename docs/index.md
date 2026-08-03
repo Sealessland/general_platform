@@ -6,8 +6,18 @@
 
 - 项目总览：`../README.md`
 - 项目约束：`project-constraints.md`
-- 架构边界：`architecture.md`
+- 架构边界：`architecture.md`（单文件；注意与 `architecture/` 目录同名不同物，目录内是各专题设计文档，见下方「架构专题」）
 - 完成检查清单：`checklists/agent-native-completion.md`
+
+## 架构专题
+
+`architecture.md` 是分层与依赖方向的权威说明；`architecture/` 目录存放按主题展开的设计文档，二者同名不同物，入口相互指引。
+
+- 系统上下文：`architecture/system-context.md`
+- 订单状态机：`architecture/order-state-machine.md`
+- 库存设计：`architecture/inventory-design.md`
+- 订单状态变更幂等：`architecture/order-action-idempotency.md`
+- AI Copilot 设计：`architecture/ai-copilot-design.md`
 
 ## API 文档
 
@@ -39,10 +49,6 @@
 - AI Provider 抽象：`adr/0004-ai-provider-abstraction.md`
 - 服务边界与 RPC 使用场景：`adr/0005-service-boundaries-and-rpc.md`
 - 消息队列与事件驱动边界：`adr/0006-message-queue-and-event-driven.md`
-
-## 关键行为
-
-- 订单状态变更幂等：`architecture/order-action-idempotency.md`
 
 ## Agent 路由
 

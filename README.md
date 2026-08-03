@@ -116,7 +116,7 @@ python3 -m http.server 4173 --bind 127.0.0.1
 - 后端连接 PostgreSQL 后会自动执行初始化迁移与演示种子数据
 - Redis 读侧适配默认启用：认证 session 以 Redis 为真相源并带本地热缓存，商品/SKU/SKU 列表读路径会优先命中 Redis 缓存
 - 商家经营看板由后端进程内实现：`service_dashboard.go` 直接读取 PostgreSQL 仓储计算漏斗/商品/汇总，无独立服务依赖
-- AI 能力使用可重复的 Mock Provider
+- AI 能力默认使用进程内 `MockProvider`（`backend/internal/ai`，可重复的本地规则实现），无需外部模型；`AI_PROVIDER=grpc` 时由 ai-service 的 `RuleBasedProvider` 提供
 - 消息队列与事件驱动边界见 `docs/adr/0006-message-queue-and-event-driven.md`
 
 ## 工程规则
