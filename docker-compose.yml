@@ -44,25 +44,6 @@ services:
       timeout: 5s
       retries: 5
 
-  analytics-service:
-    build:
-      context: ./backend
-    network_mode: host
-    command: ["redcart-analytics"]
-    environment:
-      POSTGRES_DSN: postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable
-      ANALYTICS_GRPC_PORT: 50052
-    expose:
-      - "50052"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "nc -z 127.0.0.1 50052"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   rabbitmq:
     image: rabbitmq:4-management-alpine
     network_mode: host
@@ -105,8 +86,6 @@ services:
       REDIS_ADDR: 127.0.0.1:6380
       AI_PROVIDER: grpc
       AI_GRPC_ADDR: 127.0.0.1:50051
-      ANALYTICS_PROVIDER: grpc
-      ANALYTICS_GRPC_ADDR: 127.0.0.1:50052
       RABBITMQ_ADDR: amqp://redcart:redcart@127.0.0.1:5672/
       RABBITMQ_EXCHANGE: redcart.events
       PYROSCOPE_SERVER_ADDRESS: ${PYROSCOPE_SERVER_ADDRESS-http://127.0.0.1:4040}
@@ -126,8 +105,6 @@ services:
       pyroscope:
         condition: service_started
       ai-service:
-        condition: service_healthy
-      analytics-service:
         condition: service_healthy
 
   frontend:
