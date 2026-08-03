@@ -12,12 +12,15 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 )
 
+// checkoutLine 是结算行的内部表示：校验通过后固化的商品、SKU 与数量快照。
 type checkoutLine struct {
 	product  domain.Product
 	sku      domain.SKU
 	quantity int
 }
 
+// normalizeCheckoutLines 归一化结算行：未指定明细时取购物车勾选项；
+// 逐个校验 SKU/商品状态与库存，并禁止跨商家混合结算。
 func (s *Service) normalizeCheckoutLines(actor Actor, items []OrderLineInput) ([]checkoutLine, error) {
 	lines := items
 	if len(lines) == 0 {
@@ -64,6 +67,7 @@ func (s *Service) normalizeCheckoutLines(actor Actor, items []OrderLineInput) ([
 	return out, nil
 }
 
+// buildCreatedOrder 由结算预演结果构造待落库的订单，并将商品/价格信息固化为快照（防止后续变更影响历史订单）。
 func buildCreatedOrder(actor Actor, idempotencyKey string, input CheckoutInput, preview OrderPreview, now time.Time) domain.Order {
 	order := domain.Order{
 		OrderNo:            fmt.Sprintf("RC%014d", now.UnixNano()%1e14),
@@ -97,6 +101,7 @@ func buildCreatedOrder(actor Actor, idempotencyKey string, input CheckoutInput, 
 	return order
 }
 
+// buildInventoryLocks 按订单明细构造库存锁定记录（下单时锁定、支付时扣减或取消时释放）。
 func buildInventoryLocks(items []domain.OrderItem, now time.Time) []domain.InventoryLock {
 	locks := make([]domain.InventoryLock, 0, len(items))
 	for _, item := range items {
@@ -112,6 +117,7 @@ func buildInventoryLocks(items []domain.OrderItem, now time.Time) []domain.Inven
 	return locks
 }
 
+// appendOrderCreatedEvent 写入订单创建事件并返回其落库结果（供下单响应即时组装视图）。
 func (s *Service) appendOrderCreatedEvent(order domain.Order, actor Actor, now time.Time) domain.OrderEvent {
 	event, _ := s.repo.AppendOrderEvent(domain.OrderEvent{
 		OrderID:      order.ID,
@@ -126,6 +132,7 @@ func (s *Service) appendOrderCreatedEvent(order domain.Order, actor Actor, now t
 	return event
 }
 
+// recordOrderCreateBehavior 追加"下单"行为事件，供商家漏斗/商品统计使用。
 func (s *Service) recordOrderCreateBehavior(order domain.Order, actor Actor, now time.Time) {
 	_, _ = s.repo.AppendBehaviorEvent(domain.BehaviorEvent{
 		UserID:     actor.UserID,
@@ -136,6 +143,7 @@ func (s *Service) recordOrderCreateBehavior(order domain.Order, actor Actor, now
 	})
 }
 
+// freshCreatedOrderView 基于下单时已知的明细/事件/锁定记录组装视图，避免再查一次仓储。
 func freshCreatedOrderView(order domain.Order, event domain.OrderEvent, locks []domain.InventoryLock) OrderView {
 	view := OrderView{
 		ID:                 order.ID,
@@ -195,6 +203,7 @@ func freshCreatedOrderView(order domain.Order, event domain.OrderEvent, locks []
 	return view
 }
 
+// buildOrderPreview 由结算行计算金额明细与应付金额（暂未实现优惠，折扣恒为 0）。
 func (s *Service) buildOrderPreview(lines []checkoutLine) (*OrderPreview, error) {
 	if len(lines) == 0 {
 		return nil, newError(ErrorInvalidArgument, "checkout items are required")
@@ -222,6 +231,7 @@ func (s *Service) buildOrderPreview(lines []checkoutLine) (*OrderPreview, error)
 	return preview, nil
 }
 
+// orderEventPayload 序列化订单事件负载，供事务内/异步 outbox 写入使用。
 func orderEventPayload(order domain.Order, operatorID int64, operatorRole string, remark string) ([]byte, error) {
 	return json.Marshal(map[string]any{
 		"order_id":      order.ID,
@@ -235,6 +245,7 @@ func orderEventPayload(order domain.Order, operatorID int64, operatorRole string
 	})
 }
 
+// appendOrderEventToOutbox 在状态流转事务内追加 outbox 事件，与库存/状态变更保持原子提交。
 func (s *Service) appendOrderEventToOutbox(tx OrderTx, order domain.Order, eventType event.Type, operatorID int64, operatorRole string, remark string, now time.Time) {
 	payload, err := orderEventPayload(order, operatorID, operatorRole, remark)
 	if err != nil {
@@ -248,6 +259,7 @@ func (s *Service) appendOrderEventToOutbox(tx OrderTx, order domain.Order, event
 	})
 }
 
+// appendOrderEventToOutboxAsync 通过 Service.outbox 异步追加事件；未配置 outbox（如内存仓储）时静默跳过。
 func (s *Service) appendOrderEventToOutboxAsync(order domain.Order, eventType event.Type, operatorID int64, operatorRole string, remark string, now time.Time) {
 	if s.outbox == nil {
 		return
@@ -264,6 +276,8 @@ func (s *Service) appendOrderEventToOutboxAsync(order domain.Order, eventType ev
 	})
 }
 
+// releaseInventory 释放库存锁定：fromLocked=true 时回滚未扣减的锁定（取消场景），
+// false 时返还已确认扣减的可用库存（退款场景）；锁定记录统一置为 released。
 func (s *Service) releaseInventory(tx OrderTx, orderID int64, fromLocked bool) error {
 	now := s.now()
 	for _, lock := range tx.ListInventoryLocksByOrder(orderID) {
@@ -292,6 +306,7 @@ func (s *Service) releaseInventory(tx OrderTx, orderID int64, fromLocked bool) e
 	return nil
 }
 
+// enrichOrderView 组装完整订单视图：商品快照 + 状态事件 + 库存锁定记录，供详情/列表/流转后返回。
 func (s *Service) enrichOrderView(order domain.Order) (OrderView, error) {
 	view := OrderView{
 		ID:                 order.ID,

@@ -11,6 +11,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// Register 注册用户：校验必填项与角色，密码经 bcrypt 加密后落库；商家角色会顺带创建默认店铺。
 func (s *Service) Register(ctx context.Context, input RegisterInput) (*AuthSession, error) {
 	_ = ctx
 	if strings.TrimSpace(input.Nickname) == "" || strings.TrimSpace(input.Phone) == "" || input.Password == "" {
@@ -51,6 +52,7 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (*AuthSessi
 	return s.issueSession(user)
 }
 
+// Login 使用手机号 + 密码登录：bcrypt 校验通过后签发新的访问/刷新令牌对。
 func (s *Service) Login(ctx context.Context, input LoginInput) (*AuthSession, error) {
 	_ = ctx
 	user, ok := s.repo.FindUserByPhone(strings.TrimSpace(input.Phone))
@@ -69,6 +71,7 @@ func (s *Service) Logout(ctx context.Context, token string) error {
 	return nil
 }
 
+// RefreshSession 用刷新令牌换取新的令牌对：旧刷新令牌作废，实现令牌轮换。
 func (s *Service) RefreshSession(ctx context.Context, refreshToken string) (*AuthSession, error) {
 	_ = ctx
 	user, tokenType, ok := s.repo.GetUserByToken(refreshToken)
@@ -82,6 +85,7 @@ func (s *Service) RefreshSession(ctx context.Context, refreshToken string) (*Aut
 	return s.issueSession(user)
 }
 
+// Me 校验访问令牌并返回当前用户信息（仅接受 access 类型令牌）。
 func (s *Service) Me(ctx context.Context, token string) (*UserView, error) {
 	_ = ctx
 	user, tokenType, ok := s.repo.GetUserByToken(token)
@@ -92,6 +96,7 @@ func (s *Service) Me(ctx context.Context, token string) (*UserView, error) {
 	return &view, nil
 }
 
+// Authenticate 校验访问令牌并构建 Actor 上下文；若用户为商家，补充其店铺 ID。
 func (s *Service) Authenticate(token string) (*Actor, error) {
 	user, tokenType, ok := s.repo.GetUserByToken(token)
 	if !ok || tokenType != TokenTypeAccess {
@@ -108,6 +113,7 @@ func (s *Service) Authenticate(token string) (*Actor, error) {
 	return actor, nil
 }
 
+// issueSession 生成并落库一对不透明令牌（访问 + 刷新），返回会话视图。
 func (s *Service) issueSession(user domain.User) (*AuthSession, error) {
 	accessToken, err := generateOpaqueToken()
 	if err != nil {
@@ -136,6 +142,7 @@ func hashPassword(password string) (string, error) {
 	return string(hash), nil
 }
 
+// generateOpaqueToken 生成 32 字节的随机十六进制令牌，用作不透明的访问/刷新令牌。
 func generateOpaqueToken() (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {

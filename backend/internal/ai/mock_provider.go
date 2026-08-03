@@ -7,8 +7,12 @@ import (
 	"strings"
 )
 
+// MockProvider 是 AIProvider 的内存演示实现：返回固定文案与本地构造的
+// A2UI 指令，无需外部服务即可支撑开发与测试。
 type MockProvider struct{}
 
+// GenerateSellingPoints 生成固定格式的卖点文案；商品名为必填，人群缺省为
+// "target users"。
 func (MockProvider) GenerateSellingPoints(ctx context.Context, req SellingPointRequest) (*SellingPointResult, error) {
 	if req.ProductName == "" {
 		return nil, fmt.Errorf("product name is required")
@@ -25,6 +29,7 @@ func (MockProvider) GenerateSellingPoints(ctx context.Context, req SellingPointR
 	}, nil
 }
 
+// GenerateBusinessReview 返回固定诊断文案；窗口天数必须为正。
 func (MockProvider) GenerateBusinessReview(ctx context.Context, req BusinessReviewRequest) (*BusinessReviewResult, error) {
 	if req.WindowDays <= 0 {
 		return nil, fmt.Errorf("window days must be positive")
@@ -38,6 +43,8 @@ func (MockProvider) GenerateBusinessReview(ctx context.Context, req BusinessRevi
 	}, nil
 }
 
+// GenerateA2UISurface 根据上下文是否包含商品列表决定界面形态：
+// 有商品时生成"智能导购专题"，否则生成简单的问候界面。
 func (m MockProvider) GenerateA2UISurface(ctx context.Context, req A2UISurfaceRequest) (*A2UISurfaceResult, error) {
 	if req.SurfaceID == "" {
 		return nil, fmt.Errorf("surface_id is required")
@@ -55,6 +62,8 @@ func (m MockProvider) GenerateA2UISurface(ctx context.Context, req A2UISurfaceRe
 	return m.generateGreetingSurface(req)
 }
 
+// generateGreetingSurface 生成问候类 A2UI 界面：三行 NDJSON 指令
+// （创建界面 / 更新组件 / 更新数据模型），回显用户意图。
 func (MockProvider) generateGreetingSurface(req A2UISurfaceRequest) (*A2UISurfaceResult, error) {
 	safeIntent := strings.ReplaceAll(req.UserIntent, `"`, `\"`)
 	a2uiJSON := `{"version":"v0.9","createSurface":{"surfaceId":"` + req.SurfaceID + `","catalogId":"https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json","theme":{"primaryColor":"#00BFFF"},"sendDataModel":false}}` + "\n" +
@@ -66,7 +75,11 @@ func (MockProvider) generateGreetingSurface(req A2UISurfaceRequest) (*A2UISurfac
 	}, nil
 }
 
+// generateShoppingGuideSurface 生成智能导购专题界面：按预算、场景与可选
+// 种草笔记组装组件树，最后输出 createSurface / updateComponents /
+// updateDataModel 三段 NDJSON 指令。
 func (m MockProvider) generateShoppingGuideSurface(req A2UISurfaceRequest, contextMap map[string]any) (*A2UISurfaceResult, error) {
+	// 预算从上下文读取；JSON 数字可能解码为 float64 或 int64，需统一转成 int64。
 	budget := int64(0)
 	if b, ok := contextMap["budget"]; ok {
 		switch v := b.(type) {
@@ -100,6 +113,7 @@ func (m MockProvider) generateShoppingGuideSurface(req A2UISurfaceRequest, conte
 		rootChildren = append(rootChildren, "notes_section")
 	}
 
+	// 价格以分为单位存储，展示时换算为元。
 	components := []map[string]any{
 		{"id": "root", "component": "Column", "children": rootChildren},
 		{"id": "header_card", "component": "Card", "child": "header_col"},
@@ -177,6 +191,7 @@ func (m MockProvider) generateShoppingGuideSurface(req A2UISurfaceRequest, conte
 	}, nil
 }
 
+// sceneTitle 将场景标识映射为中文专题标题，未知场景回退到默认标题。
 func sceneTitle(scene string) string {
 	switch scene {
 	case "dorm_desk":
@@ -190,6 +205,8 @@ func sceneTitle(scene string) string {
 	}
 }
 
+// normalizeNotes 把上下文中的笔记字段统一为 int64 并精简为 A2UI
+// 数据模型所需的字段集合。
 func (MockProvider) normalizeNotes(notes []map[string]any) []any {
 	out := make([]any, 0, len(notes))
 	for _, note := range notes {
@@ -221,6 +238,8 @@ func (MockProvider) normalizeNotes(notes []map[string]any) []any {
 	return out
 }
 
+// normalizeProducts 精简商品字段、统一数值类型（含 分→元 的价格换算），
+// 并把卖点列表拼接成展示用字符串。
 func (MockProvider) normalizeProducts(products []any) []any {
 	out := make([]any, 0, len(products))
 	for _, p := range products {
@@ -262,6 +281,8 @@ func (MockProvider) normalizeProducts(products []any) []any {
 	return out
 }
 
+// mustJSON 将结构序列化为 JSON 字符串，失败即 panic；此处传入的都是
+// 内部构造的合法结构，序列化失败视为编程错误。
 func mustJSON(v any) string {
 	b, err := json.Marshal(v)
 	if err != nil {

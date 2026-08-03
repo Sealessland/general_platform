@@ -11,19 +11,28 @@ import (
 	pyroscope "github.com/grafana/pyroscope-go"
 )
 
+// defaultPyroscopeApplicationName 是未显式配置 PYROSCOPE_APPLICATION_NAME
+// 时使用的默认应用名。
 const defaultPyroscopeApplicationName = "redcart.backend"
 
+// runningProfiler 抽象一个已启动的 profiler，便于测试注入替身。
 type runningProfiler interface {
 	Stop() error
 }
 
+// profilerStarter 抽象 profiler 启动函数，便于测试替换真实的 pyroscope 启动。
 type profilerStarter func(pyroscope.Config) (runningProfiler, error)
 
+// profilerRuntimeSettings 记录需要临时调整的 Go 运行时采样配置；
+// 停止 profiler 时需要恢复原值。
 type profilerRuntimeSettings struct {
 	mutexProfileFraction int
 	blockProfileRate     int
 }
 
+// startProfilerFromEnv 根据环境变量决定是否启动 pyroscope 采样：
+// 未配置 PYROSCOPE_SERVER_ADDRESS 时返回空操作；启动失败会先恢复运行时
+// 采样配置再返回错误。返回的闭包负责停止 profiler 并恢复采样配置。
 func startProfilerFromEnv(start profilerStarter, logger *log.Logger) (func(), error) {
 	cfg, runtimeSettings, enabled, err := loadProfilerConfigFromEnv()
 	if err != nil {
@@ -52,6 +61,8 @@ func startProfilerFromEnv(start profilerStarter, logger *log.Logger) (func(), er
 	}, nil
 }
 
+// loadProfilerConfigFromEnv 从环境变量组装 pyroscope.Config；
+// 返回的 enabled 为 false 表示未配置服务地址（profiler 不启用）。
 func loadProfilerConfigFromEnv() (pyroscope.Config, profilerRuntimeSettings, bool, error) {
 	serverAddress := strings.TrimSpace(os.Getenv("PYROSCOPE_SERVER_ADDRESS"))
 	if serverAddress == "" {
@@ -85,6 +96,8 @@ func loadProfilerConfigFromEnv() (pyroscope.Config, profilerRuntimeSettings, boo
 	}, runtimeSettings, true, nil
 }
 
+// loadProfilerRuntimeSettingsFromEnv 读取互斥锁/阻塞采样率配置，
+// 非法值（非正整数）返回错误。
 func loadProfilerRuntimeSettingsFromEnv() (profilerRuntimeSettings, error) {
 	mutexProfileFraction, err := parsePositiveProfilerInt("PYROSCOPE_MUTEX_PROFILE_FRACTION")
 	if err != nil {
@@ -100,6 +113,7 @@ func loadProfilerRuntimeSettingsFromEnv() (profilerRuntimeSettings, error) {
 	}, nil
 }
 
+// parsePositiveProfilerInt 解析正整数环境变量；空串视为 0（表示不启用该采样）。
 func parsePositiveProfilerInt(key string) (int, error) {
 	raw := strings.TrimSpace(os.Getenv(key))
 	if raw == "" {
@@ -112,6 +126,8 @@ func parsePositiveProfilerInt(key string) (int, error) {
 	return value, nil
 }
 
+// applyProfilerRuntimeSettings 应用运行时采样配置，返回恢复函数；
+// 恢复时互斥锁采样恢复原值，阻塞采样率归零（关闭）。
 func applyProfilerRuntimeSettings(settings profilerRuntimeSettings) func() {
 	previousMutexFraction := 0
 	if settings.mutexProfileFraction > 0 {
@@ -131,6 +147,7 @@ func applyProfilerRuntimeSettings(settings profilerRuntimeSettings) func() {
 	}
 }
 
+// pyroscopeStart 是 profilerStarter 的真实实现，直接调用 pyroscope.Start。
 func pyroscopeStart(cfg pyroscope.Config) (runningProfiler, error) {
 	return pyroscope.Start(cfg)
 }

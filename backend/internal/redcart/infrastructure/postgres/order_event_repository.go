@@ -26,6 +26,8 @@ func (r *Repository) AppendOrderEvent(event domain.OrderEvent) (domain.OrderEven
 	return appendOrderEvent(r.db, event)
 }
 
+// appendOrderEvent 是事务版追加订单事件的辅助函数（供 pgOrderTx 复用），
+// 与仓储直接调用走同一实现。
 func appendOrderEvent(q dbQuerier, event domain.OrderEvent) (domain.OrderEvent, error) {
 	err := q.QueryRow(
 		`INSERT INTO order_events (order_id, from_status, to_status, event_type, operator_id, operator_role, remark, created_at)
@@ -43,6 +45,7 @@ type orderEventScanner interface {
 	Scan(dest ...any) error
 }
 
+// scanOrderEvent 解码订单事件；from_status 可空（订单的首条事件）。
 func scanOrderEvent(scanner orderEventScanner) (domain.OrderEvent, error) {
 	var event domain.OrderEvent
 	var fromStatus sql.NullString

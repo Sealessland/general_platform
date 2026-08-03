@@ -41,6 +41,9 @@ func (r *Repository) GetUser(id int64) (domain.User, bool) {
 	return user, err == nil
 }
 
+// SaveSession / GetUserByToken / DeleteSession 维护进程内的 token -> 用户
+// 内存会话表，仅用于单实例演示；多实例或正式部署应替换为 Redis 等共享
+// 会话存储（见 infrastructure/redis 下的 SessionRepository）。
 func (r *Repository) SaveSession(accessToken, refreshToken string, userID int64) error {
 	r.sessionMu.Lock()
 	defer r.sessionMu.Unlock()
@@ -65,6 +68,7 @@ func (r *Repository) GetUserByToken(token string) (domain.User, application.Toke
 	return user, entry.tokenType, true
 }
 
+// DeleteSession 注销时删除该用户的全部 token（一处退出、所有会话失效）。
 func (r *Repository) DeleteSession(token string) {
 	r.sessionMu.Lock()
 	defer r.sessionMu.Unlock()

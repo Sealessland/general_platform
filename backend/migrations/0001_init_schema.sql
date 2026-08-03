@@ -1,3 +1,5 @@
+-- redcart 初始 schema：用户/商家/笔记/商品/购物车/订单/库存锁/行为事件/
+-- AI 生成任务等核心业务表，以及统一维护 updated_at 的触发器 set_updated_at()。
 CREATE TABLE users (
   id BIGSERIAL PRIMARY KEY,
   nickname VARCHAR(100) NOT NULL,

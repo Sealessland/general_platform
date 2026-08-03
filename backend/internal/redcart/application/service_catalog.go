@@ -6,6 +6,7 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 )
 
+// ListNotes 分页返回笔记摘要列表。
 func (s *Service) ListNotes(ctx context.Context, limit, offset int) ([]NoteSummary, error) {
 	_ = ctx
 	notes := s.repo.ListNotes(limit, offset)
@@ -16,6 +17,7 @@ func (s *Service) ListNotes(ctx context.Context, limit, offset int) ([]NoteSumma
 	return out, nil
 }
 
+// GetNote 返回笔记详情并自增浏览量；传入已认证 Actor 时记录浏览行为事件。
 func (s *Service) GetNote(ctx context.Context, noteID int64, actor *Actor) (*NoteDetail, error) {
 	_ = ctx
 	note, ok := s.repo.GetNote(noteID)
@@ -45,6 +47,7 @@ func (s *Service) GetNote(ctx context.Context, noteID int64, actor *Actor) (*Not
 	return &view, nil
 }
 
+// ListProducts 分页返回在线商品；离线/草稿商品对消费者不可见。
 func (s *Service) ListProducts(ctx context.Context, limit, offset int) ([]ProductCard, error) {
 	_ = ctx
 	products := s.repo.ListProducts(limit, offset)
@@ -58,6 +61,7 @@ func (s *Service) ListProducts(ctx context.Context, limit, offset int) ([]Produc
 	return out, nil
 }
 
+// GetProduct 返回商品详情；传入已认证 Actor 时记录商品点击行为事件。
 func (s *Service) GetProduct(ctx context.Context, productID int64, actor *Actor) (*ProductDetail, error) {
 	_ = ctx
 	product, ok := s.repo.GetProduct(productID)
@@ -77,6 +81,7 @@ func (s *Service) GetProduct(ctx context.Context, productID int64, actor *Actor)
 	return &view, nil
 }
 
+// ListProductSKUs 列出商品的全部 SKU；商品不存在时返回 NotFound。
 func (s *Service) ListProductSKUs(ctx context.Context, productID int64) ([]SKUView, error) {
 	_ = ctx
 	if _, ok := s.repo.GetProduct(productID); !ok {
@@ -90,6 +95,7 @@ func (s *Service) ListProductSKUs(ctx context.Context, productID int64) ([]SKUVi
 	return out, nil
 }
 
+// primaryMerchantID 取笔记关联商品列表中第一个可读取商品的商家 ID，用于行为事件归属。
 func (s *Service) primaryMerchantID(productIDs []int64) int64 {
 	for _, productID := range productIDs {
 		if product, ok := s.repo.GetProduct(productID); ok {

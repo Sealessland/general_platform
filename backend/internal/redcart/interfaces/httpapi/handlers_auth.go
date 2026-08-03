@@ -51,6 +51,8 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+// handleMe 以可选认证方式注册，匿名请求也会进入，因此需从请求头重新解析 token
+// 后交给服务层查询会话（handleLogout/handleRefresh 采用相同模式）。
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request, actor application.Actor) {
 	if r.Method != http.MethodGet {
 		writeMethodNotAllowed(w)

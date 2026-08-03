@@ -11,6 +11,7 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 )
 
+// countingRepo 包装底层仓库并统计各类读取次数，用于断言缓存确实命中而非回源。
 type countingRepo struct {
 	application.Repository
 	productReads int
@@ -33,11 +34,14 @@ func (r *countingRepo) ListSKUsByProduct(productID int64) []domain.SKU {
 	return r.Repository.ListSKUsByProduct(productID)
 }
 
+// newCatalogCacheRepo 构造 TTL 为 1 小时的缓存仓库，测试用。
 func newCatalogCacheRepo(t *testing.T, base application.Repository, client goredis.UniversalClient) *CatalogCacheRepository {
 	t.Helper()
 	return NewCatalogCacheRepository(base, client, time.Hour)
 }
 
+// TestCatalogCacheRepositoryUsesLocalCacheAfterFirstRead 验证首次回源后，
+// 二次读取命中本地缓存（底层仓库读取次数保持为 1）。
 func TestCatalogCacheRepositoryUsesLocalCacheAfterFirstRead(t *testing.T) {
 	fixture := newRedisPostgresFixture(t)
 	product, sku := createRedisCatalogFixture(t, fixture.repo, 12)
@@ -75,6 +79,8 @@ func TestCatalogCacheRepositoryUsesLocalCacheAfterFirstRead(t *testing.T) {
 	}
 }
 
+// TestCatalogCacheRepositoryReadsFromRedisAcrossInstances 验证两个仓库实例
+// 共享同一 Redis 时，第二个实例能命中第一个实例写入的缓存（零回源）。
 func TestCatalogCacheRepositoryReadsFromRedisAcrossInstances(t *testing.T) {
 	fixture := newRedisPostgresFixture(t)
 	product, _ := createRedisCatalogFixture(t, fixture.repo, 12)
@@ -100,6 +106,8 @@ func TestCatalogCacheRepositoryReadsFromRedisAcrossInstances(t *testing.T) {
 	}
 }
 
+// TestCatalogCacheRepositoryInvalidatesSKUListOnSaveSKU 验证保存 SKU 后
+// 该商品 SKU 列表缓存被失效，再次读取会重新回源。
 func TestCatalogCacheRepositoryInvalidatesSKUListOnSaveSKU(t *testing.T) {
 	fixture := newRedisPostgresFixture(t)
 	product, _ := createRedisCatalogFixture(t, fixture.repo, 12)
@@ -121,6 +129,8 @@ func TestCatalogCacheRepositoryInvalidatesSKUListOnSaveSKU(t *testing.T) {
 	}
 }
 
+// TestCatalogCacheRepositoryInvalidatesOrderSKUsAfterSaveOrderWithInventoryLocks
+// 验证下单（携带库存锁）后相关 SKU 缓存被失效，重新读取可见锁定库存。
 func TestCatalogCacheRepositoryInvalidatesOrderSKUsAfterSaveOrderWithInventoryLocks(t *testing.T) {
 	fixture := newRedisPostgresFixture(t)
 	product, sku := createRedisCatalogFixture(t, fixture.repo, 12)
@@ -180,6 +190,7 @@ func TestCatalogCacheRepositoryInvalidatesOrderSKUsAfterSaveOrderWithInventoryLo
 	}
 }
 
+// createRedisCatalogFixture 创建商品与 SKU 的集成测试夹具（标题带时间戳避免冲突）。
 func createRedisCatalogFixture(t *testing.T, repo *postgresrepo.Repository, stock int) (domain.Product, domain.SKU) {
 	t.Helper()
 	now := time.Now().UTC()

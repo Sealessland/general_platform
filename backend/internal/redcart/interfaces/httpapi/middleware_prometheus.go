@@ -9,6 +9,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
+// 以下指标按 方法/路径/状态 维度统计请求量与耗时，供 Prometheus 采集。
 var (
 	httpRequestsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{

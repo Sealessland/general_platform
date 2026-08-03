@@ -8,6 +8,8 @@ func (r *Repository) ListInventoryLocksByOrder(orderID int64) []domain.Inventory
 	return listInventoryLocksByOrder(r.db, orderID)
 }
 
+// listInventoryLocksByOrder / updateInventoryLock 是仓储与订单事务（pgOrderTx）
+// 共用的实现，保证库存锁的查询与更新在普通与事务路径下行为一致。
 func listInventoryLocksByOrder(q dbQuerier, orderID int64) []domain.InventoryLock {
 	rows, err := q.Query(`SELECT id, order_id, sku_id, quantity, status, locked_at, confirmed_at, released_at, created_at, updated_at FROM inventory_locks WHERE order_id = $1 ORDER BY id`, orderID)
 	if err != nil {

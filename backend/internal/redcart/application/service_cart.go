@@ -6,6 +6,7 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 )
 
+// GetCart 返回当前用户的购物车视图，含勾选商品的数量与金额汇总。
 func (s *Service) GetCart(ctx context.Context, actor Actor) (*CartView, error) {
 	_ = ctx
 	items := s.repo.ListCartItems(actor.UserID)
@@ -13,6 +14,7 @@ func (s *Service) GetCart(ctx context.Context, actor Actor) (*CartView, error) {
 	return &view, nil
 }
 
+// AddCartItem 将 SKU 加入购物车：同一 SKU 已存在时累加数量，并追加加购行为事件。
 func (s *Service) AddCartItem(ctx context.Context, actor Actor, input CartItemInput) (*CartItemView, error) {
 	_ = ctx
 	if input.Quantity <= 0 {
@@ -74,6 +76,7 @@ func (s *Service) AddCartItem(ctx context.Context, actor Actor, input CartItemIn
 	return &view, nil
 }
 
+// UpdateCartItem 局部更新购物车项的数量与勾选状态（仅更新入参中非零/非空的字段）。
 func (s *Service) UpdateCartItem(ctx context.Context, actor Actor, itemID int64, input CartItemUpdateInput) (*CartItemView, error) {
 	_ = ctx
 	item, ok := s.repo.GetCartItem(actor.UserID, itemID)
@@ -95,6 +98,7 @@ func (s *Service) UpdateCartItem(ctx context.Context, actor Actor, itemID int64,
 	return &view, nil
 }
 
+// DeleteCartItem 删除购物车项；删除不存在的项返回 NotFound。
 func (s *Service) DeleteCartItem(ctx context.Context, actor Actor, itemID int64) error {
 	_ = ctx
 	if err := s.repo.DeleteCartItem(actor.UserID, itemID); err != nil {
@@ -103,6 +107,7 @@ func (s *Service) DeleteCartItem(ctx context.Context, actor Actor, itemID int64)
 	return nil
 }
 
+// buildCartView 组装购物车视图，并累加勾选商品的件数、数量与金额。
 func (s *Service) buildCartView(items []domain.CartItem) CartView {
 	out := CartView{Items: make([]CartItemView, 0, len(items))}
 	for _, item := range items {
@@ -117,6 +122,7 @@ func (s *Service) buildCartView(items []domain.CartItem) CartView {
 	return out
 }
 
+// toCartItemView 组装购物车项视图，可用库存为总库存减去锁定库存。
 func (s *Service) toCartItemView(item domain.CartItem) CartItemView {
 	product, _ := s.repo.GetProduct(item.ProductID)
 	sku, _ := s.repo.GetSKU(item.SKUID)

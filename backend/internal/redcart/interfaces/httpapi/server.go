@@ -9,11 +9,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+// Server 持有应用服务与 gin 路由引擎，是 HTTP 接口层入口。
 type Server struct {
 	service *application.Service
 	router  *gin.Engine
 }
 
+// NewServer 以生产模式创建 gin 引擎并注册全部路由。
 func NewServer(service *application.Service) *Server {
 	gin.SetMode(gin.ReleaseMode)
 	s := &Server{
@@ -24,10 +26,13 @@ func NewServer(service *application.Service) *Server {
 	return s
 }
 
+// Handler 返回可被 net/http 直接使用的处理器。
 func (s *Server) Handler() http.Handler {
 	return s.router
 }
 
+// registerRoutes 注册全部路由；同一路径下的多个动作（如 /orders/:id/pay、/cancel、
+// /finish、/refund）复用同一个 handler，由 handler 按路径后缀分发。
 func (s *Server) registerRoutes() {
 	s.router.HandleMethodNotAllowed = true
 	s.router.Use(gin.Logger(), gin.Recovery(), prometheusMiddleware(), corsMiddleware())

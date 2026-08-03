@@ -10,6 +10,9 @@ import (
 	redisrepo "github.com/example/redcart-copilot/backend/internal/redcart/infrastructure/redis"
 )
 
+// initRepository 初始化仓储：POSTGRES_DSN 为必填，随后用 Redis 会话/目录
+// 缓存包装基础仓储。返回 (仓储, 清理函数, 错误)，清理函数按依赖逆序
+// 释放资源（先 Redis 后 Postgres）。
 func initRepository(logger *log.Logger) (application.Repository, func(), error) {
 	dsn := os.Getenv("POSTGRES_DSN")
 	if dsn == "" {
@@ -41,6 +44,9 @@ func initRepository(logger *log.Logger) (application.Repository, func(), error) 
 	}, nil
 }
 
+// wrapRepositoryWithRedisSession 用 Redis 依次包装基础仓储：
+// CatalogCacheRepository（目录缓存）→ SessionRepository（会话），
+// 各 TTL 均从环境变量读取，任一 TTL 非法或 Redis 不可用时返回错误。
 func wrapRepositoryWithRedisSession(base application.Repository, logger *log.Logger) (application.Repository, func(), error) {
 	addr := envOrDefault("REDIS_ADDR", "")
 	if addr == "" {

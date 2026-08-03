@@ -207,6 +207,8 @@ func TestPostgresApplicationMerchantDashboardAndAI(t *testing.T) {
 	}
 }
 
+// newPostgresApplicationService 构造接入真实 Postgres 的应用服务；
+// 未设置 RUN_POSTGRES_INTEGRATION 或 POSTGRES_DSN 时跳过（回归测试在同一包内复用）。
 func newPostgresApplicationService(t *testing.T) (*postgresrepo.Repository, *application.Service) {
 	t.Helper()
 	if os.Getenv("RUN_POSTGRES_INTEGRATION") != "1" {
@@ -224,6 +226,7 @@ func newPostgresApplicationService(t *testing.T) (*postgresrepo.Repository, *app
 	return repo, application.NewService(repo, backendai.MockProvider{})
 }
 
+// createPostgresApplicationProductAndSKU 造数：创建一个在线商品及其可用库存为 stock 的 SKU。
 func createPostgresApplicationProductAndSKU(t *testing.T, repo *postgresrepo.Repository, stock int) (int64, int64) {
 	t.Helper()
 	now := time.Now().UTC()

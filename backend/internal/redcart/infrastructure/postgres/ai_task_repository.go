@@ -56,6 +56,8 @@ type aiTaskScanner interface {
 	Scan(dest ...any) error
 }
 
+// scanAITask 将查询行解码为 domain.AIGenerationTask；user_id/merchant_id 与
+// output_json 列均可为 NULL，解码时分别以零值和空 map 兜底。
 func scanAITask(scanner aiTaskScanner) (domain.AIGenerationTask, error) {
 	var task domain.AIGenerationTask
 	var userID, merchantID sql.NullInt64

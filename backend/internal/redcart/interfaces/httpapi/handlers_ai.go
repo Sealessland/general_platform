@@ -43,6 +43,7 @@ func (s *Server) handleAIBusinessReview(w http.ResponseWriter, r *http.Request, 
 	writeJSON(w, http.StatusOK, result)
 }
 
+// handleAIA2UISurface 生成 A2UI 交互界面，surface_id 与 user_intent 为必填。
 func (s *Server) handleAIA2UISurface(w http.ResponseWriter, r *http.Request, actor application.Actor) {
 	if r.Method != http.MethodPost {
 		writeMethodNotAllowed(w)

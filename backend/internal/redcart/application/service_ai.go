@@ -12,6 +12,8 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 )
 
+// GenerateSellingPoints 为商家生成商品卖点：先落库 pending 任务，再同步调用 AI 提供方，
+// 无论成败都回写任务状态，接口层可轮询 GetAITask 获取结果。
 func (s *Service) GenerateSellingPoints(ctx context.Context, actor Actor, input SellingPointInput) (*AITaskView, error) {
 	if actor.Role != domain.RoleMerchant {
 		return nil, newError(ErrorForbidden, "merchant access required")
@@ -59,6 +61,7 @@ func (s *Service) GenerateSellingPoints(ctx context.Context, actor Actor, input 
 	return &view, nil
 }
 
+// GenerateBusinessReview 基于漏斗与汇总数据生成经营诊断：统计窗口与商品可配置，输出诊断与优化建议。
 func (s *Service) GenerateBusinessReview(ctx context.Context, actor Actor, input BusinessReviewInput) (*AITaskView, error) {
 	funnel, err := s.DashboardFunnel(ctx, actor)
 	if err != nil {
@@ -109,6 +112,7 @@ func (s *Service) GenerateBusinessReview(ctx context.Context, actor Actor, input
 	return &view, nil
 }
 
+// GenerateA2UISurface 根据用户意图与上下文生成 A2UI 界面描述；调用前会先做上下文富化（见 enrichA2UIContext）。
 func (s *Service) GenerateA2UISurface(ctx context.Context, actor Actor, input A2UISurfaceInput) (*A2UISurfaceView, error) {
 	_ = actor
 	enrichedContext, err := s.enrichA2UIContext(ctx, input)
@@ -129,6 +133,8 @@ func (s *Service) GenerateA2UISurface(ctx context.Context, actor Actor, input A2
 	}, nil
 }
 
+// enrichA2UIContext 富化 A2UI 上下文：从意图中解析预算（默认按元换算为分），
+// 若命中购物导购信号则注入预算内商品、相关笔记与批量加购候选，供 AI 生成更精准的界面。
 func (s *Service) enrichA2UIContext(ctx context.Context, input A2UISurfaceInput) (string, error) {
 	contextMap := map[string]any{}
 	if input.ContextJSON != "" {
@@ -236,6 +242,7 @@ func (s *Service) relatedNotes(ctx context.Context, productIDs []int64) []NoteSu
 
 var budgetRegex = regexp.MustCompile(`(?i)(\d+)\s*(百|元|块|rmb|yuan)?`)
 
+// parseBudgetFromIntent 从意图文本中解析预算（元/百），结果统一换算为分；无预算信号时返回 0。
 func parseBudgetFromIntent(intent string) int64 {
 	intent = strings.ToLower(intent)
 	matches := budgetRegex.FindStringSubmatch(intent)
@@ -253,6 +260,7 @@ func parseBudgetFromIntent(intent string) int64 {
 	return num * 100
 }
 
+// inferSceneFromIntent 从意图文本中推断使用场景（宿舍/办公/出行，默认通用）。
 func inferSceneFromIntent(intent string) string {
 	intent = strings.ToLower(intent)
 	if strings.Contains(intent, "宿舍") {
@@ -267,6 +275,7 @@ func inferSceneFromIntent(intent string) string {
 	return "general"
 }
 
+// GetAITask 查询 AI 任务；商家仅可读自己店铺的任务，消费者仅可读自己的任务。
 func (s *Service) GetAITask(ctx context.Context, actor Actor, taskID int64) (*AITaskView, error) {
 	_ = ctx
 	task, ok := s.repo.GetAITask(taskID)
@@ -277,6 +286,7 @@ func (s *Service) GetAITask(ctx context.Context, actor Actor, taskID int64) (*AI
 	return &view, nil
 }
 
+// canReadAITask 校验 Actor 是否有权读取任务：商家限本店铺，其余按用户归属。
 func canReadAITask(actor Actor, task domain.AIGenerationTask) bool {
 	if actor.Role == domain.RoleMerchant {
 		return actor.MerchantID != 0 && task.MerchantID == actor.MerchantID

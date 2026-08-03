@@ -1,7 +1,10 @@
+// Package application 是 redcart 的应用用例层：校验输入、执行权限与业务规则、
+// 编排仓储/事件/AI 依赖，并输出面向接口层的视图对象（DTO）。
 package application
 
 import "time"
 
+// Actor 描述已认证请求方的身份上下文：用户 ID、角色，以及商家角色下的店铺 ID。
 type Actor struct {
 	UserID     int64
 	Role       string
@@ -21,6 +24,7 @@ type LoginInput struct {
 	Password string `json:"password"`
 }
 
+// AuthSession 是登录/刷新后返回的会话：不透明访问令牌 + 刷新令牌 + 用户视图。
 type AuthSession struct {
 	Token        string   `json:"token"`
 	RefreshToken string   `json:"refresh_token,omitempty"`
@@ -43,6 +47,7 @@ type MerchantView struct {
 	Status      string `json:"status"`
 }
 
+// NoteSummary 笔记列表视图：标题/内容摘要与关联商品卡片。
 type NoteSummary struct {
 	ID             int64         `json:"id"`
 	Title          string        `json:"title"`
@@ -53,6 +58,7 @@ type NoteSummary struct {
 	LinkedProducts []ProductCard `json:"linked_products"`
 }
 
+// NoteDetail 笔记详情视图，字段与 NoteSummary 完全一致（当前仅语义区分）。
 type NoteDetail struct {
 	ID             int64         `json:"id"`
 	Title          string        `json:"title"`
@@ -121,6 +127,7 @@ type CartItemView struct {
 	SellingPoints []string `json:"selling_points"`
 }
 
+// CartView 购物车视图，另含勾选商品的件数、数量与金额汇总（金额单位：分）。
 type CartView struct {
 	Items              []CartItemView `json:"items"`
 	SelectedItemCount  int            `json:"selected_item_count"`
@@ -172,6 +179,7 @@ type OrderEventView struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
+// OrderView 订单详情视图：包含商品快照、状态流转事件与库存锁定记录，由 enrichOrderView 组装。
 type OrderView struct {
 	ID                 int64               `json:"id"`
 	OrderNo            string              `json:"order_no"`
@@ -195,6 +203,7 @@ type OrderView struct {
 	InventoryLocks     []InventoryLockView `json:"inventory_locks"`
 }
 
+// OrderPreview 结算预演结果：金额明细与库存是否充足（StockOK），供下单前确认。
 type OrderPreview struct {
 	MerchantID         int64           `json:"merchant_id"`
 	Items              []OrderItemView `json:"items"`
@@ -229,6 +238,7 @@ type MerchantOrderShipInput struct {
 	Remark      string `json:"remark"`
 }
 
+// DashboardFunnel 转化漏斗：各阶段行为事件计数（浏览→点击→加购→下单→支付→退款）。
 type DashboardFunnel struct {
 	NoteViews     int `json:"note_views"`
 	ProductClicks int `json:"product_clicks"`
@@ -251,6 +261,7 @@ type DashboardProductStat struct {
 	AvailableStock int    `json:"available_stock"`
 }
 
+// DashboardSummary 经营汇总：商品/订单数量、GMV（分）、退款数与库存预警 SKU 数。
 type DashboardSummary struct {
 	ProductCount        int   `json:"product_count"`
 	OnlineProductCount  int   `json:"online_product_count"`
@@ -261,6 +272,7 @@ type DashboardSummary struct {
 	InventoryWarningSKU int   `json:"inventory_warning_sku"`
 }
 
+// SellingPointInput 卖点文案生成任务入参：商品名称、属性、目标人群、价格与用户评价。
 type SellingPointInput struct {
 	ProductName string   `json:"product_name"`
 	Attributes  []string `json:"attributes"`
@@ -269,22 +281,26 @@ type SellingPointInput struct {
 	Reviews     []string `json:"reviews"`
 }
 
+// BusinessReviewInput 经营诊断任务入参：统计窗口天数与可选的商品维度。
 type BusinessReviewInput struct {
 	WindowDays int   `json:"window_days"`
 	ProductID  int64 `json:"product_id"`
 }
 
+// A2UISurfaceInput A2UI 界面生成入参：surface 标识、用户意图与可选上下文 JSON。
 type A2UISurfaceInput struct {
 	SurfaceID   string `json:"surface_id"`
 	UserIntent  string `json:"user_intent"`
 	ContextJSON string `json:"context_json,omitempty"`
 }
 
+// A2UISurfaceView 生成的 A2UI 界面描述（AI 客户端可直接渲染的交互原语）。
 type A2UISurfaceView struct {
 	SurfaceID string `json:"surface_id"`
 	A2UIJSON  string `json:"a2ui_json"`
 }
 
+// AITaskView AI 任务轮询视图：状态、入参、输出与失败原因。
 type AITaskView struct {
 	ID           int64          `json:"id"`
 	TaskType     string         `json:"task_type"`

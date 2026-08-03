@@ -82,6 +82,7 @@ type productScanner interface {
 	Scan(dest ...any) error
 }
 
+// scanProduct 将查询行解码为 domain.Product，selling_points JSONB 解析为 []string。
 func scanProduct(scanner productScanner) (domain.Product, error) {
 	var product domain.Product
 	var sellingPoints []byte

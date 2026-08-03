@@ -36,6 +36,8 @@ func (s *Server) handleMerchantProducts(w http.ResponseWriter, r *http.Request, 
 	}
 }
 
+// handleMerchantProductByID 按路径后缀分发：/skus 创建 SKU、/online、/offline 上下架，
+// 其余视为按 ID 更新商品。
 func (s *Server) handleMerchantProductByID(w http.ResponseWriter, r *http.Request, actor application.Actor) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/merchant/products/")
 	switch {

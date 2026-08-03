@@ -1,3 +1,5 @@
+// Package main 是 redcart API 服务入口：负责按依赖顺序装配基础设施
+// （profiler、仓储、AI provider、outbox 转发器）并启动 HTTP 服务。
 package main
 
 import (
@@ -15,6 +17,7 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/interfaces/httpapi"
 )
 
+// main 装配各组件并启动 HTTP 服务；任一关键依赖初始化失败都会直接退出进程。
 func main() {
 	stopProfiler, err := startProfilerFromEnv(pyroscopeStart, log.Default())
 	if err != nil {
@@ -49,6 +52,9 @@ func main() {
 	}
 }
 
+// startOutboxPublisher 根据 RABBITMQ_ADDR 决定是否启用 outbox 后台转发：
+// 未配置地址或连接失败时返回空操作，保证无 RabbitMQ 的环境也能正常启动。
+// 返回的闭包用于停止转发器并关闭发布连接。
 func startOutboxPublisher(store event.OutboxRelayStore, logger *log.Logger) func() {
 	addr := envOrDefault("RABBITMQ_ADDR", "")
 	if addr == "" {
@@ -68,6 +74,8 @@ func startOutboxPublisher(store event.OutboxRelayStore, logger *log.Logger) func
 	return func() { relay.Stop(); _ = publisher.Close() }
 }
 
+// newAIProvider 根据 AI_PROVIDER 环境变量选择 AI 实现：
+// "grpc" 走 gRPC 客户端（默认地址 127.0.0.1:50051），其余值使用 MockProvider。
 func newAIProvider() (backendai.AIProvider, error) {
 	switch os.Getenv("AI_PROVIDER") {
 	case "grpc":
@@ -78,6 +86,7 @@ func newAIProvider() (backendai.AIProvider, error) {
 	}
 }
 
+// envOrDefault 读取环境变量，未设置或值为空时返回 fallback。
 func envOrDefault(key, fallback string) string {
 	if value := os.Getenv(key); value != "" {
 		return value

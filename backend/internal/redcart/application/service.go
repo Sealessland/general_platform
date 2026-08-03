@@ -7,6 +7,7 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/event"
 )
 
+// Service 聚合应用用例，编排仓储、事件与 AI 依赖；具体业务方法按域拆分在 service_*.go 中。
 type Service struct {
 	repo       Repository
 	outbox     event.Outbox
@@ -14,6 +15,8 @@ type Service struct {
 	now        func() time.Time
 }
 
+// NewService 构造应用服务；若 repo 同时实现 event.Outbox（如 postgres 仓储），
+// 则为订单状态流转开启事务内事件写出能力。
 func NewService(repo Repository, aiProvider backendai.AIProvider) *Service {
 	outbox, _ := repo.(event.Outbox)
 	return &Service{

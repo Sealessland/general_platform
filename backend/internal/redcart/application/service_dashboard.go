@@ -8,6 +8,7 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 )
 
+// DashboardFunnel 统计当前商家各转化阶段的行为事件数（浏览→点击→加购→下单→支付→退款）。
 func (s *Service) DashboardFunnel(ctx context.Context, actor Actor) (*DashboardFunnel, error) {
 	_ = ctx
 	if actor.Role != domain.RoleMerchant {
@@ -36,6 +37,7 @@ func (s *Service) DashboardFunnel(ctx context.Context, actor Actor) (*DashboardF
 	return result, nil
 }
 
+// DashboardProducts 按商品维度聚合行为事件与可用库存，结果按商品 ID 升序返回。
 func (s *Service) DashboardProducts(ctx context.Context, actor Actor) ([]DashboardProductStat, error) {
 	_ = ctx
 	if actor.Role != domain.RoleMerchant {
@@ -85,6 +87,7 @@ func (s *Service) DashboardProducts(ctx context.Context, actor Actor) ([]Dashboa
 	return out, nil
 }
 
+// DashboardSummary 汇总商家经营指标：商品/订单数量、GMV、退款数与库存预警 SKU 数（库存 <= 5 视为预警）。
 func (s *Service) DashboardSummary(ctx context.Context, actor Actor) (*DashboardSummary, error) {
 	_ = ctx
 	if actor.Role != domain.RoleMerchant {
@@ -118,6 +121,7 @@ func (s *Service) DashboardSummary(ctx context.Context, actor Actor) (*Dashboard
 	return summary, nil
 }
 
+// refundRate 计算退款率：已支付订单数为 0 时返回 0 以避免除零。
 func refundRate(summary *DashboardSummary) float64 {
 	if summary.PaidOrderCount == 0 {
 		return 0

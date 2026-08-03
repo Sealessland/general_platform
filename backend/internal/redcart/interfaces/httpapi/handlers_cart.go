@@ -37,6 +37,7 @@ func (s *Server) handleCartItems(w http.ResponseWriter, r *http.Request, actor a
 	writeJSON(w, http.StatusCreated, result)
 }
 
+// handleCartItemByID 同一路径按 HTTP 方法区分：PUT 更新条目、DELETE 删除条目。
 func (s *Server) handleCartItemByID(w http.ResponseWriter, r *http.Request, actor application.Actor) {
 	id, err := parseIDFromPath(r.URL.Path, "/api/cart/items/")
 	if err != nil {

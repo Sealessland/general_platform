@@ -15,6 +15,8 @@ var (
 	_ event.OutboxRelayStore = (*Repository)(nil)
 )
 
+// outboxStore 实现 event.OutboxStore 与 event.OutboxRelayStore，
+// 负责出站事件的追加、待发布事件的轮询，以及失败重试与死信迁移。
 type outboxStore struct {
 	db dbQuerier
 }
@@ -106,6 +108,8 @@ func (s *outboxStore) MarkPublished(ctx context.Context, ids []int64) error {
 	return nil
 }
 
+// MarkFailed 累加该事件的失败重试次数并记录错误信息；一旦达到重试上限，
+// 事件会被迁出到 outbox_dead_letter 死信表，避免无限重试并保留排查线索。
 func (s *outboxStore) MarkFailed(ctx context.Context, id int64, reason string) error {
 	const maxRetries = 5
 	result, err := s.db.Exec(
@@ -148,6 +152,8 @@ func (s *outboxStore) BeginTx(ctx context.Context) (event.OutboxTx, error) {
 	return &outboxTx{tx: tx}, nil
 }
 
+// outboxTx 是事务版 outbox 存储的适配器，把 *gormTx 包装为 event.OutboxTx，
+// 使事件投递能与业务数据变更在同一事务中提交。
 type outboxTx struct {
 	tx *gormTx
 }
@@ -155,6 +161,8 @@ type outboxTx struct {
 func (t *outboxTx) Commit() error   { return t.tx.Commit() }
 func (t *outboxTx) Rollback() error { return t.tx.Rollback() }
 
+// PollPendingInTx 在事务内以 FOR UPDATE SKIP LOCKED 轮询待发布事件：
+// 多个 relay 实例并发消费时互不阻塞、互不重复领取同一事件。
 func (s *outboxStore) PollPendingInTx(ctx context.Context, tx event.OutboxTx, limit int) ([]event.Event, error) {
 	otx, ok := tx.(*outboxTx)
 	if !ok {
@@ -231,6 +239,8 @@ func (s *outboxStore) MarkFailedInTx(ctx context.Context, tx event.OutboxTx, id 
 	return nil
 }
 
+// appendOutboxEvent 在事务内追加 outbox 事件（供订单事务副作用复用），
+// 与 outboxStore.Append 逻辑一致，但作用于事务连接。
 func appendOutboxEvent(q dbQuerier, evt event.Event) (int64, error) {
 	payload := evt.Payload
 	if len(payload) == 0 {
@@ -249,6 +259,7 @@ func appendOutboxEvent(q dbQuerier, evt event.Event) (int64, error) {
 	return id, nil
 }
 
+// scanOutboxRows 将查询结果行解码为 event.Event 列表，payload 为 NULL 时置空。
 func scanOutboxRows(rows *sql.Rows) ([]event.Event, error) {
 	var events []event.Event
 	for rows.Next() {

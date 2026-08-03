@@ -10,6 +10,7 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 )
 
+// PreviewOrder 预演结算：校验商品与库存后返回金额明细和库存是否充足，不产生落库副作用。
 func (s *Service) PreviewOrder(ctx context.Context, actor Actor, input CheckoutInput) (*OrderPreview, error) {
 	_ = ctx
 	lines, err := s.normalizeCheckoutLines(actor, input.Items)
@@ -23,6 +24,8 @@ func (s *Service) PreviewOrder(ctx context.Context, actor Actor, input CheckoutI
 	return preview, nil
 }
 
+// CreateOrder 创建订单：支持按幂等键去重；不传商品明细时结算购物车中已勾选项，
+// 落库时同时写入库存锁定记录；若商品来源于购物车，下单成功后清空勾选项。
 func (s *Service) CreateOrder(ctx context.Context, actor Actor, idempotencyKey string, input CheckoutInput) (*OrderView, error) {
 	_ = ctx
 	idempotencyKey = strings.TrimSpace(idempotencyKey)
@@ -68,6 +71,7 @@ func (s *Service) CreateOrder(ctx context.Context, actor Actor, idempotencyKey s
 	return &view, nil
 }
 
+// ListOrders 分页返回当前消费者的订单列表。
 func (s *Service) ListOrders(ctx context.Context, actor Actor, limit, offset int) ([]OrderView, error) {
 	_ = ctx
 	orders := s.repo.ListOrdersByUser(actor.UserID, limit, offset)
@@ -82,6 +86,7 @@ func (s *Service) ListOrders(ctx context.Context, actor Actor, limit, offset int
 	return out, nil
 }
 
+// GetOrder 返回订单详情；消费者或订单所属商家均可读取。
 func (s *Service) GetOrder(ctx context.Context, actor Actor, orderID int64) (*OrderView, error) {
 	_ = ctx
 	order, ok := s.repo.GetOrder(orderID)
@@ -95,6 +100,8 @@ func (s *Service) GetOrder(ctx context.Context, actor Actor, orderID int64) (*Or
 	return &view, nil
 }
 
+// PayOrder 模拟支付：事务内将锁定库存转正（扣减可用库存并确认锁定记录），
+// 幂等分支直接返回当前视图；重复支付由 payAlreadyApplied 守卫拦截。
 func (s *Service) PayOrder(ctx context.Context, actor Actor, orderID int64) (*OrderView, error) {
 	_ = ctx
 	order, ok := s.repo.GetOrder(orderID)
@@ -166,6 +173,7 @@ func (s *Service) PayOrder(ctx context.Context, actor Actor, orderID int64) (*Or
 	return &view, nil
 }
 
+// CancelOrder 支付前取消订单：事务内释放已锁定但未扣减的库存，幂等分支直接返回当前视图。
 func (s *Service) CancelOrder(ctx context.Context, actor Actor, orderID int64) (*OrderView, error) {
 	_ = ctx
 	order, ok := s.repo.GetOrder(orderID)
@@ -221,6 +229,7 @@ func (s *Service) CancelOrder(ctx context.Context, actor Actor, orderID int64) (
 	return &view, nil
 }
 
+// FinishOrder 消费者确认收货，将已发货订单流转为已完成；幂等分支直接返回当前视图。
 func (s *Service) FinishOrder(ctx context.Context, actor Actor, orderID int64) (*OrderView, error) {
 	_ = ctx
 	order, ok := s.repo.GetOrder(orderID)
@@ -264,6 +273,7 @@ func (s *Service) FinishOrder(ctx context.Context, actor Actor, orderID int64) (
 	return &view, nil
 }
 
+// RequestRefund 消费者申请退款：已支付/已发货订单均可发起，进入退款中状态；幂等分支返回当前视图。
 func (s *Service) RequestRefund(ctx context.Context, actor Actor, orderID int64, input RefundRequestInput) (*OrderView, error) {
 	_ = ctx
 	order, ok := s.repo.GetOrder(orderID)

@@ -15,10 +15,12 @@ import (
 )
 
 const (
-	reconnectDelay = 3 * time.Second
-	publishTimeout = 10 * time.Second
+	reconnectDelay = 3 * time.Second  // 断线后的重连等待间隔
+	publishTimeout = 10 * time.Second // 等待 broker 发布确认（confirm）的超时
 )
 
+// Publisher 是 event.Publisher 的 RabbitMQ 实现：向 topic exchange 发布事件，
+// 启用 publisher confirms 等待 broker 落盘确认，并在连接断开后自动重连。
 type Publisher struct {
 	addr     string
 	exchange string
@@ -30,6 +32,8 @@ type Publisher struct {
 	closed  bool
 }
 
+// NewPublisher 建立到 RabbitMQ 的连接并完成 exchange 声明，
+// 返回的 Publisher 可直接用于发布事件。
 func NewPublisher(addr, exchange string) (*Publisher, error) {
 	p := &Publisher{
 		addr:     addr,
@@ -42,6 +46,8 @@ func NewPublisher(addr, exchange string) (*Publisher, error) {
 	return p, nil
 }
 
+// connect 建立连接、打开 channel 并声明 topic exchange、开启 publisher
+// confirms，随后启动断线监听 goroutine。
 func (p *Publisher) connect() error {
 	conn, err := amqp.Dial(p.addr)
 	if err != nil {
@@ -78,6 +84,8 @@ func (p *Publisher) connect() error {
 	return nil
 }
 
+// watchClose 监听 channel 关闭事件（连接断开或服务端异常），一旦发生便
+// 以固定间隔反复尝试重连，直到重连成功或 Close 被调用。
 func (p *Publisher) watchClose() {
 	closeCh := p.channel.NotifyClose(make(chan *amqp.Error, 1))
 	err, ok := <-closeCh
@@ -110,6 +118,8 @@ func (p *Publisher) watchClose() {
 	}
 }
 
+// ensureConnected 检查当前 channel 是否可用；不可用时返回错误。
+// 注意：它只做检测，实际的重连由 watchClose 的重连循环负责。
 func (p *Publisher) ensureConnected() error {
 	if p.channel != nil && !p.channel.IsClosed() {
 		return nil
@@ -117,6 +127,8 @@ func (p *Publisher) ensureConnected() error {
 	return fmt.Errorf("rabbitmq channel unavailable")
 }
 
+// Publish 将事件序列化为固定 envelope（字段与 consumer 侧解码结构保持一致），
+// 以持久化消息发布到事件对应的 topic，并等待 broker 的发布确认后才返回。
 func (p *Publisher) Publish(ctx context.Context, evt event.Event) error {
 	body, err := json.Marshal(map[string]any{
 		"event_id":       evt.ID,
@@ -166,6 +178,7 @@ func (p *Publisher) Publish(ctx context.Context, evt event.Event) error {
 	return nil
 }
 
+// Close 标记关闭并释放 channel 与连接，之后重连循环会随之退出。
 func (p *Publisher) Close() error {
 	p.mu.Lock()
 	p.closed = true

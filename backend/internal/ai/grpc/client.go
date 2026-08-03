@@ -36,10 +36,13 @@ func NewClient(addr string, opts ...grpc.DialOption) (*Client, error) {
 	}, nil
 }
 
+// Close 关闭底层 gRPC 连接。
 func (c *Client) Close() error {
 	return c.conn.Close()
 }
 
+// GenerateSellingPoints 将领域请求转换为 proto 请求，调用 Python AI 服务
+// 的 gRPC 接口生成卖点，并将结果映射回领域类型。
 func (c *Client) GenerateSellingPoints(ctx context.Context, req backendai.SellingPointRequest) (*backendai.SellingPointResult, error) {
 	resp, err := c.client.GenerateSellingPoints(ctx, &pb.GenerateSellingPointsRequest{
 		ProductName: req.ProductName,
@@ -53,6 +56,8 @@ func (c *Client) GenerateSellingPoints(ctx context.Context, req backendai.Sellin
 	return &backendai.SellingPointResult{Points: resp.Points}, nil
 }
 
+// GenerateBusinessReview 调用 gRPC 接口生成经营复盘，注意领域侧 GMV
+// 与 proto 的 Gmv 字段为同一含义（金额）。
 func (c *Client) GenerateBusinessReview(ctx context.Context, req backendai.BusinessReviewRequest) (*backendai.BusinessReviewResult, error) {
 	resp, err := c.client.GenerateBusinessReview(ctx, &pb.GenerateBusinessReviewRequest{
 		WindowDays: int32(req.WindowDays),
@@ -68,6 +73,8 @@ func (c *Client) GenerateBusinessReview(ctx context.Context, req backendai.Busin
 	}, nil
 }
 
+// GenerateA2UISurface 调用 gRPC 接口生成 A2UI 界面指令（走独立的
+// A2UIService），并返回多行 NDJSON 字符串。
 func (c *Client) GenerateA2UISurface(ctx context.Context, req backendai.A2UISurfaceRequest) (*backendai.A2UISurfaceResult, error) {
 	resp, err := c.a2uiClient.GenerateA2UISurface(ctx, &pb.GenerateA2UISurfaceRequest{
 		SurfaceId:   req.SurfaceID,

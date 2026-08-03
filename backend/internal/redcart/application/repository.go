@@ -7,6 +7,7 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 )
 
+// ErrInsufficientStock 是仓储层在库存不足/并发扣减失败时返回的哨兵错误，由调用方映射为冲突响应。
 var ErrInsufficientStock = errors.New("stock is insufficient")
 
 // TokenType distinguishes access tokens from refresh tokens so the service
@@ -31,6 +32,8 @@ type OrderTx interface {
 	AppendOrderEvent(event domain.OrderEvent) (domain.OrderEvent, error)
 }
 
+// Repository 定义应用层所需的全部持久化操作，由基础设施层实现
+// （postgres 仓储同时实现 event.Outbox，以支持订单状态流转的事务内事件写出）。
 type Repository interface {
 	CreateUser(user domain.User) (domain.User, error)
 	FindUserByPhone(phone string) (domain.User, bool)

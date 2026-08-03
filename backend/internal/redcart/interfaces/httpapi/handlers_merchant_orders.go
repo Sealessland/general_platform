@@ -9,6 +9,8 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 )
 
+// handleMerchantOrderByID 按路径后缀分发：/ship 发货、/refund/approve 审核退款，
+// 其余视为按 ID 查询订单。
 func (s *Server) handleMerchantOrderByID(w http.ResponseWriter, r *http.Request, actor application.Actor) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/merchant/orders/")
 	switch {

@@ -28,6 +28,8 @@ func (r *Repository) GetSKU(id int64) (domain.SKU, bool) {
 	return getSKU(r.db, id)
 }
 
+// getSKU / saveSKU 是仓储与订单事务（pgOrderTx）共用的实现，
+// 保证下单流程中的库存校验与读写与普通查询走同一套代码。
 func getSKU(q dbQuerier, id int64) (domain.SKU, bool) {
 	row := q.QueryRow(`SELECT id, product_id, sku_name, sku_attrs_json, price_cent, stock, locked_stock, status, created_at, updated_at FROM product_skus WHERE id = $1`, id)
 	sku, err := scanSKU(row)
@@ -79,6 +81,7 @@ type skuScanner interface {
 	Scan(dest ...any) error
 }
 
+// scanSKU 将查询行解码为 domain.SKU，sku_attrs_json JSONB 解析为属性 map。
 func scanSKU(scanner skuScanner) (domain.SKU, error) {
 	var sku domain.SKU
 	var attrs []byte

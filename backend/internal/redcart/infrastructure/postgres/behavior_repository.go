@@ -39,6 +39,8 @@ type behaviorScanner interface {
 	Scan(dest ...any) error
 }
 
+// scanBehaviorEvent 解码行为事件；note/product/sku/order/merchant 等
+// 外键列均可为 NULL（按事件类型而定），解码时以零值兜底。
 func scanBehaviorEvent(scanner behaviorScanner) (domain.BehaviorEvent, error) {
 	var event domain.BehaviorEvent
 	var userID, noteID, productID, skuID, orderID, merchantID sql.NullInt64

@@ -12,6 +12,8 @@ import (
 	"gorm.io/gorm"
 )
 
+// migrate 按文件名升序逐个执行尚未应用的 SQL 迁移文件；
+// 每个文件与对应的 schema_migrations 版本记录在同一事务中，失败即整体回滚。
 func (r *Repository) migrate(ctx context.Context) error {
 	if err := r.ensureSchemaMigrationsTable(ctx); err != nil {
 		return fmt.Errorf("ensure schema_migrations: %w", err)
@@ -64,6 +66,8 @@ func (r *Repository) isMigrationApplied(ctx context.Context, version string) (bo
 	return count > 0, err
 }
 
+// resolveMigrationsDir 依次尝试环境变量 MIGRATIONS_DIR、源码相对路径、
+// 工作目录与容器固定路径（/app/migrations），返回第一个存在的目录。
 func resolveMigrationsDir() (string, error) {
 	candidates := []string{
 		envOrDefault("MIGRATIONS_DIR", ""),
@@ -93,6 +97,7 @@ func resolveMigrationsDir() (string, error) {
 	return "", fmt.Errorf("migrations directory not found")
 }
 
+// listMigrationFiles 返回目录下所有 .sql 文件路径，按文件名排序保证迁移顺序。
 func listMigrationFiles(dir string) ([]string, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -113,6 +118,8 @@ func listMigrationFiles(dir string) ([]string, error) {
 	return files, nil
 }
 
+// seed 仅在用户表为空时写入演示数据（用户/商家/商品/订单/行为事件等），
+// 保证本地开发与演示环境开箱即用；已有数据时直接跳过，避免重复污染。
 func (r *Repository) seed(ctx context.Context) error {
 	var count int
 	if err := r.gormDB.WithContext(ctx).Raw(`SELECT COUNT(*) FROM users`).Row().Scan(&count); err != nil {
@@ -227,6 +234,7 @@ SELECT setval(pg_get_serial_sequence('behavior_events', 'id'), COALESCE((SELECT 
 	return nil
 }
 
+// seededPasswordHash 为种子演示账号生成 bcrypt 密码哈希。
 func seededPasswordHash(password string) string {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {

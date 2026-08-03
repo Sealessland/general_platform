@@ -32,6 +32,8 @@ func (r *Repository) GetCartItem(userID, itemID int64) (domain.CartItem, bool) {
 	return item, true
 }
 
+// SaveCartItem 新增（ID 为 0）或更新购物车条目。注意插入时 cart_id 恒为 NULL：
+// 初始 schema 中的 carts 表并未实际使用，购物车条目直接归属 user_id。
 func (r *Repository) SaveCartItem(item domain.CartItem) (domain.CartItem, error) {
 	if item.ID == 0 {
 		query := `
