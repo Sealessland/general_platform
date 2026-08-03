@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>RedCart Copilot · Agent-Native 内容电商全栈项目展示</title>
+  <meta name="description" content="RedCart Copilot：面向内容电商场景的 AI Native 全栈项目展示——四层架构、A2UI 流式界面生成、事务性发件箱事件驱动与工程化能力。" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Noto+Serif+SC:wght@600;700;900&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            background: "#f6f8fb",
+            foreground: "#132033",
+            muted: "#5f6f82",
+            border: "#dce4ee",
+            primary: "#2563eb",
+            accent: "#0ea5a4",
+            card: "#ffffff"
+          },
+          fontFamily: {
+            sans: ["Inter", "PingFang SC", "system-ui", "sans-serif"],
+            serif: ["Noto Serif SC", "Source Serif 4", "serif"],
+            mono: ["JetBrains Mono", "monospace"]
+          }
+        }
+      }
+    };
+  </script>
+</head>
+<body class="bg-background text-foreground font-sans antialiased overflow-x-hidden">
+  <div id="progress-bar" class="fixed left-0 top-0 z-[60] h-[2px] bg-primary" style="width: 0%"></div>
+
+  <header class="fixed inset-x-0 top-0 z-50 border-b border-border bg-background/80 backdrop-blur">
+    <div class="mx-auto flex h-14 max-w-[1440px] items-center justify-between px-5 md:px-10">
+      <a href="#top" class="flex items-center gap-2 font-mono text-sm">
+        <span class="inline-block h-2 w-2 rounded-full bg-primary"></span>
+        <span class="font-semibold">REDCART</span>
+        <span class="hidden text-muted sm:inline">/ agent-native-shop</span>
+      </a>
+      <nav class="hidden items-center gap-6 text-sm text-muted md:flex">
+        <a href="#problem" class="nav-link">理念</a>
+        <a href="#architecture" class="nav-link">架构</a>
+        <a href="#a2ui" class="nav-link">A2UI</a>
+        <a href="#engineering" class="nav-link">工程化</a>
+        <a href="#quickstart" class="nav-link">快速开始</a>
+        <a href="#closing" class="nav-link">结尾</a>
+      </nav>
+      <div class="font-mono text-xs text-muted">AGENT-NATIVE SHOWCASE</div>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-[1440px]">
+
+    <!-- ============ 封面 ============ -->
+    <section id="top" class="relative overflow-hidden border-b border-border px-5 pb-20 pt-28 md:px-10 md:pb-28 md:pt-36">
+      <div class="pointer-events-none absolute inset-0 grid-bg opacity-50"></div>
+      <div class="relative">
+        <div class="mb-6 flex items-center gap-3 font-mono text-xs tracking-[0.2em] text-primary">
+          <span class="inline-block h-px w-8 bg-primary"></span>
+          REDCART COPILOT · AI NATIVE 全栈项目
+        </div>
+        <h1 class="max-w-5xl font-serif text-[40px] font-black leading-[1.02] tracking-tight sm:text-6xl md:text-[76px]">
+          内容电商的<br />
+          <span class="text-primary">Agent-Native</span> Copilot<span class="text-muted font-normal">.</span>
+        </h1>
+        <p class="mt-8 max-w-2xl text-base leading-relaxed text-muted md:text-lg">
+          RedCart Copilot 是一个面向内容电商场景的 AI Native 全栈项目：从内容种草到交易履约、再到商家经营与 AI 提效的完整链路。
+          它不是堆功能，而是把业务主链路、工程边界与演进方式讲清楚、跑起来——Agent 与人是同一套协作规则的参与者。
+        </p>
+
+        <div class="mt-12 grid max-w-4xl grid-cols-2 gap-px border border-border bg-border md:grid-cols-4">
+          <div class="bg-card p-5">
+            <div class="font-mono text-xs text-muted">ARCHITECTURE</div>
+            <div class="mt-1 font-serif text-3xl">4 层</div>
+            <div class="mt-1 text-xs text-muted">产品接口 / 运行编排 / 领域能力 / 集成适配</div>
+          </div>
+          <div class="bg-card p-5">
+            <div class="font-mono text-xs text-muted">COVERAGE GATE</div>
+            <div class="mt-1 font-serif text-3xl text-primary">65.0%</div>
+            <div class="mt-1 text-xs text-muted">后端总覆盖率 CI 门禁阈值</div>
+          </div>
+          <div class="bg-card p-5">
+            <div class="font-mono text-xs text-muted">ORDER STATE</div>
+            <div class="mt-1 font-serif text-3xl">7 态</div>
+            <div class="mt-1 text-xs text-muted">订单状态机（含退款流）</div>
+          </div>
+          <div class="bg-card p-5">
+            <div class="font-mono text-xs text-muted">AUDIENCE</div>
+            <div class="mt-1 font-serif text-2xl">4 类</div>
+            <div class="mt-1 text-xs text-muted">消费者 · 商家 · AI Copilot · 工程协作</div>
+          </div>
+        </div>
+
+        <div class="mt-10 flex flex-wrap gap-3">
+          <a href="#a2ui" class="demo-btn-primary"><i data-lucide="sparkles" class="h-4 w-4"></i> 看 A2UI 动态演示</a>
+          <a href="#quickstart" class="demo-btn-ghost"><i data-lucide="terminal" class="h-4 w-4"></i> 快速开始</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 故事地图 ============ -->
+    <section id="map" class="border-b border-border px-5 py-20 md:px-10 md:py-24">
+      <div class="mb-12 flex items-end justify-between">
+        <div>
+          <div class="mb-3 font-mono text-xs tracking-[0.2em] text-primary">00 / CHAPTER MAP</div>
+          <h2 class="font-serif text-4xl font-bold md:text-5xl">故事地图</h2>
+        </div>
+        <div class="hidden max-w-sm text-sm text-muted md:block">
+          一条主线：先把业务跑起来，再把边界讲清楚，最后让 Agent 参与整套工程的协作。
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 gap-px border border-border bg-border md:grid-cols-2" data-reveal>
+        <a href="#problem" class="group bg-card p-7 transition-colors hover:bg-primary hover:text-white md:p-9">
+          <div class="flex items-start justify-between">
+            <div class="font-mono text-xs opacity-60">A-01</div>
+            <i data-lucide="arrow-up-right" class="h-5 w-5 opacity-40 transition group-hover:opacity-100"></i>
+          </div>
+          <div class="mt-12 font-serif text-2xl font-bold leading-tight md:text-3xl">问题与理念</div>
+          <div class="mt-3 text-sm text-muted group-hover:text-white/80">为什么把 Agent 当成一等公民：AI 输出只是草案，验证证据可复现。</div>
+        </a>
+        <a href="#architecture" class="group bg-card p-7 transition-colors hover:bg-primary hover:text-white md:p-9">
+          <div class="flex items-start justify-between">
+            <div class="font-mono text-xs opacity-60">B-02</div>
+            <i data-lucide="arrow-up-right" class="h-5 w-5 opacity-40 transition group-hover:opacity-100"></i>
+          </div>
+          <div class="mt-12 font-serif text-2xl font-bold leading-tight md:text-3xl">系统架构</div>
+          <div class="mt-3 text-sm text-muted group-hover:text-white/80">四层分层 + Go 后端、ai-service gRPC、RabbitMQ 事务性发件箱、Postgres/Redis。</div>
+        </a>
+        <a href="#a2ui" class="group bg-card p-7 transition-colors hover:bg-primary hover:text-white md:p-9">
+          <div class="flex items-start justify-between">
+            <div class="font-mono text-xs opacity-60">C-03</div>
+            <i data-lucide="arrow-up-right" class="h-5 w-5 opacity-40 transition group-hover:opacity-100"></i>
+          </div>
+          <div class="mt-12 font-serif text-2xl font-bold leading-tight md:text-3xl">A2UI 流式界面生成</div>
+          <div class="mt-3 text-sm text-muted group-hover:text-white/80">POST /api/ai/a2ui 返回 NDJSON 指令流，前端逐行渲染成 UI——含动态演示。</div>
+        </a>
+        <a href="#engineering" class="group bg-card p-7 transition-colors hover:bg-primary hover:text-white md:p-9">
+          <div class="flex items-start justify-between">
+            <div class="font-mono text-xs opacity-60">D-04</div>
+            <i data-lucide="arrow-up-right" class="h-5 w-5 opacity-40 transition group-hover:opacity-100"></i>
+          </div>
+          <div class="mt-12 font-serif text-2xl font-bold leading-tight md:text-3xl">工程化能力</div>
+          <div class="mt-3 text-sm text-muted group-hover:text-white/80">CI 门禁、可复现脚本、质量指标、幂等下单与事件驱动的可靠性设计。</div>
+        </a>
+      </div>
+    </section>
+
+    <!-- ============ 问题与理念 ============ -->
+    <section id="problem" class="border-b border-border px-5 py-20 md:px-10 md:py-28">
+      <div class="grid grid-cols-12 gap-6 md:gap-10">
+        <div class="col-span-12 md:col-span-4">
+          <div class="mb-3 font-mono text-xs tracking-[0.2em] text-primary">01 / PROBLEM &amp; PRINCIPLE</div>
+          <div class="font-mono text-7xl font-bold leading-none text-primary md:text-8xl">01</div>
+          <h2 class="mt-6 font-serif text-3xl font-bold leading-tight md:text-4xl">Agent 是一等公民</h2>
+          <div class="mt-5 flex flex-wrap gap-2">
+            <span class="tag">AI NATIVE</span>
+            <span class="tag">WORKTREE</span>
+            <span class="tag">DRAFT ONLY</span>
+          </div>
+        </div>
+        <div class="col-span-12 space-y-6 md:col-span-8">
+          <div class="border-l-2 border-primary pl-6">
+            <div class="mb-1 font-mono text-xs text-muted">CORE CLAIM</div>
+            <p class="text-lg leading-relaxed">
+              AI 全程参与需求、设计、实现、测试、审查与交付，但 <strong>AI 输出只是草案</strong>：
+              最终决策、代码合并与验收结论必须由人工或主代理复核（仓库以 <code class="code-inline">AI_WORKFLOW.md</code> 固化该规则）。
+            </p>
+          </div>
+          <div class="grid grid-cols-1 gap-px border border-border bg-border md:grid-cols-3" data-reveal>
+            <div class="bg-card p-6">
+              <div class="font-mono text-xs text-primary">01</div>
+              <h3 class="mt-3 text-lg font-semibold">参与有记录</h3>
+              <p class="mt-3 text-sm leading-6 text-muted">
+                每次 AI 参与都按「参与范围 / 人工修正 / 验证证据 / 剩余风险」四段式归档；
+                子代理产物必须经主代理验收后才能进入主工作区。
+              </p>
+            </div>
+            <div class="bg-card p-6">
+              <div class="font-mono text-xs text-primary">02</div>
+              <h3 class="mt-3 text-lg font-semibold">验证优先于文字</h3>
+              <p class="mt-3 text-sm leading-6 text-muted">
+                「可执行验证优先于文字说明；没有跑过的命令不能写成已通过。」
+                每个改动都要留下可复现命令，CI 本地可跑，QPS 产物只收真实运行时基准。
+              </p>
+            </div>
+            <div class="bg-card p-6">
+              <div class="font-mono text-xs text-primary">03</div>
+              <h3 class="mt-3 text-lg font-semibold">分层边界约束</h3>
+              <p class="mt-3 text-sm leading-6 text-muted">
+                领域能力层不能反向依赖产品接口、运行时、供应商 SDK 或部署环境；
+                Gin 只停留在产品接口层，应用层与领域层不依赖框架类型。
+              </p>
+            </div>
+          </div>
+          <div class="border border-border bg-card p-6 md:p-7">
+            <div class="mb-3 font-mono text-xs text-muted">协作方式</div>
+            <div class="space-y-3 text-foreground/90">
+              <div>· 默认从 <code class="code-inline">main</code> 拉任务分支，并为每条工作线创建独立 <code class="code-inline">git worktree</code>（<code class="code-inline">scripts/git-worktree.sh</code>）。</div>
+              <div>· 高风险改动（订单、库存、金额、权限、迁移、数据一致性）必须人工复核，并先写失败测试再改实现。</div>
+              <div>· 架构、运行时、供应商或框架假设必须落到 <code class="code-inline">docs/architecture.md</code>、ADR 或对应工作流文档。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 系统架构 ============ -->
+    <section id="architecture" class="border-b border-border px-5 py-20 md:px-10 md:py-28">
+      <div class="mb-10">
+        <div class="mb-3 font-mono text-xs tracking-[0.2em] text-primary">02 / SYSTEM ARCHITECTURE</div>
+        <h2 class="font-serif text-3xl font-bold md:text-4xl">系统架构：按稳定职责分层，而不是围绕框架堆代码</h2>
+        <p class="mt-4 max-w-3xl text-sm leading-7 text-muted">
+          当前可执行 MVP 的代码映射（事实来源：<code class="code-inline">docs/architecture.md</code> 与 <code class="code-inline">docs/architecture/system-context.md</code>）。
+          依赖方向固定为：产品接口层 → 运行编排层 → 领域能力层；集成适配层只依赖领域契约。
+        </p>
+      </div>
+
+      <!-- 分层图 -->
+      <div class="grid grid-cols-12 gap-6 md:gap-10">
+        <div class="col-span-12 xl:col-span-7">
+          <div class="flex flex-col gap-3" data-reveal>
+            <div class="rounded-2xl border border-primary/40 bg-card p-6">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="font-mono text-xs tracking-[0.18em] text-primary">产品接口层</span>
+                <span class="rounded-full border border-border px-2 py-0.5 font-mono text-[11px] text-muted">backend/cmd/api</span>
+                <span class="rounded-full border border-border px-2 py-0.5 font-mono text-[11px] text-muted">interfaces/httpapi (Gin)</span>
+                <span class="rounded-full border border-border px-2 py-0.5 font-mono text-[11px] text-muted">frontend/</span>
+              </div>
+              <div class="mt-3 font-mono text-xs leading-6 text-muted">
+                GET /api/notes · POST /api/orders · POST /api/ai/a2ui · GET /metrics · /healthz
+              </div>
+              <div class="mt-2 text-xs text-muted">用户直接接触的 API 与页面；Gin 只负责路由与 method gate，不向应用层泄漏类型。</div>
+            </div>
+            <div class="flex justify-center text-primary"><i data-lucide="arrow-down" class="h-5 w-5"></i></div>
+            <div class="rounded-2xl border border-border bg-card p-6">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="font-mono text-xs tracking-[0.18em] text-primary">运行编排层</span>
+                <span class="rounded-full border border-border px-2 py-0.5 font-mono text-[11px] text-muted">internal/redcart/application</span>
+              </div>
+              <div class="mt-3 font-mono text-xs leading-6 text-muted">
+                CreateOrder · PayOrder · UpdateOrderStatus · DashboardFunnel / DashboardProducts / DashboardSummary · GenerateA2UISurface
+              </div>
+              <div class="mt-2 text-xs text-muted">业务流程编排、依赖注入、状态推进；商家看板为进程内实现，直接读 PostgreSQL 仓储计算。</div>
+            </div>
+            <div class="flex justify-center text-primary"><i data-lucide="arrow-down" class="h-5 w-5"></i></div>
+            <div class="rounded-2xl border border-border bg-card p-6">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="font-mono text-xs tracking-[0.18em] text-primary">领域能力层</span>
+                <span class="rounded-full border border-border px-2 py-0.5 font-mono text-[11px] text-muted">internal/order/domain</span>
+                <span class="rounded-full border border-border px-2 py-0.5 font-mono text-[11px] text-muted">internal/redcart/domain</span>
+              </div>
+              <div class="mt-3 font-mono text-xs leading-6 text-muted">
+                订单状态机（CREATED / PAID / SHIPPED / FINISHED / CANCELLED / REFUNDING / REFUNDED）· 显式状态流转校验 · 领域规则
+              </div>
+              <div class="mt-2 text-xs text-muted">可复用的业务规则与纯能力模块；不依赖框架、供应商 SDK 或部署环境。</div>
+            </div>
+            <div class="flex justify-center text-primary"><i data-lucide="arrow-down" class="h-5 w-5"></i></div>
+            <div class="rounded-2xl border border-accent/40 bg-card p-6">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="font-mono text-xs tracking-[0.18em] text-accent">集成适配层</span>
+              </div>
+              <div class="mt-3 grid grid-cols-1 gap-2 font-mono text-xs leading-6 text-muted sm:grid-cols-2">
+                <div class="rounded-lg border border-border bg-background p-3">
+                  <div class="text-foreground">PostgreSQL</div>
+                  <div>业务真相源 · 迁移与种子 · 事务内库存预锁</div>
+                </div>
+                <div class="rounded-lg border border-border bg-background p-3">
+                  <div class="text-foreground">Redis</div>
+                  <div>认证 session 共享源 · 商品/SKU 热读缓存</div>
+                </div>
+                <div class="rounded-lg border border-border bg-background p-3">
+                  <div class="text-foreground">RabbitMQ</div>
+                  <div>事务性发件箱 → 订单事件总线（redcart.events）</div>
+                </div>
+                <div class="rounded-lg border border-border bg-background p-3">
+                  <div class="text-foreground">AI Provider</div>
+                  <div>MockProvider 默认 · AI_PROVIDER=grpc 时调用 ai-service</div>
+                </div>
+              </div>
+              <div class="mt-3 text-xs text-muted">数据库、缓存、消息队列与模型 Provider 的适配都收敛在这一层，领域层不感知供应商细节。</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-span-12 space-y-6 xl:col-span-5">
+          <div class="border border-border bg-card p-6">
+            <div class="mb-3 font-mono text-xs text-muted">RUNTIME COMPONENTS</div>
+            <div class="grid grid-cols-2 gap-px border border-border bg-border">
+              <div class="bg-card p-4">
+                <div class="font-mono text-xs text-primary">backend</div>
+                <div class="mt-1 font-mono text-sm text-foreground">:18080</div>
+                <div class="mt-1 text-xs text-muted">Go API · Gin · 单体业务模块</div>
+              </div>
+              <div class="bg-card p-4">
+                <div class="font-mono text-xs text-primary">frontend</div>
+                <div class="mt-1 font-mono text-sm text-foreground">:4173</div>
+                <div class="mt-1 text-xs text-muted">静态演示应用（dist 构建产物）</div>
+              </div>
+              <div class="bg-card p-4">
+                <div class="font-mono text-xs text-primary">ai-service</div>
+                <div class="mt-1 font-mono text-sm text-foreground">gRPC :50051</div>
+                <div class="mt-1 text-xs text-muted">AI 提示词与 Provider（当前 Mock）</div>
+              </div>
+              <div class="bg-card p-4">
+                <div class="font-mono text-xs text-primary">postgres:16</div>
+                <div class="mt-1 font-mono text-sm text-foreground">:15432</div>
+                <div class="mt-1 text-xs text-muted">业务真相源 + 迁移 + 种子数据</div>
+              </div>
+              <div class="bg-card p-4">
+                <div class="font-mono text-xs text-primary">redis:7</div>
+                <div class="mt-1 font-mono text-sm text-foreground">:6380</div>
+                <div class="mt-1 text-xs text-muted">session 共享 + catalog 热读</div>
+              </div>
+              <div class="bg-card p-4">
+                <div class="font-mono text-xs text-primary">rabbitmq</div>
+                <div class="mt-1 font-mono text-sm text-foreground">:5672</div>
+                <div class="mt-1 text-xs text-muted">订单事件总线（outbox 发布）</div>
+              </div>
+              <div class="bg-card p-4">
+                <div class="font-mono text-xs text-primary">prometheus</div>
+                <div class="mt-1 font-mono text-sm text-foreground">:9090</div>
+                <div class="mt-1 text-xs text-muted">/metrics 采集 · 15s 间隔 · 7d 保留</div>
+              </div>
+              <div class="bg-card p-4">
+                <div class="font-mono text-xs text-primary">pyroscope</div>
+                <div class="mt-1 font-mono text-sm text-foreground">:4040</div>
+                <div class="mt-1 text-xs text-muted">可选 Go push mode profiling</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="border border-border bg-card p-6">
+            <div class="mb-3 font-mono text-xs text-muted">EVENT DRIVEN · TRANSACTIONAL OUTBOX</div>
+            <div class="font-mono text-xs leading-6 text-foreground/90">
+              ORDER_CREATED · ORDER_PAID · ORDER_CANCELLED<br />
+              ORDER_SHIPPED · ORDER_FINISHED · ORDER_REFUND_REQUESTED
+            </div>
+            <div class="mt-3 flex items-center gap-2 text-xs text-muted">
+              <span class="rounded-full border border-border px-2 py-0.5 font-mono">PostgreSQL</span>
+              <i data-lucide="arrow-right" class="h-3.5 w-3.5"></i>
+              <span class="rounded-full border border-border px-2 py-0.5 font-mono">outbox 表</span>
+              <i data-lucide="arrow-right" class="h-3.5 w-3.5"></i>
+              <span class="rounded-full border border-border px-2 py-0.5 font-mono">RabbitMQ</span>
+            </div>
+            <p class="mt-3 text-xs leading-6 text-muted">
+              订单状态变更事件经事务性发件箱发布（exchange 默认 <code class="code-inline">redcart.events</code>），
+              消费者可独立成进程；事件先作为「逻辑服务」之间的边界，核心交易路径仍保持数据库事务强一致。
+            </p>
+          </div>
+
+          <div class="border border-border bg-card p-6">
+            <div class="mb-3 font-mono text-xs text-muted">CORE DATA FLOW</div>
+            <ol class="space-y-2 text-sm text-foreground/90">
+              <li class="flow-step"><span class="font-mono text-xs text-primary">01</span>消费者浏览笔记与商品</li>
+              <li class="flow-step"><span class="font-mono text-xs text-primary">02</span>行为事件被记录</li>
+              <li class="flow-step"><span class="font-mono text-xs text-primary">03</span>消费者加购 SKU</li>
+              <li class="flow-step"><span class="font-mono text-xs text-primary">04</span>结算预览校验库存与金额</li>
+              <li class="flow-step"><span class="font-mono text-xs text-primary">05</span>下单携带幂等键并创建库存锁</li>
+              <li class="flow-step"><span class="font-mono text-xs text-primary">06</span>支付成功后订单进入已支付状态</li>
+              <li class="flow-step"><span class="font-mono text-xs text-primary">07</span>订单与行为事件汇总到商家看板</li>
+              <li class="flow-step"><span class="font-mono text-xs text-primary">08</span>AI Copilot 基于商品与经营数据返回草案建议</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ A2UI 核心亮点（含动态演示） ============ -->
+    <section id="a2ui" class="border-b border-border bg-[linear-gradient(180deg,rgba(245,247,250,0.96),rgba(250,250,250,1))] px-5 py-20 md:px-10 md:py-28">
+      <div class="mb-10">
+        <div class="mb-3 font-mono text-xs tracking-[0.2em] text-primary">03 / HIGHLIGHT · AGENT-TO-UI</div>
+        <h2 class="font-serif text-3xl font-bold md:text-4xl">核心亮点：A2UI 流式界面生成</h2>
+        <p class="mt-4 max-w-3xl text-sm leading-7 text-muted">
+          <code class="code-inline">POST /api/ai/a2ui</code> 接收 <code class="code-inline">surface_id</code>、<code class="code-inline">user_intent</code> 与可选
+          <code class="code-inline">context_json</code>，返回 A2UI v0.9 协议的多行 NDJSON 指令流：
+          <code class="code-inline">createSurface</code> / <code class="code-inline">updateComponents</code> / <code class="code-inline">updateDataModel</code>。
+          前端 <code class="code-inline">frontend/src/app.ts</code> 的 <code class="code-inline">a2uiRenderPanel</code> 逐行解析 JSONL 并按指令装配组件树。
+        </p>
+      </div>
+
+      <div class="grid grid-cols-12 gap-6 md:gap-10">
+        <!-- 左：协议说明 -->
+        <div class="col-span-12 lg:col-span-4">
+          <div class="mb-3 font-mono text-xs tracking-[0.18em] text-primary">HOW IT WORKS</div>
+          <div class="flex flex-col gap-4">
+            <div class="border border-border bg-card p-5">
+              <div class="font-mono text-xs text-primary">01 · 上下文富化</div>
+              <p class="mt-2 text-sm leading-6 text-muted">
+                <code class="code-inline">service_ai.go</code> 的 <code class="code-inline">GenerateA2UISurface</code>
+                解析用户意图中的预算与场景，调用 <code class="code-inline">ListProducts</code> 查询在线商品，
+                把预算内商品注入 <code class="code-inline">context_json</code>。
+              </p>
+            </div>
+            <div class="border border-border bg-card p-5">
+              <div class="font-mono text-xs text-primary">02 · Provider 生成</div>
+              <p class="mt-2 text-sm leading-6 text-muted">
+                <code class="code-inline">backend/internal/ai.AIProvider</code> 契约输出 A2UI v0.9 NDJSON；
+                <code class="code-inline">AI_PROVIDER=grpc</code> 时经 gRPC 调用独立 <code class="code-inline">ai-service</code> 容器
+                （<code class="code-inline">api/proto/ai/v1/ai.proto</code> 定义 <code class="code-inline">A2UIService</code>）。
+              </p>
+            </div>
+            <div class="border border-border bg-card p-5">
+              <div class="font-mono text-xs text-primary">03 · 前端装配</div>
+              <p class="mt-2 text-sm leading-6 text-muted">
+                逐行解析指令：Card / Column / Row / Text / Button / List / Image / Slider，
+                支持 <code class="code-inline">formatString</code> 函数调用、列表子作用域与
+                <code class="code-inline">add_to_cart</code> 动作。
+              </p>
+            </div>
+            <div class="border border-accent bg-accent/5 p-5">
+              <div class="font-mono text-xs text-accent">安全边界</div>
+              <p class="mt-2 text-sm leading-6 text-muted">
+                前端只渲染声明式 UI，不执行任何 Agent 代码；AI 输出只能作为建议，
+                不能直接改动价格、库存、权限、订单状态或退款结算结果。
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 右：动态演示 -->
+        <div class="col-span-12 lg:col-span-8">
+          <div class="border border-border bg-card p-6 md:p-7">
+            <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+              <div class="min-w-0">
+                <div class="font-mono text-xs text-muted">LIVE DEMO · 本地静态演示协议渲染过程</div>
+                <div class="algo-safe-text mt-2 text-xl font-semibold">NDJSON 指令流 → 逐行装配 → UI 就绪</div>
+              </div>
+              <div class="flex flex-wrap gap-3">
+                <button id="a2ui-play" class="demo-btn-primary"><i data-lucide="play" class="h-4 w-4"></i> 播放</button>
+                <button id="a2ui-reset" class="demo-btn-ghost"><i data-lucide="rotate-ccw" class="h-4 w-4"></i> 重置</button>
+              </div>
+            </div>
+
+            <div class="mt-6 flex flex-col gap-6 xl:flex-row">
+              <!-- NDJSON 流 -->
+              <div class="min-w-0 flex-1 overflow-hidden rounded-2xl border border-border bg-[#0f1a2b]">
+                <div class="flex items-center justify-between border-b border-white/10 px-4 py-3">
+                  <div class="font-mono text-[11px] tracking-[0.16em] text-slate-400">POST /api/ai/a2ui · RESPONSE (NDJSON)</div>
+                  <div class="flex gap-1.5">
+                    <span class="h-2 w-2 rounded-full bg-rose-400/70"></span>
+                    <span class="h-2 w-2 rounded-full bg-amber-400/70"></span>
+                    <span class="h-2 w-2 rounded-full bg-emerald-400/70"></span>
+                  </div>
+                </div>
+                <div id="a2ui-lines" class="flex flex-col gap-0 px-4 py-3 font-mono text-[11px] leading-5">
+                  <div class="a2ui-line" data-line="0"><span class="a2ui-ln">01</span><span class="a2ui-chip">createSurface</span><span class="a2ui-code">{"version":"v0.9","createSurface":{…}}</span></div>
+                  <div class="a2ui-line" data-line="1"><span class="a2ui-ln">02</span><span class="a2ui-chip">updateComponents</span><span class="a2ui-code">{… components:[Column,Card,Row,Slider,List,Button]}</span></div>
+                  <div class="a2ui-line" data-line="2"><span class="a2ui-ln">03</span><span class="a2ui-chip">updateDataModel</span><span class="a2ui-code">{"path":"/","value":{"budget":12900,"products":[…3 件]}}</span></div>
+                </div>
+                <div class="border-t border-white/10 px-4 py-2 font-mono text-[10px] text-slate-500">
+                  完整 JSON 示例见下方协议卡片；此处为本地静态示例数据，非后端真实返回。
+                </div>
+              </div>
+
+              <!-- 渲染结果 -->
+              <div class="min-w-0 flex-1 overflow-hidden rounded-2xl border border-border bg-background">
+                <div class="flex items-center justify-between border-b border-border px-4 py-3">
+                  <div class="font-mono text-[11px] tracking-[0.16em] text-muted">FRONTEND RENDER · a2uiRenderPanel</div>
+                  <div class="font-mono text-[10px] uppercase tracking-[0.16em] text-muted">A2UI v0.9</div>
+                </div>
+                <div class="p-5">
+                  <div class="mb-3 font-mono text-[11px] text-muted">
+                    STATUS: <span id="a2ui-status-title" class="font-semibold text-foreground">渲染完成</span>
+                  </div>
+                  <div id="a2ui-canvas"></div>
+                  <div id="a2ui-status-detail" class="algo-safe-text mt-3 min-h-[2.5rem] text-xs leading-6 text-muted">
+                    三条指令执行完毕：surface 外壳、组件树与数据模型已全部装配。
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 协议完整示例（静态兜底，保证打印/截图不丢内容） -->
+          <div class="mt-4 border border-border bg-card p-5">
+            <div class="mb-2 flex items-center gap-2">
+              <div class="font-mono text-xs text-primary">完整协议示例（示意，字段结构以仓库 MockProvider 为准）</div>
+            </div>
+            <pre class="protocol-pre"><code>{"version":"v0.9","createSurface":{"surfaceId":"guide-001","catalogId":"https://redcart.example/a2ui/catalog/v1","theme":{"primaryColor":"#00BFFF"},"sendDataModel":true}}
+{"version":"v0.9","updateComponents":{"surfaceId":"guide-001","components":[
+  {"id":"root","component":"Column","children":["header","budget_row","product_list"]},
+  {"id":"scene_title","component":"Text","text":"宿舍书桌场景好物","variant":"h2"},
+  {"id":"budget_slider","component":"Slider","min":0,"max":12900,"value":{"path":"/budget"}},
+  {"id":"product_list","component":"List","children":{"path":"/products","componentId":"product_card"}},
+  {"id":"add_btn","component":"Button","text":"加入购物车","variant":"primary","action":{"event":{"name":"add_to_cart"}}}]}}
+{"version":"v0.9","updateDataModel":{"surfaceId":"guide-001","path":"/","value":{"budget":12900,"products":[
+  {"id":1,"title":"LED Desk Lamp","price_yuan":"79.00","selling_points":"宿舍护眼 · 三档调光"},
+  {"id":2,"title":"Desk Storage Box Set","price_yuan":"39.90","selling_points":"桌面收纳 · 多格分区"},
+  {"id":3,"title":"USB Power Strip","price_yuan":"49.00","selling_points":"多口快充 · 宿舍友好"}]}}}</code></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 工程化能力 ============ -->
+    <section id="engineering" class="border-b border-border px-5 py-20 md:px-10 md:py-28">
+      <div class="mb-10">
+        <div class="mb-3 font-mono text-xs tracking-[0.2em] text-primary">04 / ENGINEERING</div>
+        <h2 class="font-serif text-3xl font-bold md:text-4xl">工程化能力：门禁可复现，指标只信真实运行时</h2>
+      </div>
+
+      <div class="grid grid-cols-1 gap-px border border-border bg-border md:grid-cols-2 xl:grid-cols-3" data-reveal>
+        <div class="bg-card p-6">
+          <div class="font-mono text-xs text-primary">01</div>
+          <h3 class="mt-3 text-lg font-semibold">CI 统一门禁</h3>
+          <p class="mt-3 text-sm leading-6 text-muted">
+            <code class="code-inline">.github/workflows/ci.yml</code> 是 PR 与 main push 的统一入口；后端、前端、AI service、安全、Docker
+            子 workflow 收敛为 <code class="code-inline">workflow_call</code>，本地用 <code class="code-inline">ci/scripts/*.sh</code> 复现同一套检查。
+          </p>
+        </div>
+        <div class="bg-card p-6">
+          <div class="font-mono text-xs text-primary">02</div>
+          <h3 class="mt-3 text-lg font-semibold">质量指标门禁</h3>
+          <p class="mt-3 text-sm leading-6 text-muted">
+            <code class="code-inline">backend-test-metrics.sh</code> 阻断回退：总覆盖率 <strong>65.0%</strong>、应用层 <strong>80.0%</strong>、
+            HTTP 层 <strong>60.0%</strong>、AI <strong>95.0%</strong>、领域 <strong>95.0%</strong>、测试数量 <strong>55</strong>；
+            连库时 PostgreSQL 仓储覆盖率门槛提高到 <strong>75.0%</strong>。
+          </p>
+        </div>
+        <div class="bg-card p-6">
+          <div class="font-mono text-xs text-primary">03</div>
+          <h3 class="mt-3 text-lg font-semibold">真实运行时基准口径</h3>
+          <p class="mt-3 text-sm leading-6 text-muted">
+            README 性能表与 CI 产物（<code class="code-inline">backend-postgres-http-qps.txt</code>、
+            <code class="code-inline">backend-rabbitmq-qps.txt</code>）只收 PostgreSQL/Redis/RabbitMQ-backed 基准；
+            内存仓储、空 publisher 与模拟延迟 benchmark 不允许进入 CI artifact 或性能表。
+          </p>
+        </div>
+        <div class="bg-card p-6">
+          <div class="font-mono text-xs text-primary">04</div>
+          <h3 class="mt-3 text-lg font-semibold">幂等下单与并发安全</h3>
+          <p class="mt-3 text-sm leading-6 text-muted">
+            <code class="code-inline">POST /api/orders</code> 携带 <code class="code-inline">Idempotency-Key</code>；
+            已成功的状态变更重复调用返回当前订单视图。<code class="code-inline">UpdateOrderStatus</code>
+            用 <code class="code-inline">SELECT … FOR UPDATE</code> + <code class="code-inline">AND status = fromStatus</code> 原子迁移，防止丢失更新。
+          </p>
+        </div>
+        <div class="bg-card p-6">
+          <div class="font-mono text-xs text-primary">05</div>
+          <h3 class="mt-3 text-lg font-semibold">极端并发测试</h3>
+          <p class="mt-3 text-sm leading-6 text-muted">
+            PostgreSQL 稳定性测试覆盖脏读/幻读/写偏斜/死锁等场景：
+            <strong>200 并发抢 50 库存不超卖</strong>、并发支付不重复确认、并发支付与取消不产生库存损坏（
+            <code class="code-inline">repository_stability_test.go</code>）。
+          </p>
+        </div>
+        <div class="bg-card p-6">
+          <div class="font-mono text-xs text-primary">06</div>
+          <h3 class="mt-3 text-lg font-semibold">可观测性</h3>
+          <p class="mt-3 text-sm leading-6 text-muted">
+            Prometheus 经 <code class="code-inline">/metrics</code> 暴露 <code class="code-inline">redcart_http_requests_total</code> 与
+            <code class="code-inline">redcart_http_request_duration_seconds</code>（15s 采集、7d 保留）；
+            Pyroscope Go push mode 由环境变量可选启用，默认关闭。
+          </p>
+        </div>
+      </div>
+
+      <!-- 方案对比：发件箱 vs 同步副作用 -->
+      <div class="mt-12">
+        <div class="mb-6">
+          <div class="mb-1 font-mono text-xs tracking-[0.2em] text-primary">TRADE-OFF</div>
+          <h3 class="font-serif text-2xl font-bold">异步事件边界怎么选：发件箱 vs 同步副作用</h3>
+        </div>
+        <div class="border border-border bg-card">
+          <div id="tab-bar" class="flex flex-col border-b border-border sm:flex-row">
+            <button class="tab-btn flex-1 border-b border-border px-6 py-4 text-left sm:border-b-0 sm:border-r" data-tab="option-b" data-active="true">
+              <div class="font-mono text-xs opacity-60">OPTION B · 已采用</div>
+              <div class="mt-1 font-semibold">事务性发件箱（Outbox → RabbitMQ）</div>
+            </button>
+            <button class="tab-btn flex-1 px-6 py-4 text-left" data-tab="option-a" data-active="false">
+              <div class="font-mono text-xs opacity-60">OPTION A · 对照</div>
+              <div class="mt-1 font-semibold">同步副作用（下游直接内联调用）</div>
+            </button>
+          </div>
+          <div class="p-6 md:p-8">
+            <div class="tab-panel" data-panel="option-b">
+              <div class="space-y-3 text-sm leading-7 text-foreground/90">
+                <div class="flex gap-3"><span class="font-mono text-xs text-accent">✓</span><span>订单状态变更先写入数据库 outbox 表，再经 relay 轮询发布到 RabbitMQ（exchange 默认 <code class="code-inline">redcart.events</code>），发布器启用 confirm 模式、失败进死信、<code class="code-inline">FOR UPDATE SKIP LOCKED</code> 轮询。</span></div>
+                <div class="flex gap-3"><span class="font-mono text-xs text-accent">✓</span><span>业务写入与事件入箱在同一数据库事务内，保证「先记后发」的强一致；消费侧有 <code class="code-inline">event_id</code> 幂等去重与 DLX 死信队列。</span></div>
+                <div class="flex gap-3"><span class="font-mono text-xs text-accent">✓</span><span>事件成为「逻辑服务」之间的边界：未来通知、分析、库存等消费者可以独立成进程，订单核心服务仍保留在单体内部，不引入 Saga/TCC。</span></div>
+                <div class="flex gap-3"><span class="font-mono text-xs text-accent">✓</span><span>设计评审构建的控制变量 benchmark（ADR 0006 记录）：模拟 3 个 500μs 下游调用时，发件箱模式吞吐提升约 365 倍；该数据仅用于决策，不进入 README 性能表。</span></div>
+              </div>
+            </div>
+            <div class="tab-panel" data-panel="option-a" hidden>
+              <div class="space-y-3 text-sm leading-7 text-foreground/90">
+                <div class="flex gap-3"><span class="font-mono text-xs text-muted">✗</span><span>每次订单状态变更后，订单服务直接同步调用下游（通知、分析等），请求路径被下游延迟拖慢。</span></div>
+                <div class="flex gap-3"><span class="font-mono text-xs text-muted">✗</span><span>下游失败会污染交易路径：核心订单事务与外部副作用耦合，难以回滚与重试。</span></div>
+                <div class="flex gap-3"><span class="font-mono text-xs text-muted">✗</span><span>扩展性差：新增消费者需要改动订单服务代码，而不是独立订阅事件。</span></div>
+                <div class="flex gap-3"><span class="font-mono text-xs text-accent">✓</span><span>对照基准 <code class="code-inline">BenchmarkCreateOrderSyncSideEffects</code> 用于量化差距，证明发件箱收益是吞吐提升而不是实现偏好。</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 快速开始 ============ -->
+    <section id="quickstart" class="border-b border-border px-5 py-20 md:px-10 md:py-28">
+      <div class="mb-10">
+        <div class="mb-3 font-mono text-xs tracking-[0.2em] text-primary">05 / QUICK START</div>
+        <h2 class="font-serif text-3xl font-bold md:text-4xl">快速开始：clone 后即可跑起来的 MVP</h2>
+        <p class="mt-4 max-w-3xl text-sm leading-7 text-muted">
+          以下命令与 <code class="code-inline">README.md</code> 完全一致；本地 MVP 同时启动 PostgreSQL、Redis、RabbitMQ、
+          ai-service 与 Pyroscope，后端自动执行迁移与演示种子数据。
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div class="space-y-4">
+          <div class="border border-border bg-card">
+            <div class="border-b border-border px-5 py-3 font-mono text-xs tracking-[0.16em] text-muted">1 · 仓库基础校验</div>
+            <pre class="cmd-pre"><code>bash scripts/validate-workspace.sh
+bash scripts/check-openapi.sh</code></pre>
+          </div>
+          <div class="border border-border bg-card">
+            <div class="border-b border-border px-5 py-3 font-mono text-xs tracking-[0.16em] text-muted">2 · 一键启动完整 MVP（推荐）</div>
+            <pre class="cmd-pre"><code>bash scripts/local-dev.sh</code></pre>
+            <div class="border-t border-border px-5 py-3 text-xs leading-6 text-muted">
+              内部执行 <code class="code-inline">docker compose up -d postgres redis pyroscope backend frontend</code>；
+              如需关掉 profiling，启动前把 <code class="code-inline">PYROSCOPE_SERVER_ADDRESS</code> 设为空值。
+            </div>
+          </div>
+          <div class="border border-border bg-card">
+            <div class="border-b border-border px-5 py-3 font-mono text-xs tracking-[0.16em] text-muted">3 · 后端测试</div>
+            <pre class="cmd-pre"><code>cd backend
+GOCACHE=/tmp/go-build-cache go test ./...</code></pre>
+          </div>
+          <div class="border border-border bg-card">
+            <div class="border-b border-border px-5 py-3 font-mono text-xs tracking-[0.16em] text-muted">4 · 前端检查与构建</div>
+            <pre class="cmd-pre"><code>cd frontend
+npm test
+npm run lint
+npm run typecheck
+npm run build</code></pre>
+          </div>
+        </div>
+
+        <div class="space-y-4">
+          <div class="border border-border bg-card p-6">
+            <div class="mb-3 font-mono text-xs text-muted">内置演示账号（种子数据）</div>
+            <div class="grid grid-cols-1 gap-px border border-border bg-border sm:grid-cols-2">
+              <div class="bg-card p-4">
+                <div class="font-mono text-xs text-primary">消费者</div>
+                <div class="mt-1 font-mono text-sm">13800000001</div>
+                <div class="font-mono text-xs text-muted">/ consumer-demo</div>
+              </div>
+              <div class="bg-card p-4">
+                <div class="font-mono text-xs text-primary">商家</div>
+                <div class="mt-1 font-mono text-sm">13800000002</div>
+                <div class="font-mono text-xs text-muted">/ merchant-demo</div>
+              </div>
+            </div>
+            <div class="mt-4 text-xs leading-6 text-muted">
+              消费者链路：笔记 → 商品 → 购物车 → 结算预览 → 幂等下单 → 模拟支付 → 取消/确认收货/退款；
+              商家链路：商品/SKU 管理、上下架、订单履约、退款审批、经营看板。
+            </div>
+          </div>
+
+          <div class="border border-border bg-card p-6">
+            <div class="mb-3 font-mono text-xs text-muted">本地端口（与 docker-compose.yml / README 一致）</div>
+            <div class="grid grid-cols-2 gap-px border border-border bg-border">
+              <div class="bg-card p-3"><div class="font-mono text-xs text-primary">backend</div><div class="font-mono text-xs">127.0.0.1:18080</div></div>
+              <div class="bg-card p-3"><div class="font-mono text-xs text-primary">frontend 静态服务</div><div class="font-mono text-xs">127.0.0.1:4173</div></div>
+              <div class="bg-card p-3"><div class="font-mono text-xs text-primary">PostgreSQL</div><div class="font-mono text-xs">127.0.0.1:15432</div></div>
+              <div class="bg-card p-3"><div class="font-mono text-xs text-primary">Redis</div><div class="font-mono text-xs">127.0.0.1:6380</div></div>
+              <div class="bg-card p-3"><div class="font-mono text-xs text-primary">RabbitMQ (AMQP)</div><div class="font-mono text-xs">127.0.0.1:5672</div></div>
+              <div class="bg-card p-3"><div class="font-mono text-xs text-primary">ai-service (gRPC)</div><div class="font-mono text-xs">127.0.0.1:50051</div></div>
+              <div class="bg-card p-3"><div class="font-mono text-xs text-primary">Prometheus</div><div class="font-mono text-xs">127.0.0.1:9090</div></div>
+              <div class="bg-card p-3"><div class="font-mono text-xs text-primary">Pyroscope</div><div class="font-mono text-xs">127.0.0.1:4040</div></div>
+            </div>
+          </div>
+
+          <div class="border border-border bg-card p-6">
+            <div class="mb-3 font-mono text-xs text-muted">只启动后端 API（不依赖 compose）</div>
+            <pre class="cmd-pre border-0 p-0"><code>cd backend
+POSTGRES_DSN=postgres://postgres:postgres@127.0.0.1:15432/redcart?sslmode=disable \
+REDIS_ADDR=127.0.0.1:6380 HTTP_PORT=18080 \
+GOCACHE=/tmp/go-build-cache go run ./cmd/api</code></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 结尾 ============ -->
+    <section id="closing" class="border-b border-border px-5 py-20 md:px-10 md:py-28">
+      <div class="mb-10">
+        <div class="mb-3 font-mono text-xs tracking-[0.2em] text-primary">06 / CLOSING</div>
+        <h2 class="font-serif text-3xl font-bold md:text-4xl">总结与更多材料</h2>
+      </div>
+
+      <div class="grid grid-cols-1 gap-px border border-border bg-border md:grid-cols-3">
+        <div class="bg-card p-7">
+          <div class="font-mono text-xs text-primary">01</div>
+          <h3 class="mt-3 font-serif text-2xl font-bold">分层边界是事实源</h3>
+          <p class="mt-4 text-sm leading-6 text-muted">架构事实以 docs/ 与 ADR 为准；Agent 路由文件不是架构事实源。</p>
+        </div>
+        <div class="bg-card p-7">
+          <div class="font-mono text-xs text-primary">02</div>
+          <h3 class="mt-3 font-serif text-2xl font-bold">可执行验证优先</h3>
+          <p class="mt-4 text-sm leading-6 text-muted">没有跑过的命令不能写成「已通过」；门禁在本地与 CI 均可复现。</p>
+        </div>
+        <div class="bg-card p-7">
+          <div class="font-mono text-xs text-primary">03</div>
+          <h3 class="mt-3 font-serif text-2xl font-bold">AI 输出只是草案</h3>
+          <p class="mt-4 text-sm leading-6 text-muted">最终决策、代码合并与验收结论由人工或主代理复核并留下证据。</p>
+        </div>
+      </div>
+
+      <div class="mt-12 grid grid-cols-1 gap-px border border-border bg-border md:grid-cols-2">
+        <a href="demo.html" class="group bg-card p-8 transition-colors hover:bg-primary hover:text-white">
+          <div class="flex items-start justify-between">
+            <div class="font-mono text-xs opacity-60">MORE · 01</div>
+            <i data-lucide="arrow-up-right" class="h-5 w-5 opacity-40 transition group-hover:opacity-100"></i>
+          </div>
+          <div class="mt-8 font-serif text-2xl font-bold">交互演示 demo.html</div>
+          <div class="mt-3 text-sm text-muted group-hover:text-white/80">本展示目录下的独立交互演示页，零后端依赖。</div>
+        </a>
+        <a href="../README.md" class="group bg-card p-8 transition-colors hover:bg-primary hover:text-white">
+          <div class="flex items-start justify-between">
+            <div class="font-mono text-xs opacity-60">MORE · 02</div>
+            <i data-lucide="arrow-up-right" class="h-5 w-5 opacity-40 transition group-hover:opacity-100"></i>
+          </div>
+          <div class="mt-8 font-serif text-2xl font-bold">仓库 README.md</div>
+          <div class="mt-3 text-sm text-muted group-hover:text-white/80">快速开始、验证要求、演示账号与工程规则原文。</div>
+        </a>
+      </div>
+    </section>
+
+    <footer class="px-5 py-16 md:px-10">
+      <div class="flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
+        <div>
+          <div class="font-serif text-3xl font-bold md:text-4xl">RedCart Copilot</div>
+          <div class="mt-3 font-mono text-sm text-muted">内容电商 · Agent-Native · 全链路可跑可验证</div>
+        </div>
+        <div class="font-mono text-xs text-muted">
+          <div>静态展示页：Tailwind + 内联 JS，无后端依赖。</div>
+          <div class="mt-1">本页所有事实均来自仓库文档（README / docs / ADR / AI_WORKFLOW）。</div>
+        </div>
+      </div>
+    </footer>
+  </main>
+
+  <style>
+    html { scroll-behavior: smooth; scroll-padding-top: 64px; font-size: 17px; }
+    @media (min-width: 768px) { html { font-size: 18px; } }
+    body {
+      color: #132033;
+      font-size: 1.03rem;
+      line-height: 1.75;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+    }
+    p { line-height: 1.85; }
+    h1, h2, h3 { letter-spacing: -0.02em; }
+    .font-mono { letter-spacing: 0.04em; }
+    .grid-bg {
+      background-image:
+        linear-gradient(to right, rgba(37, 99, 235, 0.08) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(37, 99, 235, 0.08) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: radial-gradient(ellipse 80% 60% at 30% 30%, #000 30%, transparent 75%);
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid #e5e7eb;
+      border-radius: 999px;
+      background: #fff;
+      padding: 5px 12px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12px;
+      color: #374151;
+    }
+    .code-inline {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.86em;
+      background: rgba(37, 99, 235, 0.08);
+      border: 1px solid rgba(37, 99, 235, 0.16);
+      border-radius: 4px;
+      padding: 1px 5px;
+      color: #1d4ed8;
+    }
+    .nav-link { position: relative; transition: color 0.2s ease; }
+    .nav-link.is-active { color: #132033; }
+    .nav-link.is-active::after {
+      content: "";
+      display: block;
+      margin-top: 4px;
+      height: 2px;
+      border-radius: 1px;
+      background: #2563eb;
+    }
+    .group:hover .text-muted { color: rgba(255, 255, 255, 0.82) !important; }
+    .group:hover .opacity-60 { opacity: 0.95; color: #fff; }
+    .tab-btn[data-active="true"] { background: #2563eb; color: #fff; }
+    .tab-btn[data-active="true"] .opacity-60 { color: rgba(255, 255, 255, 0.82); opacity: 1; }
+    .demo-btn-primary,
+    .demo-btn-ghost {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border-radius: 999px;
+      padding: 10px 16px;
+      font-size: 13px;
+      font-weight: 500;
+      flex: 0 0 auto;
+      transition: transform 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+      text-decoration: none;
+    }
+    .algo-safe-text { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+    .demo-btn-primary { background: #2563eb; color: #fff; }
+    .demo-btn-primary:hover { background: #1d4ed8; transform: translateY(-1px); }
+    .demo-btn-ghost { border: 1px solid #dce4ee; background: #fff; color: #132033; }
+    .demo-btn-ghost:hover { background: #f1f5f9; transform: translateY(-1px); }
+
+    .flow-step { display: flex; gap: 10px; align-items: baseline; }
+    .flow-step .font-mono { flex: 0 0 auto; }
+
+    .cmd-pre { overflow-x: auto; padding: 16px 20px; }
+    .cmd-pre code {
+      display: block;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12.5px;
+      line-height: 1.9;
+      color: #1e293b;
+      white-space: pre;
+    }
+    .protocol-pre {
+      overflow-x: auto;
+      max-height: 220px;
+      overflow-y: auto;
+      border: 1px solid #dce4ee;
+      border-radius: 10px;
+      background: #0f1a2b;
+      padding: 14px 16px;
+    }
+    .protocol-pre code {
+      display: block;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 11px;
+      line-height: 1.8;
+      color: #cbd5e1;
+      white-space: pre;
+    }
+
+    /* A2UI 动态演示 */
+    .a2ui-line {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      padding: 7px 8px;
+      border-radius: 8px;
+      border-left: 3px solid transparent;
+      color: #64748b;
+      transition: background 0.3s ease, color 0.3s ease;
+    }
+    .a2ui-line.is-active {
+      background: rgba(37, 99, 235, 0.16);
+      border-left-color: #60a5fa;
+      color: #e2e8f0;
+    }
+    .a2ui-ln { flex: 0 0 auto; color: #475569; }
+    .a2ui-line.is-active .a2ui-ln { color: #93c5fd; }
+    .a2ui-chip {
+      flex: 0 0 auto;
+      border-radius: 999px;
+      padding: 0 8px;
+      font-size: 10px;
+      line-height: 18px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: #94a3b8;
+      letter-spacing: 0.04em;
+    }
+    .a2ui-line.is-active .a2ui-chip {
+      background: #2563eb;
+      border-color: #2563eb;
+      color: #fff;
+    }
+    .a2ui-code { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+
+    .a2ui-surface {
+      border: 1px solid #dce4ee;
+      border-radius: 14px;
+      background: #fff;
+      overflow: hidden;
+    }
+    .a2ui-surf-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-bottom: 1px solid #eef2f7;
+      background: #fafbfe;
+    }
+    .a2ui-dot { width: 10px; height: 10px; border-radius: 999px; background: #00BFFF; }
+    .a2ui-pad { padding: 14px; }
+    .a2ui-ph {
+      border: 1px dashed #cbd5e1;
+      border-radius: 10px;
+      padding: 12px;
+      text-align: center;
+      font-size: 12px;
+      color: #94a3b8;
+      background: #f8fafc;
+    }
+    .a2ui-product {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border: 1px solid #eef2f7;
+      border-radius: 12px;
+      padding: 10px 12px;
+      background: #fff;
+    }
+    .a2ui-product .a2ui-thumb {
+      flex: 0 0 auto;
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #dbeafe, #e0f2fe);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+    .a2ui-add-btn {
+      flex: 0 0 auto;
+      border-radius: 999px;
+      background: #2563eb;
+      color: #fff;
+      font-size: 11px;
+      padding: 5px 12px;
+      white-space: nowrap;
+    }
+
+    [data-reveal-item] {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+    [data-reveal-item].is-in {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    @media print {
+      header { position: static !important; }
+      #progress-bar { display: none !important; }
+      [data-reveal-item] { opacity: 1 !important; transform: none !important; }
+      .grid-bg { opacity: 0.18; }
+      .a2ui-line { color: #475569 !important; }
+    }
+  </style>
+
+  <script>
+    // nav + progress bar
+    (function () {
+      function initNav() {
+        const bar = document.getElementById("progress-bar");
+        const links = document.querySelectorAll(".nav-link");
+        const sections = Array.from(document.querySelectorAll("section[id]"));
+        function onScroll() {
+          const root = document.documentElement;
+          const scrolled = root.scrollTop;
+          const percent = scrolled / (root.scrollHeight - root.clientHeight) * 100;
+          if (bar) bar.style.width = Math.max(0, Math.min(100, percent)) + "%";
+          const y = scrolled + 120;
+          let current = sections[0] ? sections[0].id : "";
+          sections.forEach((section) => {
+            if (section.offsetTop <= y) current = section.id;
+          });
+          links.forEach((link) => {
+            link.classList.toggle("is-active", link.getAttribute("href") === "#" + current);
+          });
+        }
+        document.addEventListener("scroll", onScroll, { passive: true });
+        onScroll();
+      }
+      window.__initNav = initNav;
+    })();
+
+    // reveal（带超时兜底：2.5s 后强制全部显示，保证截图/打印不丢内容）
+    (function () {
+      function initReveal() {
+        const blocks = document.querySelectorAll("section .grid > *, section article, section li, section .tag");
+        blocks.forEach((element, index) => {
+          element.setAttribute("data-reveal-item", "");
+          element.style.transitionDelay = (index % 6) * 60 + "ms";
+        });
+        const io = new IntersectionObserver((entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("is-in");
+              io.unobserve(entry.target);
+            }
+          });
+        }, { threshold: 0.12 });
+        document.querySelectorAll("[data-reveal-item]").forEach((element) => io.observe(element));
+        setTimeout(() => {
+          document.querySelectorAll("[data-reveal-item]:not(.is-in)").forEach((element) => {
+            element.classList.add("is-in");
+          });
+        }, 2500);
+      }
+      window.__initReveal = initReveal;
+    })();
+
+    // A2UI 动态演示：NDJSON 指令流 → 逐行渲染成 UI
+    (function () {
+      var PRODUCTS = [
+        { title: "LED Desk Lamp", price_yuan: "79.00", points: "宿舍护眼 · 三档调光" },
+        { title: "Desk Storage Box Set", price_yuan: "39.90", points: "桌面收纳 · 多格分区" },
+        { title: "USB Power Strip", price_yuan: "49.00", points: "多口快充 · 宿舍友好" }
+      ];
+      var STEPS = [
+        {
+          title: "createSurface 执行",
+          detail: "surface 外壳就绪（surfaceId guide-001，A2UI v0.9，主题色 #00BFFF），等待组件指令…",
+          lines: [0]
+        },
+        {
+          title: "updateComponents 装配组件树",
+          detail: "Column/Card/Row/Slider/List/Button 逐条装配；商品 List 已就位，等待数据绑定…",
+          lines: [0, 1]
+        },
+        {
+          title: "updateDataModel 绑定数据",
+          detail: "/products 数据落入列表子作用域，/budget 绑定滑块；商品卡片渲染完成…",
+          lines: [0, 1, 2]
+        },
+        {
+          title: "渲染完成",
+          detail: "三条指令执行完毕：surface 外壳、组件树与数据模型已全部装配。",
+          lines: [0, 1, 2]
+        }
+      ];
+      var FINAL_INDEX = STEPS.length - 1;
+
+      function el(tag, className, text) {
+        var node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text !== undefined) node.textContent = text;
+        return node;
+      }
+
+      function productCard(product) {
+        var card = el("div", "a2ui-product");
+        var thumb = el("div", "a2ui-thumb", "🛍");
+        var body = el("div", "min-w-0 flex-1");
+        body.appendChild(el("div", "text-[13px] font-semibold leading-5", product.title));
+        var sub = el("div", "mt-0.5 text-[11px] text-muted");
+        sub.textContent = "¥" + product.price_yuan + " · " + product.points;
+        body.appendChild(sub);
+        card.appendChild(thumb);
+        card.appendChild(body);
+        card.appendChild(el("button", "a2ui-add-btn", "加入购物车"));
+        return card;
+      }
+
+      function renderCanvas(stepIndex) {
+        var host = document.getElementById("a2ui-canvas");
+        if (!host) return;
+        host.innerHTML = "";
+        var shell = el("div", "a2ui-surface");
+        var head = el("div", "a2ui-surf-head");
+        head.appendChild(el("span", "a2ui-dot"));
+        head.appendChild(el("span", "font-mono text-[10px] tracking-[0.14em] text-muted", "SURFACE guide-001 · A2UI v0.9"));
+        shell.appendChild(head);
+
+        if (stepIndex < 1) {
+          var pad0 = el("div", "a2ui-pad");
+          pad0.appendChild(el("div", "a2ui-ph", "createSurface 已执行：surface 外壳就绪，等待组件指令…"));
+          shell.appendChild(pad0);
+        } else {
+          var pad = el("div", "a2ui-pad space-y-3");
+          pad.appendChild(el("div", "font-serif text-[15px] font-bold text-foreground", "宿舍书桌场景好物"));
+          pad.appendChild(el("div", "text-[12px] text-muted", "已为你筛选 3 件预算内好物"));
+          var row = el("div", "flex items-center gap-3");
+          row.appendChild(el("span", "text-[11px] text-muted", "预算: ¥129.00"));
+          var slider = document.createElement("input");
+          slider.type = "range";
+          slider.min = 0;
+          slider.max = 12900;
+          slider.value = 12900;
+          slider.className = "flex-1 accent-[#00BFFF]";
+          row.appendChild(slider);
+          pad.appendChild(row);
+          var listHost = el("div", "space-y-2");
+          if (stepIndex >= 2) {
+            PRODUCTS.forEach(function (p) { listHost.appendChild(productCard(p)); });
+          } else {
+            listHost.appendChild(el("div", "a2ui-ph", "List 组件已装配，等待 updateDataModel 绑定 /products…"));
+          }
+          pad.appendChild(listHost);
+          shell.appendChild(pad);
+        }
+        host.appendChild(shell);
+      }
+
+      function paintLines(activeLines) {
+        var lines = document.querySelectorAll("#a2ui-lines .a2ui-line");
+        lines.forEach(function (line) {
+          var n = Number(line.getAttribute("data-line"));
+          line.classList.toggle("is-active", activeLines.indexOf(n) !== -1);
+        });
+      }
+
+      function paint(index) {
+        var step = STEPS[index];
+        paintLines(step.lines);
+        renderCanvas(index);
+        var title = document.getElementById("a2ui-status-title");
+        var detail = document.getElementById("a2ui-status-detail");
+        if (title) title.textContent = step.title;
+        if (detail) detail.textContent = step.detail;
+      }
+
+      function initA2UIDemo() {
+        var play = document.getElementById("a2ui-play");
+        var reset = document.getElementById("a2ui-reset");
+        if (!play || !reset) return;
+        var running = false;
+        var timer = null;
+
+        function playFrom(i) {
+          if (i >= STEPS.length) {
+            running = false;
+            return;
+          }
+          paint(i);
+          timer = window.setTimeout(function () { playFrom(i + 1); }, 1000);
+        }
+
+        play.addEventListener("click", function () {
+          if (running) return;
+          running = true;
+          playFrom(0);
+        });
+        reset.addEventListener("click", function () {
+          if (timer) window.clearTimeout(timer);
+          running = false;
+          paint(0);
+        });
+        // 初始即最终态：静态阅读/打印/截图完整可见，交互只是重放过程
+        paint(FINAL_INDEX);
+      }
+      window.__initA2UIDemo = initA2UIDemo;
+    })();
+
+    // tabs（发件箱 vs 同步副作用）
+    (function () {
+      function initTabs() {
+        const bar = document.getElementById("tab-bar");
+        if (!bar) return;
+        const buttons = bar.querySelectorAll(".tab-btn");
+        const panels = document.querySelectorAll(".tab-panel");
+        function activate(name) {
+          buttons.forEach((button) => {
+            button.setAttribute("data-active", button.dataset.tab === name ? "true" : "false");
+          });
+          panels.forEach((panel) => {
+            panel.hidden = panel.dataset.panel !== name;
+          });
+        }
+        buttons.forEach((button) => {
+          button.addEventListener("click", function () {
+            activate(button.dataset.tab);
+          });
+        });
+        activate(bar.querySelector(".tab-btn[data-active='true']").dataset.tab);
+      }
+      window.__initTabs = initTabs;
+    })();
+
+    document.addEventListener("DOMContentLoaded", function () {
+      if (window.lucide) window.lucide.createIcons();
+      if (window.__initNav) window.__initNav();
+      if (window.__initReveal) window.__initReveal();
+      if (window.__initTabs) window.__initTabs();
+      if (window.__initA2UIDemo) window.__initA2UIDemo();
+    });
+  </script>
+</body>
+</html>

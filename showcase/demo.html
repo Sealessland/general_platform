@@ -1,0 +1,2125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="RedCart Copilot 商店演示：无后端单文件 demo，覆盖消费者购买闭环、商家看板与 A2UI 智能导购。">
+<title>RedCart Copilot · 商店演示（无后端单文件 Demo）</title>
+<!--
+  RedCart Copilot 商店演示（showcase/demo.html）
+
+  这是一个【无后端、零网络依赖】的单文件演示：双击即可在浏览器中运行，
+  不请求任何网络资源（商品封面使用本地渐变占位图，不使用外部 CDN/字体）。
+
+  所有展示事实均取自仓库真实文件：
+  - 商品/SKU/笔记/订单/行为事件 seed 数据：backend/internal/redcart/infrastructure/postgres/migrate.go（seedSQL）
+  - 表结构与金额单位（分）：backend/migrations/0001_init_schema.sql
+  - 交互流程与状态机：frontend/src/app.ts（订单状态枚举、SKU 选择、购物车、结算、幂等下单、
+    订单详情三面板、商家看板、A2UI 渲染器均按 app.ts 行为移植）
+  - A2UI 指令结构与上下文富化：backend/internal/ai/mock_provider.go、
+    backend/internal/redcart/application/service_ai.go（预算解析/场景推断/商品筛选）
+
+  说明：
+  - 数据为仓库 seed 的 mock 数据；购物车/订单/幂等键持久化在浏览器 localStorage。
+  - 商品标题与卖点为 seed 原文（英文），页面展示的「丝绒唇泥套装」等为演示译名，仅作 UI 文案。
+  - seed cover_url 指向 images.example.com 占位域名，本 demo 为保证离线可用改渲染本地渐变占位图。
+  - 与后端 mock_provider.normalizeProducts 一致，A2UI 数据模型中的 sku_id 简化为商品 id；
+    演示在渲染层把「商品 id 型 sku_id」安全映射到该商品首个在售 SKU，避免加购错误 SKU。
+
+  交互闭环：商品列表 → 详情(SKU/库存) → 购物车 → 结算(幂等下单) → 订单(状态机)；
+  商家视角：经营看板(seed 漏斗/GMV) + 商品只读列表；AI 导购：意图 → NDJSON 指令流 → 实时渲染。
+-->
+<style>
+  :root {
+    --bg: #eef4fa;
+    --panel: #ffffff;
+    --border: #d5e1ee;
+    --ink: #12283f;
+    --muted: #5f738b;
+    --primary: #0e7490;
+    --primary-2: #0891b2;
+    --accent: #22d3ee;
+    --accent-soft: #e0f7fb;
+    --navy: #0d1b2e;
+    --navy-2: #14283f;
+    --danger: #d33a4f;
+    --ok: #0f9d58;
+    --warn: #b45309;
+    --radius: 12px;
+    --shadow: 0 1px 3px rgba(13, 27, 46, .08), 0 4px 14px rgba(13, 27, 46, .06);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  #app { min-height: 100vh; display: flex; flex-direction: column; }
+
+  /* 顶栏 */
+  .topbar {
+    background: linear-gradient(100deg, var(--navy) 0%, var(--navy-2) 55%, #0e3a52 100%);
+    color: #e6f4fb;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 22px; gap: 12px; flex-wrap: wrap;
+    box-shadow: 0 2px 10px rgba(13, 27, 46, .25);
+    position: sticky; top: 0; z-index: 20;
+  }
+  .top-left { display: flex; align-items: center; gap: 10px; }
+  .brand { font-weight: 700; font-size: 17px; letter-spacing: .2px; color: #fff; }
+  .brand .dot { color: var(--accent); }
+  .role-tag {
+    font-size: 12px; padding: 2px 10px; border-radius: 999px;
+    background: rgba(34, 211, 238, .16); color: #a5f3fc;
+    border: 1px solid rgba(34, 211, 238, .35);
+  }
+  .top-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .account { font-size: 12px; color: #b6cde0; margin-right: 4px; }
+
+  /* 按钮 */
+  .btn {
+    font: inherit; cursor: pointer; border: 1px solid var(--border);
+    background: #fff; color: var(--ink);
+    border-radius: 8px; padding: 5px 14px;
+    transition: all .15s ease;
+  }
+  .btn:hover { border-color: var(--primary-2); color: var(--primary-2); }
+  .btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .btn.primary:hover { background: var(--primary-2); color: #fff; }
+  .btn.danger { color: var(--danger); border-color: #f3c1c7; }
+  .btn.danger:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
+  .btn.mini { padding: 2px 10px; font-size: 12px; border-radius: 6px; }
+  .btn.ghost { background: transparent; border-color: rgba(255,255,255,.35); color: #e6f4fb; }
+  .btn.ghost:hover { border-color: #fff; color: #fff; }
+  .btn:disabled { opacity: .55; cursor: not-allowed; }
+  .btn.link { border: none; background: none; color: var(--primary); padding: 0 2px; }
+  .btn.link:hover { text-decoration: underline; color: var(--primary-2); }
+
+  /* 布局 */
+  .layout { display: flex; flex: 1; }
+  .nav {
+    width: 172px; flex-shrink: 0;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    padding: 14px 8px; display: flex; flex-direction: column; gap: 4px;
+  }
+  .nav a {
+    display: block; padding: 8px 12px; border-radius: 8px;
+    color: var(--muted); text-decoration: none; font-size: 13.5px;
+    border: 1px solid transparent;
+  }
+  .nav a:hover { background: var(--accent-soft); color: var(--primary); }
+  .nav a.active { background: var(--accent-soft); color: var(--primary); border-color: #bdeaf5; font-weight: 600; }
+  .nav .badge-pill {
+    display: inline-block; min-width: 18px; text-align: center; font-size: 11px;
+    background: var(--primary); color: #fff; border-radius: 999px; margin-left: 6px; padding: 0 5px;
+  }
+  .main { flex: 1; padding: 20px 26px 40px; max-width: 1120px; }
+
+  .notice {
+    padding: 9px 14px; border-radius: 10px; margin-bottom: 14px;
+    font-size: 13px; border: 1px solid;
+  }
+  .notice.ok { background: #e9f9ef; border-color: #bfe8cf; color: #166534; }
+  .notice.info { background: #e6f4fe; border-color: #bcdbf5; color: #1d4ed8; }
+  .notice.error { background: #fdecef; border-color: #f5c2ca; color: #b91c1c; }
+
+  .page-head { margin-bottom: 16px; }
+  .page-head h1 { margin: 0 0 2px; font-size: 22px; color: var(--ink); }
+  .page-head p { margin: 0; color: var(--muted); font-size: 13px; }
+  .muted { color: var(--muted); font-size: 12.5px; }
+  .meta { color: var(--muted); font-size: 12.5px; }
+
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; margin-bottom: 16px; box-shadow: var(--shadow); }
+  .panel.soft { background: #f8fbfd; }
+  .panel h2, .panel h3 { margin: 0 0 10px; }
+  .panel h2 { font-size: 17px; }
+  .panel h3 { font-size: 15px; }
+  .panel p { margin: 4px 0; }
+
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 6px; }
+  .grid { display: grid; gap: 14px; }
+  .cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  @media (max-width: 880px) { .cols-2, .cols-3 { grid-template-columns: 1fr; } .nav { width: 100%; flex-direction: row; flex-wrap: wrap; } .layout { flex-direction: column; } }
+
+  /* 商品封面：本地渐变占位图（离线可用） */
+  .cover {
+    height: 128px; border-radius: 10px; position: relative; overflow: hidden;
+    display: flex; align-items: flex-end; padding: 10px 12px;
+    color: rgba(255, 255, 255, .95); font-weight: 700; font-size: 18px;
+    letter-spacing: 2px; text-shadow: 0 1px 4px rgba(0, 0, 0, .25);
+  }
+  .cover.g1 { background: linear-gradient(135deg, #0e7490, #22d3ee); }
+  .cover.g2 { background: linear-gradient(135deg, #2563eb, #38bdf8); }
+  .cover.g3 { background: linear-gradient(135deg, #312e81, #22d3ee); }
+  .cover.g4 { background: linear-gradient(135deg, #0f766e, #2dd4bf); }
+  .cover.g5 { background: linear-gradient(135deg, #1e3a8a, #0ea5e9); }
+  .cover .cover-tag { position: absolute; top: 8px; right: 10px; font-size: 11px; font-weight: 400; background: rgba(13, 27, 46, .35); border-radius: 6px; padding: 1px 7px; letter-spacing: 0; text-shadow: none; }
+
+  .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    font: inherit; font-size: 12px; padding: 2px 10px; border-radius: 999px;
+    border: 1px solid var(--border); background: #f6fafd; color: var(--muted); cursor: pointer;
+  }
+  .chip:hover { color: var(--primary); border-color: var(--primary-2); }
+  .chip.static { cursor: default; background: var(--accent-soft); border-color: #c9eef6; color: var(--primary); }
+
+  .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+
+  table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.tbl th, table.tbl td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  table.tbl th { color: var(--muted); font-weight: 600; font-size: 12px; background: #f6fafd; }
+  table.tbl tr:last-child td { border-bottom: none; }
+  .mini-input { width: 62px; font: inherit; padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; }
+  input[type="text"], input[type="number"], input[type="password"], select, textarea {
+    font: inherit; padding: 6px 9px; border: 1px solid var(--border); border-radius: 8px;
+    background: #fff; color: var(--ink); width: 100%;
+  }
+  select { width: auto; }
+  textarea { resize: vertical; min-height: 64px; }
+  .form-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+  .form-row .label { font-size: 12px; color: var(--muted); }
+
+  .badge { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 11.5px; border: 1px solid; white-space: nowrap; }
+  .badge.created   { background: #fef3c7; color: #b45309; border-color: #f5d489; }
+  .badge.paid      { background: #dbeafe; color: #1d4ed8; border-color: #bcd7fb; }
+  .badge.shipped   { background: #cffafe; color: #0e7490; border-color: #9be1f2; }
+  .badge.finished  { background: #dcfce7; color: #15803d; border-color: #b3e8c5; }
+  .badge.cancelled { background: #e2e8f0; color: #64748b; border-color: #ccd6e0; }
+  .badge.refunding { background: #ffedd5; color: #c2410c; border-color: #f7d2a8; }
+  .badge.refunded  { background: #f3e8ff; color: #7e22ce; border-color: #e3cdf5; }
+
+  .empty, .error { padding: 22px 14px; text-align: center; color: var(--muted); border: 1px dashed var(--border); border-radius: var(--radius); background: #fafcfe; }
+  .error { color: var(--danger); border-color: #f3c1c7; background: #fdf5f6; }
+
+  .summary-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .summary-money { font-size: 18px; font-weight: 700; color: var(--primary); }
+
+  /* 指标卡 */
+  .metric { gap: 2px; }
+  .metric-label { font-size: 12px; color: var(--muted); }
+  .metric-value { font-size: 24px; font-weight: 700; color: var(--ink); }
+  .metric .muted { margin-top: 2px; }
+
+  /* 漏斗条 */
+  .funnel-row { display: grid; grid-template-columns: 130px 1fr 70px; align-items: center; gap: 10px; padding: 6px 0; font-size: 13px; }
+  .funnel-row .fk { color: var(--muted); font-size: 12px; }
+  .bar { height: 12px; background: #e7eef6; border-radius: 999px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--primary-2), var(--accent)); }
+  .funnel-row .fv { text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* 终端式 NDJSON 输出 */
+  .terminal {
+    background: #0b1524; color: #9fd7f5; border-radius: 10px;
+    padding: 12px 14px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px; overflow-x: auto; margin-top: 10px;
+  }
+  .term-line { border-left: 2px solid #1e4d6b; padding: 2px 0 8px 10px; margin-bottom: 8px; }
+  .term-line.applied { border-left-color: #22d3ee; }
+  .term-meta { color: #7fa9c4; margin-bottom: 3px; }
+  .term-tag { float: right; color: #4c7d9e; font-size: 11px; }
+  .term-line pre { margin: 0; white-space: pre-wrap; word-break: break-all; color: #b8e2fb; }
+  .term-status { color: #22d3ee; font-size: 12px; margin-top: 6px; }
+
+  /* A2UI surface 渲染 */
+  .a2ui-surface { margin-top: 10px; }
+  .a2ui-card { border: 1px solid #bfe0ef; border-left: 4px solid #00BFFF; }
+  .a2ui-column { display: flex; flex-direction: column; gap: 8px; }
+  .a2ui-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .a2ui-list { display: flex; flex-direction: column; gap: 10px; }
+  .a2ui-text { color: var(--ink); }
+  .a2ui-text.h2 { font-size: 17px; font-weight: 700; }
+  .a2ui-text.h3 { font-size: 15px; font-weight: 600; }
+  .a2ui-image { width: 100%; height: 110px; border-radius: 8px; object-fit: cover; }
+  .a2ui-slider-wrap { display: flex; align-items: center; gap: 8px; }
+  .a2ui-slider-wrap input[type="range"] { width: 160px; accent-color: #00BFFF; }
+  .a2ui-slider-label { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  .idem-panel { border: 1px dashed #9bd7e8; background: #f2fbfd; border-radius: 10px; padding: 10px 14px; margin-top: 10px; font-size: 12.5px; }
+  .foot { margin-top: 26px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+  .json-pre { background: #f6fafd; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+"use strict";
+
+/* =====================================================================
+ * 1. Mock 数据（源自 backend/internal/redcart/infrastructure/postgres/migrate.go 的 seedSQL）
+ * ===================================================================== */
+
+// 商家（seed users 表 id=2 与 merchants 表 id=1）
+var MOCK_MERCHANT = { id: 1, name: "RedCart Beauty Lab", description: "Content-driven beauty merchant demo account", status: "active" };
+
+// 演示账号（seed users 表）
+var DEMO_ACCOUNTS = {
+  consumer: { id: 1, nickname: "Alice", phone: "13800000001", passcode: "consumer-demo" },
+  merchant: { id: 2, nickname: "Merchant Zoe", phone: "13800000002", passcode: "merchant-demo" },
+};
+
+// 商品中文展示名：演示译名（title 与卖点保留 seed 原文）
+var PRODUCT_CN = {
+  1: "丝绒唇泥套装", 2: "旅行化妆收纳包", 3: "LED 护眼台灯",
+  4: "桌面收纳盒套装", 5: "USB 插线板",
+};
+
+// 商品 + SKU（金额单位：分；skus 字段为 seed product_skus 表数据）
+var MOCK_PRODUCTS = [
+  {
+    id: 1, merchant_id: 1,
+    title: "Velvet Lip Mud Set",
+    description: "Matte lip set for commute, campus, and quick content shoots.",
+    cover_url: "https://images.example.com/lip-mud.jpg",
+    category_id: 101, status: "online",
+    selling_points: ["Soft matte finish", "Pocket-size touch-up", "Daily shade bundle"],
+    skus: [
+      { id: 1, sku_name: "Cherry Set", sku_attrs: { shade: "cherry", pack: "3pcs" }, price_cent: 12900, stock: 29, locked_stock: 1, status: "active" },
+      { id: 2, sku_name: "Rose Set", sku_attrs: { shade: "rose", pack: "3pcs" }, price_cent: 13900, stock: 18, locked_stock: 1, status: "active" },
+    ],
+  },
+  {
+    id: 2, merchant_id: 1,
+    title: "Travel Makeup Organizer",
+    description: "Portable makeup storage for dorm, travel, and desk organization.",
+    cover_url: "https://images.example.com/makeup-organizer.jpg",
+    category_id: 102, status: "online",
+    selling_points: ["Compartment layout", "Portable and lightweight", "Easy to clean"],
+    skus: [
+      { id: 3, sku_name: "Cream White", sku_attrs: { color: "cream", size: "standard" }, price_cent: 8900, stock: 38, locked_stock: 0, status: "active" },
+    ],
+  },
+  {
+    id: 3, merchant_id: 1,
+    title: "LED Desk Lamp",
+    description: "Dimmable LED desk lamp with warm/cold light modes for small desk setups.",
+    cover_url: "https://images.example.com/desk-lamp.jpg",
+    category_id: 103, status: "online",
+    selling_points: ["3 color temperatures", "USB powered", "Space saving"],
+    skus: [
+      { id: 4, sku_name: "White", sku_attrs: { color: "white", size: "standard" }, price_cent: 7900, stock: 50, locked_stock: 0, status: "active" },
+    ],
+  },
+  {
+    id: 4, merchant_id: 1,
+    title: "Desk Storage Box Set",
+    description: "Multi-size storage boxes for stationery, cables, and daily desk items.",
+    cover_url: "https://images.example.com/storage-box.jpg",
+    category_id: 104, status: "online",
+    selling_points: ["Stackable", "See-through lid", "Cable hole design"],
+    skus: [
+      { id: 5, sku_name: "3-Piece Set", sku_attrs: { color: "clear", size: "3pcs" }, price_cent: 4900, stock: 60, locked_stock: 0, status: "active" },
+    ],
+  },
+  {
+    id: 5, merchant_id: 1,
+    title: "USB Power Strip",
+    description: "Compact power strip with USB-C and USB-A ports for dorm desk electronics.",
+    cover_url: "https://images.example.com/power-strip.jpg",
+    category_id: 105, status: "online",
+    selling_points: ["3 AC + 3 USB", "Overload protection", "1.8m cord"],
+    skus: [
+      { id: 6, sku_name: "Standard", sku_attrs: { color: "white", size: "standard" }, price_cent: 5900, stock: 45, locked_stock: 0, status: "active" },
+    ],
+  },
+];
+
+// 商品种子快照：下单会累加 locked_stock 模拟库存锁定，清空数据时据此还原
+var MOCK_PRODUCTS_PRISTINE = JSON.parse(JSON.stringify(MOCK_PRODUCTS));
+
+// 笔记（seed notes 表 + note_products 表；product_ids 为挂载商品）
+var MOCK_NOTES = [
+  {
+    id: 1, author_id: 2,
+    title: "通勤妆 5 分钟出门组合",
+    content: "这套唇泥和整理盒是我最近拍通勤内容最常带的组合，颜色稳、补妆快、包里不乱。",
+    cover_url: "https://images.example.com/note-commute.jpg",
+    status: "published", view_count: 1280, like_count: 218,
+    product_ids: [1, 2],
+  },
+  {
+    id: 2, author_id: 2,
+    title: "宿舍桌面整理前后对比",
+    content: "桌面一乱，化妆和出门效率都会掉。这个整理盒适合小桌面。",
+    cover_url: "https://images.example.com/note-dorm.jpg",
+    status: "published", view_count: 920, like_count: 141,
+    product_ids: [2],
+  },
+];
+
+// 行为事件（seed behavior_events 表）：供商家看板按 service_dashboard.go 口径聚合
+var MOCK_BEHAVIOR_EVENTS = [
+  { id: 1, event_type: "NOTE_VIEW", product_id: null, sku_id: null },
+  { id: 2, event_type: "NOTE_VIEW", product_id: null, sku_id: null },
+  { id: 3, event_type: "PRODUCT_CLICK", product_id: 1, sku_id: null },
+  { id: 4, event_type: "PRODUCT_CLICK", product_id: 2, sku_id: null },
+  { id: 5, event_type: "ADD_TO_CART", product_id: 1, sku_id: 1 },
+  { id: 6, event_type: "ADD_TO_CART", product_id: 2, sku_id: 3 },
+  { id: 7, event_type: "ORDER_CREATE", product_id: 1, sku_id: 2 },
+  { id: 8, event_type: "ORDER_CREATE", product_id: 2, sku_id: 3 },
+  { id: 9, event_type: "ORDER_PAY", product_id: 2, sku_id: 3 },
+  { id: 10, event_type: "ORDER_CREATE", product_id: 1, sku_id: 1 },
+  { id: 11, event_type: "ORDER_PAY", product_id: 1, sku_id: 1 },
+  { id: 12, event_type: "ORDER_REFUND", product_id: 1, sku_id: 1 },
+];
+
+// 购物车 seed（seed cart_items 表：Alice 已加入 1 件 Cherry Set）
+function seedCartItems() {
+  return [{
+    id: 1, product_id: 1, sku_id: 1, quantity: 1, selected: true,
+    product_title: "Velvet Lip Mud Set", sku_name: "Cherry Set",
+    price_cent: 12900, stock: skuAvailable(findSku(1)),
+  }];
+}
+
+// 订单 seed（seed orders/order_items/order_events/inventory_locks 表），时间按 seed 的 INTERVAL 偏移
+function seedOrders() {
+  var h4 = hoursAgo(4), h48 = hoursAgo(48), h47h = hoursAgo(47.5), h46h = hoursAgo(46.5);
+  var h24 = hoursAgo(24), h23h = hoursAgo(23.6667), h21h = hoursAgo(21.6667);
+  return [
+    {
+      id: 1, order_no: "RCSEEDC000002", user_id: 1, merchant_id: 1, status: "CREATED",
+      total_amount_cent: 13900, pay_amount_cent: 13900, discount_amount_cent: 0,
+      idempotency_key: "seed-created-2",
+      receiver_name: "Alice", receiver_phone: "13800000001", receiver_address: "Shanghai Xuhui District",
+      paid_at: null, cancelled_at: null, shipped_at: null, finished_at: null,
+      created_at: h4, updated_at: h4,
+      items: [{ product_title: "Velvet Lip Mud Set", sku_name: "Rose Set", price_cent: 13900, quantity: 1, total_amount_cent: 13900 }],
+      events: [{ from_status: null, to_status: "CREATED", event_type: "ORDER_CREATED", operator_role: "consumer", operator_id: 1, remark: "seeded created order", created_at: h4 }],
+      inventory_locks: [{ sku_id: 2, quantity: 1, status: "locked", locked_at: h4 }],
+    },
+    {
+      id: 2, order_no: "RCSEEDS000003", user_id: 1, merchant_id: 1, status: "SHIPPED",
+      total_amount_cent: 8900, pay_amount_cent: 8900, discount_amount_cent: 0,
+      idempotency_key: "seed-shipped-3",
+      receiver_name: "Alice", receiver_phone: "13800000001", receiver_address: "Hangzhou Binjiang",
+      paid_at: h47h, cancelled_at: null, shipped_at: h46h, finished_at: null,
+      created_at: h48, updated_at: h46h,
+      items: [{ product_title: "Travel Makeup Organizer", sku_name: "Cream White", price_cent: 8900, quantity: 1, total_amount_cent: 8900 }],
+      events: [
+        { from_status: null, to_status: "CREATED", event_type: "ORDER_CREATED", operator_role: "consumer", operator_id: 1, remark: "seeded created order", created_at: h48 },
+        { from_status: "CREATED", to_status: "PAID", event_type: "ORDER_PAID", operator_role: "consumer", operator_id: 1, remark: "seeded paid order", created_at: h47h },
+        { from_status: "PAID", to_status: "SHIPPED", event_type: "ORDER_SHIPPED", operator_role: "merchant", operator_id: 2, remark: "seeded shipped order", created_at: h46h },
+      ],
+      inventory_locks: [{ sku_id: 3, quantity: 1, status: "confirmed", locked_at: h48 }],
+    },
+    {
+      id: 3, order_no: "RCSEEDR000001", user_id: 1, merchant_id: 1, status: "REFUNDING",
+      total_amount_cent: 12900, pay_amount_cent: 12900, discount_amount_cent: 0,
+      idempotency_key: "seed-refunding-1",
+      receiver_name: "Alice", receiver_phone: "13800000001", receiver_address: "Suzhou Industrial Park",
+      paid_at: h23h, cancelled_at: null, shipped_at: null, finished_at: null,
+      created_at: h24, updated_at: h21h,
+      items: [{ product_title: "Velvet Lip Mud Set", sku_name: "Cherry Set", price_cent: 12900, quantity: 1, total_amount_cent: 12900 }],
+      events: [
+        { from_status: null, to_status: "CREATED", event_type: "ORDER_CREATED", operator_role: "consumer", operator_id: 1, remark: "seeded created order", created_at: h24 },
+        { from_status: "CREATED", to_status: "PAID", event_type: "ORDER_PAID", operator_role: "consumer", operator_id: 1, remark: "seeded paid order", created_at: h23h },
+        { from_status: "PAID", to_status: "REFUNDING", event_type: "ORDER_REFUND_REQUESTED", operator_role: "consumer", operator_id: 1, remark: "seeded refunding order", created_at: h21h },
+      ],
+      inventory_locks: [{ sku_id: 1, quantity: 1, status: "confirmed", locked_at: h24 }],
+    },
+  ];
+}
+
+/* =====================================================================
+ * 2. 工具函数（纯逻辑，可在 node 中直接测试）
+ * ===================================================================== */
+
+// 把「分」格式化为人民币字符串，与 frontend/src/app.ts formatMoney 一致
+function formatMoney(cents) {
+  if (!Number.isInteger(cents)) { throw new Error("amount must be integer cents"); }
+  return "¥" + (cents / 100).toFixed(2);
+}
+function fmtYuan(cents) { return (cents / 100).toFixed(2); }
+function prettyTime(value) {
+  if (!value) return "-";
+  var d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleString("zh-CN");
+}
+function hoursAgo(h) { return new Date(Date.now() - h * 3600 * 1000).toISOString(); }
+
+function findProduct(id) {
+  for (var i = 0; i < MOCK_PRODUCTS.length; i++) {
+    if (MOCK_PRODUCTS[i].id === Number(id)) return MOCK_PRODUCTS[i];
+  }
+  return null;
+}
+// 通过 SKU id 反查所属商品（SKU 未冗余 product_id 字段，按 seed 的归属关系扫描）
+function findProductBySku(skuId) {
+  for (var i = 0; i < MOCK_PRODUCTS.length; i++) {
+    var skus = MOCK_PRODUCTS[i].skus;
+    for (var j = 0; j < skus.length; j++) {
+      if (skus[j].id === Number(skuId)) return MOCK_PRODUCTS[i];
+    }
+  }
+  return null;
+}
+function findSku(skuId) {
+  for (var i = 0; i < MOCK_PRODUCTS.length; i++) {
+    var skus = MOCK_PRODUCTS[i].skus;
+    for (var j = 0; j < skus.length; j++) {
+      if (skus[j].id === Number(skuId)) return skus[j];
+    }
+  }
+  return null;
+}
+
+// 起售价（最低价）与可售库存（stock - locked_stock），与 app.ts calcProductPrice/calcProductStock 一致
+function productMinPrice(product) {
+  var skus = product.skus || [];
+  if (!skus.length) return 0;
+  var min = 0;
+  for (var i = 0; i < skus.length; i++) {
+    if (!min || skus[i].price_cent < min) min = skus[i].price_cent;
+  }
+  return min;
+}
+function productStock(product) {
+  var skus = product.skus || [];
+  var sum = 0;
+  for (var i = 0; i < skus.length; i++) sum += Math.max(0, skus[i].stock - skus[i].locked_stock);
+  return sum;
+}
+function skuAvailable(sku) { return Math.max(0, sku.stock - sku.locked_stock); }
+
+/* =====================================================================
+ * 3. 状态与持久化（localStorage；node 环境自动降级为内存）
+ * ===================================================================== */
+
+var LS_KEY = {
+  role: "redcart_demo_role_v1",
+  cart: "redcart_demo_cart_v1",
+  orders: "redcart_demo_orders_v1",
+  idem: "redcart_demo_idem_v1",
+};
+
+function lsGet(key, fb) {
+  try {
+    if (typeof localStorage === "undefined") return fb;
+    var raw = localStorage.getItem(key);
+    return raw == null ? fb : JSON.parse(raw);
+  } catch (e) { return fb; }
+}
+function lsSet(key, val) {
+  try {
+    if (typeof localStorage === "undefined") return;
+    localStorage.setItem(key, JSON.stringify(val));
+  } catch (e) { /* 隐私模式等场景下忽略 */ }
+}
+
+var state = {
+  role: lsGet(LS_KEY.role, "consumer"),
+  cart: null,
+  orders: null,
+  idem: null,
+};
+
+function loadCart() {
+  if (state.cart == null) {
+    state.cart = lsGet(LS_KEY.cart, null);
+    if (state.cart == null) { state.cart = seedCartItems(); saveCart(); }
+  }
+  return state.cart;
+}
+function loadOrders() {
+  if (state.orders == null) {
+    state.orders = lsGet(LS_KEY.orders, null);
+    if (state.orders == null) { state.orders = seedOrders(); saveOrders(); }
+  }
+  return state.orders;
+}
+function loadIdem() {
+  if (state.idem == null) {
+    state.idem = lsGet(LS_KEY.idem, {});
+  }
+  return state.idem;
+}
+function saveCart() { lsSet(LS_KEY.cart, state.cart); }
+function saveOrders() { lsSet(LS_KEY.orders, state.orders); }
+function saveIdem() { lsSet(LS_KEY.idem, state.idem); }
+function saveRole() { lsSet(LS_KEY.role, state.role); }
+
+function nextCartId() {
+  var max = 0;
+  loadCart().forEach(function (i) { if (i.id > max) max = i.id; });
+  return max + 1;
+}
+function nextOrderId() {
+  var max = 0;
+  loadOrders().forEach(function (o) { if (o.id > max) max = o.id; });
+  return max + 1;
+}
+
+// 清空本地数据，回到 seed 初始态
+function resetDemo() {
+  state.role = "consumer";
+  state.cart = null; state.orders = null; state.idem = null;
+  // 还原 SKU 库存/锁定库存（下单时 locked_stock 会被占位累加）
+  MOCK_PRODUCTS.forEach(function (p, i) {
+    p.skus.forEach(function (sku, j) {
+      var pristine = MOCK_PRODUCTS_PRISTINE[i].skus[j];
+      sku.stock = pristine.stock;
+      sku.locked_stock = pristine.locked_stock;
+    });
+  });
+  try {
+    if (typeof localStorage !== "undefined") {
+      [LS_KEY.role, LS_KEY.cart, LS_KEY.orders, LS_KEY.idem].forEach(function (k) { localStorage.removeItem(k); });
+    }
+  } catch (e) { /* ignore */ }
+}
+
+/* =====================================================================
+ * 4. 业务逻辑：购物车 / 结算 / 订单状态机 / 幂等下单
+ * ===================================================================== */
+
+function addToCart(skuId, quantity) {
+  var sku = findSku(skuId);
+  if (!sku) return { error: "SKU 不存在" };
+  var product = findProductBySku(sku.id);
+  var avail = skuAvailable(sku);
+  var qty = Math.max(1, Math.floor(Number(quantity)) || 1);
+  var cart = loadCart();
+  var existing = null;
+  for (var i = 0; i < cart.length; i++) { if (cart[i].sku_id === sku.id) { existing = cart[i]; break; } }
+  var baseQty = existing ? existing.quantity : 0;
+  if (baseQty + qty > avail) return { error: "库存不足（stock is insufficient），可售 " + avail + " 件" };
+  if (existing) {
+    existing.quantity = baseQty + qty;
+  } else {
+    cart.push({
+      id: nextCartId(), product_id: product.id, sku_id: sku.id, quantity: qty, selected: true,
+      product_title: product.title, sku_name: sku.sku_name, price_cent: sku.price_cent, stock: avail,
+    });
+  }
+  saveCart();
+  return { ok: true };
+}
+
+function updateCartItem(id, patch) {
+  var item = null;
+  var cart = loadCart();
+  for (var i = 0; i < cart.length; i++) { if (cart[i].id === Number(id)) { item = cart[i]; break; } }
+  if (!item) return { error: "购物车条目不存在" };
+  if (patch.quantity != null) {
+    var q = Math.max(1, Math.floor(Number(patch.quantity)) || 1);
+    var sku = findSku(item.sku_id);
+    var avail = sku ? skuAvailable(sku) : item.stock;
+    if (q > avail) return { error: "库存不足（stock is insufficient），可售 " + avail + " 件" };
+    item.quantity = q;
+  }
+  if (patch.selected != null) item.selected = !!patch.selected;
+  saveCart();
+  return { ok: true };
+}
+
+function removeCartItem(id) {
+  var cart = loadCart();
+  state.cart = cart.filter(function (i) { return i.id !== Number(id); });
+  saveCart();
+}
+
+function cartSummary() {
+  var items = loadCart();
+  var sel = items.filter(function (i) { return i.selected; });
+  return {
+    total_quantity: items.reduce(function (s, i) { return s + i.quantity; }, 0),
+    selected_item_count: sel.length,
+    selected_quantity: sel.reduce(function (s, i) { return s + i.quantity; }, 0),
+    selected_amount_cent: sel.reduce(function (s, i) { return s + i.price_cent * i.quantity; }, 0),
+  };
+}
+
+// 结算预览（对应 /api/orders/preview）：勾选条目 + 库存检查
+function checkoutPreview() {
+  var items = loadCart().filter(function (i) { return i.selected; });
+  var stockOk = true;
+  items.forEach(function (item) {
+    var sku = findSku(item.sku_id);
+    var avail = sku ? skuAvailable(sku) : item.stock;
+    if (item.quantity > avail) stockOk = false;
+  });
+  return {
+    merchant_id: MOCK_MERCHANT.id,
+    items: items,
+    stock_ok: stockOk,
+    pay_amount_cent: cartSummary().selected_amount_cent,
+  };
+}
+
+// 幂等下单：同一 idempotency_key 只允许创建一个订单（对应 uk_user_idempotency_key 唯一约束）。
+// 成功后会扣减对应 SKU 可售库存（locked_stock 占位增量），并清空勾选条目。
+function createOrder(input) {
+  var idem = loadIdem();
+  var key = input.idempotency_key;
+  if (idem[key] != null) {
+    var dup = findOrder(idem[key]);
+    return { duplicate: true, order: dup };
+  }
+  var items = loadCart().filter(function (i) { return i.selected; });
+  if (!items.length) return { error: "没有勾选任何商品" };
+  for (var i = 0; i < items.length; i++) {
+    var sku = findSku(items[i].sku_id);
+    if (!sku || items[i].quantity > skuAvailable(sku)) {
+      return { error: "库存不足（stock is insufficient）" };
+    }
+  }
+  var total = items.reduce(function (s, it) { return s + it.price_cent * it.quantity; }, 0);
+  var orderId = nextOrderId();
+  var order = {
+    id: orderId,
+    order_no: "RCDEMO" + String(orderId).padStart(7, "0"),
+    user_id: DEMO_ACCOUNTS.consumer.id,
+    merchant_id: MOCK_MERCHANT.id,
+    status: "CREATED",
+    total_amount_cent: total, pay_amount_cent: total, discount_amount_cent: 0,
+    idempotency_key: key,
+    receiver_name: input.receiver_name, receiver_phone: input.receiver_phone, receiver_address: input.receiver_address,
+    paid_at: null, cancelled_at: null, shipped_at: null, finished_at: null,
+    created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+    items: items.map(function (it) {
+      return { product_title: it.product_title, sku_name: it.sku_name, price_cent: it.price_cent, quantity: it.quantity, total_amount_cent: it.price_cent * it.quantity };
+    }),
+    events: [{ from_status: null, to_status: "CREATED", event_type: "ORDER_CREATED", operator_role: "consumer", operator_id: DEMO_ACCOUNTS.consumer.id, remark: "demo order created", created_at: new Date().toISOString() }],
+    inventory_locks: items.map(function (it) {
+      return { sku_id: it.sku_id, quantity: it.quantity, status: "locked", locked_at: new Date().toISOString() };
+    }),
+  };
+  // 占位库存锁定：locked_stock 增加（演示层模拟）
+  items.forEach(function (it) {
+    var sku = findSku(it.sku_id);
+    if (sku) sku.locked_stock += it.quantity;
+  });
+  // 移除已下单条目
+  var cart = loadCart();
+  state.cart = cart.filter(function (i) { return !i.selected; });
+  saveCart();
+
+  var orders = loadOrders();
+  orders.unshift(order);
+  saveOrders();
+  idem[key] = order.id;
+  saveIdem();
+  return { duplicate: false, order: order };
+}
+
+function findOrder(id) {
+  var orders = loadOrders();
+  for (var i = 0; i < orders.length; i++) { if (orders[i].id === Number(id)) return orders[i]; }
+  return null;
+}
+
+function pushEvent(order, from, to, type, remark) {
+  order.events.push({
+    from_status: from, to_status: to, event_type: type,
+    operator_role: "consumer", operator_id: DEMO_ACCOUNTS.consumer.id,
+    remark: remark, created_at: new Date().toISOString(),
+  });
+}
+
+// 订单状态机（枚举与 backend/internal/order/domain/order_status.go、app.ts 一致）
+function payOrder(id) {
+  var order = findOrder(id);
+  if (!order) return { error: "订单不存在" };
+  if (order.status !== "CREATED") return { error: "仅待支付订单可支付" };
+  order.status = "PAID"; order.paid_at = new Date().toISOString(); order.updated_at = order.paid_at;
+  pushEvent(order, "CREATED", "PAID", "ORDER_PAID", "demo paid");
+  order.inventory_locks.forEach(function (lock) { if (lock.status === "locked") lock.status = "confirmed"; });
+  saveOrders();
+  return { ok: true, order: order };
+}
+function cancelOrder(id) {
+  var order = findOrder(id);
+  if (!order) return { error: "订单不存在" };
+  if (order.status !== "CREATED") return { error: "仅待支付订单可取消" };
+  order.status = "CANCELLED"; order.cancelled_at = new Date().toISOString(); order.updated_at = order.cancelled_at;
+  pushEvent(order, "CREATED", "CANCELLED", "ORDER_CANCELLED", "demo cancelled");
+  order.inventory_locks.forEach(function (lock) { if (lock.status === "locked") lock.status = "released"; });
+  saveOrders();
+  return { ok: true, order: order };
+}
+function requestRefund(id, reason) {
+  var order = findOrder(id);
+  if (!order) return { error: "订单不存在" };
+  if (order.status !== "PAID" && order.status !== "SHIPPED") return { error: "当前状态不支持退款申请" };
+  order.status = "REFUNDING"; order.updated_at = new Date().toISOString();
+  pushEvent(order, order.status === "PAID" ? "PAID" : "SHIPPED", "REFUNDING", "ORDER_REFUND_REQUESTED", reason || "体验不符");
+  saveOrders();
+  return { ok: true, order: order };
+}
+function finishOrder(id) {
+  var order = findOrder(id);
+  if (!order) return { error: "订单不存在" };
+  if (order.status !== "SHIPPED") return { error: "仅已发货订单可确认收货" };
+  order.status = "FINISHED"; order.finished_at = new Date().toISOString(); order.updated_at = order.finished_at;
+  pushEvent(order, "SHIPPED", "FINISHED", "ORDER_FINISHED", "demo finished");
+  saveOrders();
+  return { ok: true, order: order };
+}
+
+/* =====================================================================
+ * 5. A2UI 智能导购：上下文富化 + NDJSON 指令生成
+ *    富化逻辑对应 service_ai.go enrichA2UIContext / parseBudgetFromIntent / inferSceneFromIntent；
+ *    指令结构对应 backend/internal/ai/mock_provider.go。
+ * ===================================================================== */
+
+var A2UI_CATALOG_BASIC = "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json";
+var A2UI_CATALOG_REDCART = "https://redcart.example/a2ui/catalog/v1";
+var A2UI_PRIMARY = "#00BFFF";
+
+// 从意图中解析预算（元/百 -> 分）；与 service_ai.go budgetRegex 语义一致
+function parseBudgetFromIntent(intent) {
+  var m = String(intent || "").toLowerCase().match(/(\d+)\s*(百|元|块|rmb|yuan)?/);
+  if (!m) return 0;
+  var num = parseInt(m[1], 10);
+  if (Number.isNaN(num)) return 0;
+  if (m[2] === "百") return num * 100 * 100;
+  return num * 100;
+}
+
+function inferSceneFromIntent(intent) {
+  var t = String(intent || "").toLowerCase();
+  if (t.indexOf("宿舍") >= 0) return "dorm_desk";
+  if (t.indexOf("通勤") >= 0 || t.indexOf("办公") >= 0) return "office_desk";
+  if (t.indexOf("出行") >= 0 || t.indexOf("旅行") >= 0) return "travel";
+  return "general";
+}
+
+function sceneTitle(scene) {
+  var map = { dorm_desk: "宿舍书桌改造方案", office_desk: "通勤办公桌面方案", travel: "出行收纳方案" };
+  return map[scene] || "智能导购专题";
+}
+
+// 与 service_ai.go relatedNotes 一致：返回挂载了指定商品的笔记（最多 4 条）
+function relatedNotesFor(productIds) {
+  var wanted = {};
+  productIds.forEach(function (id) { wanted[id] = true; });
+  var out = [];
+  for (var i = 0; i < MOCK_NOTES.length; i++) {
+    var note = MOCK_NOTES[i];
+    var hit = note.product_ids.some(function (p) { return wanted[p]; });
+    if (hit) out.push({ id: note.id, title: note.title, view_count: note.view_count, like_count: note.like_count });
+    if (out.length >= 4) break;
+  }
+  return out;
+}
+
+// 富化上下文：预算命中时注入预算内商品/相关笔记/批量加购候选（对应 enrichA2UIContext）
+function enrichA2UIContext(context, intent) {
+  var ctx = {};
+  Object.keys(context || {}).forEach(function (k) { ctx[k] = context[k]; });
+  var budget = parseBudgetFromIntent(intent);
+  if (ctx.budget != null) {
+    var b = Number(ctx.budget);
+    if (!Number.isNaN(b)) budget = b;
+  }
+  if (budget <= 0) return ctx; // 无导购信号：保持原上下文（mock 将生成问候界面）
+  var filtered = MOCK_PRODUCTS.filter(function (p) {
+    return productMinPrice(p) > 0 && productMinPrice(p) <= budget;
+  });
+  var productIds = filtered.map(function (p) { return p.id; });
+  // 与 service_ai.go 一致：batch_cart_items 的 sku_id 简化为商品 id
+  var batchItems = filtered.map(function (p) {
+    return { product_id: p.id, sku_id: p.id, title: p.title };
+  });
+  ctx.budget = budget;
+  ctx.products = filtered;
+  ctx.related_notes = relatedNotesFor(productIds);
+  ctx.batch_cart_items = batchItems;
+  if (ctx.scene == null) ctx.scene = inferSceneFromIntent(intent);
+  return ctx;
+}
+
+// 与 mock_provider.go normalizeProducts/normalizeNotes 一致：价格换算分->元，卖点拼接
+function normalizeProducts(list) {
+  return (list || []).map(function (p) {
+    return {
+      id: p.id, title: p.title, cover_url: p.cover_url,
+      price_yuan: fmtYuan(productMinPrice(p)),
+      selling_points: (p.selling_points || []).join(" · "),
+      sku_id: p.id,
+    };
+  });
+}
+function normalizeNotes(list) {
+  return (list || []).map(function (n) {
+    return { id: n.id, title: n.title, view_count: Number(n.view_count) || 0, like_count: Number(n.like_count) || 0 };
+  });
+}
+
+// 生成问候类 A2UI 界面（三行 NDJSON），结构同 mock_provider.generateGreetingSurface
+function buildGreetingSurface(surfaceId, intent) {
+  var line1 = JSON.stringify({
+    version: "v0.9",
+    createSurface: { surfaceId: surfaceId, catalogId: A2UI_CATALOG_BASIC, theme: { primaryColor: A2UI_PRIMARY }, sendDataModel: false },
+  });
+  var line2 = JSON.stringify({
+    version: "v0.9",
+    updateComponents: {
+      surfaceId: surfaceId,
+      components: [
+        { id: "root", component: "Card", child: "content_col" },
+        { id: "content_col", component: "Column", children: ["title_text", "intent_text", "action_button"] },
+        { id: "title_text", component: "Text", text: "AI 生成界面", variant: "h2" },
+        { id: "intent_text", component: "Text", text: "收到意图：" + String(intent || "") },
+        { id: "action_button", component: "Button", text: "好的", variant: "primary", action: { event: { name: "a2ui_ack", context: { surface_id: surfaceId } } } },
+      ],
+    },
+  });
+  var line3 = JSON.stringify({
+    version: "v0.9",
+    updateDataModel: { surfaceId: surfaceId, path: "/", value: { acknowledged: false } },
+  });
+  return [line1, line2, line3];
+}
+
+// 生成智能导购专题界面（三行 NDJSON），结构同 mock_provider.generateShoppingGuideSurface
+function buildGuideSurface(surfaceId, intent, ctx) {
+  var budget = Number(ctx.budget) || 0;
+  var scene = sceneTitle(ctx.scene || inferSceneFromIntent(intent));
+  var products = normalizeProducts(ctx.products || []);
+  var notes = normalizeNotes(ctx.related_notes || []);
+  var hasNotes = notes.length > 0;
+
+  var rootChildren = ["header_card", "budget_row", "product_section", "batch_cart_row"];
+  if (hasNotes) rootChildren.push("notes_section");
+
+  var components = [
+    { id: "root", component: "Column", children: rootChildren },
+    { id: "header_card", component: "Card", child: "header_col" },
+    { id: "header_col", component: "Column", children: ["scene_title", "scene_desc"] },
+    { id: "scene_title", component: "Text", text: scene, variant: "h2" },
+    { id: "scene_desc", component: "Text", text: "预算 ¥" + fmtYuan(budget) + "，已为你筛选 " + products.length + " 件好物" },
+  ];
+  if (budget > 0) {
+    components.push(
+      { id: "budget_row", component: "Row", children: ["budget_label", "budget_slider"] },
+      { id: "budget_label", component: "Text", text: "预算: ¥" + fmtYuan(budget) },
+      { id: "budget_slider", component: "Slider", min: 0, max: budget, value: { path: "/budget" } },
+    );
+  } else {
+    components.push(
+      { id: "budget_row", component: "Row", children: ["budget_label"] },
+      { id: "budget_label", component: "Text", text: "预算不限" },
+    );
+  }
+  components.push(
+    { id: "product_section", component: "Column", children: ["product_section_title", "product_list"] },
+    { id: "product_section_title", component: "Text", text: "精选商品", variant: "h3" },
+    { id: "product_list", component: "List", children: { path: "/products", componentId: "product_card_template" } },
+    { id: "product_card_template", component: "Card", child: "product_col" },
+    { id: "product_col", component: "Column", children: ["product_image", "product_title", "product_price", "product_points", "add_to_cart_btn"] },
+    { id: "product_image", component: "Image", url: { path: "cover_url" }, alt: { path: "title" } },
+    { id: "product_title", component: "Text", text: { path: "title" }, variant: "h3" },
+    { id: "product_price", component: "Text", text: { call: "formatString", args: { value: "¥${price_yuan}" } } },
+    { id: "product_points", component: "Text", text: { path: "selling_points" } },
+    { id: "add_to_cart_btn", component: "Button", text: "加入购物车", variant: "primary", action: { event: { name: "add_to_cart", context: { product_id: { path: "id" }, sku_id: { path: "sku_id" } } } } },
+    { id: "batch_cart_row", component: "Row", children: ["batch_total_text", "batch_add_btn"] },
+    { id: "batch_total_text", component: "Text", text: "共 " + products.length + " 件商品，一键加入购物车" },
+    { id: "batch_add_btn", component: "Button", text: "一键加购全部", variant: "primary", action: { event: { name: "add_all_to_cart", context: { items: { path: "/batch_cart_items" } } } } },
+  );
+  if (hasNotes) {
+    components.push(
+      { id: "notes_section", component: "Column", children: ["notes_section_title", "note_list"] },
+      { id: "notes_section_title", component: "Text", text: "相关种草笔记", variant: "h3" },
+      { id: "note_list", component: "List", children: { path: "/related_notes", componentId: "note_card_template" } },
+      { id: "note_card_template", component: "Card", child: "note_col" },
+      { id: "note_col", component: "Column", children: ["note_title", "note_meta", "note_link_btn"] },
+      { id: "note_title", component: "Text", text: { path: "title" }, variant: "h3" },
+      { id: "note_meta", component: "Text", text: { call: "formatString", args: { value: "浏览 ${view_count} · 点赞 ${like_count}" } } },
+      { id: "note_link_btn", component: "Button", text: "查看笔记", action: { functionCall: { call: "openUrl", args: { url: { call: "formatString", args: { value: "#/notes/${id}" } } } } } },
+    );
+  }
+
+  var dataModel = { budget: budget, products: products };
+  if (hasNotes) dataModel.related_notes = notes;
+  if (Array.isArray(ctx.batch_cart_items)) dataModel.batch_cart_items = ctx.batch_cart_items;
+
+  var line1 = JSON.stringify({
+    version: "v0.9",
+    createSurface: { surfaceId: surfaceId, catalogId: A2UI_CATALOG_REDCART, theme: { primaryColor: A2UI_PRIMARY }, sendDataModel: true },
+  });
+  var line2 = JSON.stringify({ version: "v0.9", updateComponents: { surfaceId: surfaceId, components: components } });
+  var line3 = JSON.stringify({ version: "v0.9", updateDataModel: { surfaceId: surfaceId, path: "/", value: dataModel } });
+  return [line1, line2, line3];
+}
+
+// 统一入口：按富化后的上下文是否含商品，生成问候或导购界面
+function buildA2UISurface(surfaceId, intent, context) {
+  var ctx = enrichA2UIContext(context || {}, intent);
+  var products = Array.isArray(ctx.products) ? ctx.products : [];
+  if (products.length === 0) return { type: "greeting", lines: buildGreetingSurface(surfaceId, intent), ctx: ctx };
+  return { type: "guide", lines: buildGuideSurface(surfaceId, intent, ctx), ctx: ctx };
+}
+
+// 商家看板数据（口径与 backend/internal/redcart/application/service_dashboard.go 一致）
+function deriveDashboard() {
+  var products = MOCK_PRODUCTS;
+  var orders = loadOrders();
+  var summary = { product_count: 0, online_product_count: 0, order_count: 0, paid_order_count: 0, gmv_amount_cent: 0, refund_order_count: 0, inventory_warning_sku: 0 };
+  products.forEach(function (p) {
+    summary.product_count++;
+    if (p.status === "online") summary.online_product_count++;
+    p.skus.forEach(function (sku) { if (sku.stock <= 5) summary.inventory_warning_sku++; });
+  });
+  orders.forEach(function (o) {
+    summary.order_count++;
+    if (["PAID", "SHIPPED", "FINISHED", "REFUNDING", "REFUNDED"].indexOf(o.status) >= 0) {
+      summary.paid_order_count++;
+      summary.gmv_amount_cent += o.pay_amount_cent;
+    }
+    if (o.status === "REFUNDED" || o.status === "REFUNDING") summary.refund_order_count++;
+  });
+  var funnel = { note_views: 0, product_clicks: 0, add_to_cart: 0, order_create: 0, order_pay: 0, order_refund: 0 };
+  MOCK_BEHAVIOR_EVENTS.forEach(function (e) {
+    if (e.event_type === "NOTE_VIEW") funnel.note_views++;
+    else if (e.event_type === "PRODUCT_CLICK") funnel.product_clicks++;
+    else if (e.event_type === "ADD_TO_CART") funnel.add_to_cart++;
+    else if (e.event_type === "ORDER_CREATE") funnel.order_create++;
+    else if (e.event_type === "ORDER_PAY") funnel.order_pay++;
+    else if (e.event_type === "ORDER_REFUND") funnel.order_refund++;
+  });
+  var stats = products.map(function (p) {
+    var s = { id: p.id, title: p.title, status: p.status, exposure: 0, clicks: 0, add_to_cart: 0, orders: 0, paid: 0, refunds: 0, available_stock: p.skus.reduce(function (a, sku) { return a + sku.stock; }, 0) };
+    MOCK_BEHAVIOR_EVENTS.forEach(function (e) {
+      if (e.product_id !== p.id) return;
+      if (e.event_type === "NOTE_VIEW") s.exposure++;
+      else if (e.event_type === "PRODUCT_CLICK") s.clicks++;
+      else if (e.event_type === "ADD_TO_CART") s.add_to_cart++;
+      else if (e.event_type === "ORDER_CREATE") s.orders++;
+      else if (e.event_type === "ORDER_PAY") s.paid++;
+      else if (e.event_type === "ORDER_REFUND") s.refunds++;
+    });
+    return s;
+  });
+  return { summary: summary, funnel: funnel, stats: stats };
+}
+
+/* =====================================================================
+ * 6. DOM 辅助与全局通知
+ * ===================================================================== */
+
+function h(tag, props, kids) {
+  var el = document.createElement(tag);
+  if (props) {
+    Object.keys(props).forEach(function (key) {
+      var value = props[key];
+      if (value === null || value === undefined) return;
+      if (key === "text") { el.textContent = value; return; }
+      if (key === "class") { el.className = value; return; }
+      if (key === "value") { el.value = value; return; }
+      el.setAttribute(key, value);
+    });
+  }
+  (kids || []).forEach(function (kid) {
+    if (kid === null || kid === undefined) return;
+    if (typeof kid === "string") el.appendChild(document.createTextNode(kid));
+    else el.appendChild(kid);
+  });
+  return el;
+}
+
+var noticeTimer = null;
+function setNotice(text, level) {
+  var bar = document.querySelector(".notice");
+  if (bar && bar.parentNode) bar.parentNode.removeChild(bar);
+  if (!text) return;
+  var main = document.getElementById("main");
+  if (main) {
+    var n = h("div", { class: "notice " + (level || "info"), text: text });
+    main.insertBefore(n, main.firstChild);
+  }
+  if (noticeTimer) clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(function () {
+    var bar2 = document.querySelector(".notice");
+    if (bar2 && bar2.parentNode) bar2.parentNode.removeChild(bar2);
+  }, 4200);
+}
+
+// 商品封面：本地渐变占位图（离线零请求）
+function coverBlock(product, small) {
+  var g = ((product.id - 1) % 5) + 1;
+  var cn = PRODUCT_CN[product.id] || product.title;
+  return h("div", { class: "cover g" + g }, [
+    h("div", { text: cn.slice(0, 2) }),
+    h("span", { class: "cover-tag", text: "类目 " + product.category_id }),
+  ]);
+}
+
+/* =====================================================================
+ * 7. A2UI 渲染器（移植自 frontend/src/app.ts a2uiRenderComponent）
+ *    支持 Card/Column/Row/List/Text/Image/Slider/Button，路径取值、formatString 与动作绑定。
+ * ===================================================================== */
+
+function a2uiPath(dataModel, path) {
+  if (path == null) return dataModel;
+  var parts = String(path).split("/").filter(function (p) { return p; });
+  var target = dataModel;
+  for (var i = 0; i < parts.length; i++) {
+    if (target == null || typeof target !== "object") return undefined;
+    target = target[parts[i]];
+  }
+  return target;
+}
+
+function a2uiValue(value, scope) {
+  if (value == null) return "";
+  if (typeof value === "object") {
+    if (value.path) {
+      var resolved = a2uiPath(scope, value.path);
+      return resolved == null ? "" : String(resolved);
+    }
+    if (value.call === "formatString" && value.args && value.args.value) {
+      return String(value.args.value).replace(/\$\{([^}]+)\}/g, function (_, expr) {
+        var r = a2uiPath(scope, expr);
+        return r == null ? "" : String(r);
+      });
+    }
+  }
+  return String(value);
+}
+
+function a2uiActionContext(context, scope) {
+  if (!context || typeof context !== "object") return {};
+  var out = {};
+  Object.keys(context).forEach(function (k) { out[k] = a2uiValue(context[k], scope); });
+  return out;
+}
+
+// 把「商品 id 型 sku_id」映射到该商品真实在售 SKU（见文件头说明）
+function resolveSkuFor(productId, skuId) {
+  var product = findProduct(productId);
+  if (!product) return null;
+  if (skuId && product.skus.some(function (s) { return s.id === Number(skuId); })) return findSku(Number(skuId));
+  return product.skus.find(function (s) { return s.status === "active" && skuAvailable(s) > 0; }) || product.skus[0] || null;
+}
+
+function a2uiChildren(surface, comp, scope) {
+  if (!comp.children) return [];
+  if (Array.isArray(comp.children)) {
+    return comp.children.map(function (id) { return a2uiNode(surface, surface.components.get(id), scope); }).filter(Boolean);
+  }
+  if (comp.child) {
+    var child = a2uiNode(surface, surface.components.get(comp.child), scope);
+    return child ? [child] : [];
+  }
+  return [];
+}
+
+function a2uiNode(surface, comp, scope) {
+  if (!comp) return h("span");
+  var dataModel = scope || surface.dataModel;
+  var children = a2uiChildren(surface, comp, dataModel);
+
+  if (comp.component === "Card") {
+    var card = h("section", { class: "card a2ui-card" });
+    if (children[0]) card.appendChild(children[0]);
+    return card;
+  }
+  if (comp.component === "Column") {
+    var col = h("div", { class: "a2ui-column" });
+    children.forEach(function (c) { col.appendChild(c); });
+    return col;
+  }
+  if (comp.component === "Row") {
+    var row = h("div", { class: "a2ui-row" });
+    children.forEach(function (c) { row.appendChild(c); });
+    return row;
+  }
+  if (comp.component === "List") {
+    var list = h("div", { class: "a2ui-list" });
+    var childDesc = comp.children;
+    if (childDesc && typeof childDesc === "object" && childDesc.path && childDesc.componentId) {
+      var items = a2uiPath(dataModel, childDesc.path) || [];
+      var template = surface.components.get(childDesc.componentId);
+      items.forEach(function (item) {
+        var itemScope = Object.assign({ __parent: dataModel }, item);
+        var rendered = a2uiNode(surface, template, itemScope);
+        if (rendered) list.appendChild(rendered);
+      });
+    } else if (Array.isArray(childDesc)) {
+      children.forEach(function (c) { list.appendChild(c); });
+    }
+    return list;
+  }
+  if (comp.component === "Text") {
+    return h("div", { class: "a2ui-text " + (comp.variant || ""), text: a2uiValue(comp.text, dataModel) });
+  }
+  if (comp.component === "Image") {
+    // 封面：seed cover_url 为占位域名，离线环境改为本地渐变占位图，保证零网络请求
+    var url = a2uiValue(comp.url, dataModel);
+    var alt = a2uiValue(comp.alt, dataModel) || "product";
+    if (/^https?:\/\//.test(url)) {
+      var g = ((Number(alt.length) || 1) % 5) + 1;
+      return h("div", { class: "cover g" + g }, [h("div", { text: String(alt).slice(0, 2) })]);
+    }
+    var img = h("img", { class: "a2ui-image", src: url, alt: alt });
+    img.onerror = function () { img.style.display = "none"; };
+    return img;
+  }
+  if (comp.component === "Slider") {
+    var wrap = h("div", { class: "a2ui-slider-wrap" });
+    var max = Number(comp.max) || 100;
+    var slider = h("input", { type: "range", min: String(comp.min || 0), max: String(max), value: String(a2uiValue(comp.value, dataModel) || max) });
+    var label = h("span", { class: "a2ui-slider-label", text: slider.value });
+    slider.addEventListener("input", function () {
+      label.textContent = slider.value;
+      if (comp.value && comp.value.path) {
+        var parts = String(comp.value.path).split("/").filter(function (p) { return p; });
+        var target = surface.dataModel;
+        parts.slice(0, -1).forEach(function (part) {
+          if (!target[part]) target[part] = {};
+          target = target[part];
+        });
+        if (parts.length > 0) target[parts[parts.length - 1]] = Number(slider.value);
+        surface.refresh();
+      }
+    });
+    wrap.appendChild(slider);
+    wrap.appendChild(label);
+    return wrap;
+  }
+  if (comp.component === "Button") {
+    var btn = h("button", { class: "btn " + (comp.variant === "primary" ? "primary" : ""), text: a2uiValue(comp.text, dataModel) });
+    if (comp.action) {
+      if (comp.action.event) {
+        var eventName = comp.action.event.name;
+        var context = a2uiActionContext(comp.action.event.context, dataModel);
+        btn.addEventListener("click", function () {
+          if (eventName === "add_to_cart") {
+            var sku = resolveSkuFor(Number(context.product_id), Number(context.sku_id));
+            var result = sku ? addToCart(sku.id, 1) : { error: "SKU 不存在" };
+            setNotice(result.ok ? "已加入购物车" : (result.error || "加购失败"), result.ok ? "ok" : "error");
+          } else if (eventName === "add_all_to_cart") {
+            var items = [];
+            if (comp.action.event.context && comp.action.event.context.items && comp.action.event.context.items.path) {
+              items = a2uiPath(dataModel, comp.action.event.context.items.path) || [];
+            }
+            if (!items.length) { setNotice("没有可批量加购的商品", "info"); return; }
+            var failCount = 0;
+            items.forEach(function (item) {
+              var sku2 = resolveSkuFor(Number(item.product_id), Number(item.sku_id));
+              var r = sku2 ? addToCart(sku2.id, 1) : { error: "SKU 不存在" };
+              if (!r.ok) failCount++;
+            });
+            setNotice(failCount ? ("部分商品加购失败（" + failCount + " 件）") : "全部商品已加入购物车", failCount ? "error" : "ok");
+          } else if (eventName === "a2ui_ack") {
+            surface.dataModel.acknowledged = true;
+            setNotice("A2UI 已确认（a2ui_ack）", "info");
+          } else {
+            setNotice("A2UI action: " + eventName, "info");
+          }
+        });
+      } else if (comp.action.functionCall) {
+        var call = comp.action.functionCall.call;
+        var args = a2uiActionContext(comp.action.functionCall.args, dataModel);
+        btn.addEventListener("click", function () {
+          if (call === "openUrl") {
+            var url = args.url || "";
+            if (url.indexOf("#") === 0) go(url.slice(1));
+            else if (url) window.open(url, "_blank");
+          } else {
+            setNotice("A2UI function: " + call, "info");
+          }
+        });
+      }
+    }
+    return btn;
+  }
+  return h("div", { class: "a2ui-unknown muted", text: "未知组件: " + comp.component });
+}
+
+function makeSurface(surfaceId) {
+  return { surfaceId: surfaceId, components: new Map(), dataModel: {}, refresh: null };
+}
+
+// 逐行解析 NDJSON 指令并应用（createSurface / updateComponents / updateDataModel）
+function applySurfaceLine(surface, line) {
+  var envelope = JSON.parse(line);
+  if (envelope.createSurface) {
+    surface.dataModel = {};
+  } else if (envelope.updateComponents) {
+    (envelope.updateComponents.components || []).forEach(function (component) {
+      surface.components.set(component.id, component);
+    });
+  } else if (envelope.updateDataModel) {
+    var path = envelope.updateDataModel.path || "/";
+    var parts = path.split("/").filter(function (p) { return p; });
+    var target = surface.dataModel;
+    parts.slice(0, -1).forEach(function (part) {
+      if (!target[part]) target[part] = {};
+      target = target[part];
+    });
+    if (parts.length === 0) surface.dataModel = envelope.updateDataModel.value;
+    else target[parts[parts.length - 1]] = envelope.updateDataModel.value;
+  }
+}
+
+/* =====================================================================
+ * 8. 视图与路由
+ * ===================================================================== */
+
+var appRoot = null;
+
+function currentPath() {
+  var raw = window.location.hash ? window.location.hash.slice(1) : "";
+  return (raw || defaultPath()).split("?")[0];
+}
+function go(path) { window.location.hash = path; }
+function defaultPath() { return state.role === "merchant" ? "/merchant/dashboard" : "/home"; }
+function roleLabel() { return state.role === "merchant" ? "商家" : "消费者"; }
+
+function badge(status) {
+  var zh = { CREATED: "待支付", PAID: "已支付", SHIPPED: "已发货", FINISHED: "已完成", CANCELLED: "已取消", REFUNDING: "退款中", REFUNDED: "已退款" };
+  var map = { CREATED: "created", PAID: "paid", SHIPPED: "shipped", FINISHED: "finished", CANCELLED: "cancelled", REFUNDING: "refunding", REFUNDED: "refunded" };
+  return h("span", { class: "badge " + (map[status] || "created"), text: status + " " + (zh[status] || "") });
+}
+
+function navLink(path, label, badgeCount) {
+  var active = currentPath() === path || currentPath().indexOf(path + "/") === 0;
+  var link = h("a", { href: "#" + path, class: active ? "active" : "", text: label });
+  if (badgeCount) link.appendChild(h("span", { class: "badge-pill", text: String(badgeCount) }));
+  return link;
+}
+
+function renderShell() {
+  var topbar = document.getElementById("topbar");
+  var nav = document.getElementById("nav");
+  topbar.innerHTML = "";
+  nav.innerHTML = "";
+
+  var left = h("div", { class: "top-left" }, [
+    h("div", { class: "brand" }, [h("span", { text: "RedCart " }), h("span", { class: "dot", text: "Copilot" })]),
+    h("span", { class: "role-tag", text: roleLabel() + "视角" }),
+  ]);
+  var right = h("div", { class: "top-right" });
+  var toConsumer = h("button", { class: "btn ghost mini", text: "消费者演示" });
+  toConsumer.addEventListener("click", function () { switchRole("consumer"); });
+  var toMerchant = h("button", { class: "btn ghost mini", text: "商家演示" });
+  toMerchant.addEventListener("click", function () { switchRole("merchant"); });
+  var resetBtn = h("button", { class: "btn ghost mini", text: "清空本地数据" });
+  resetBtn.addEventListener("click", function () {
+    if (!confirm("确认清空本地购物车/订单数据并回到 seed 初始态？")) return;
+    resetDemo();
+    switchRole("consumer");
+  });
+  var account = state.role === "merchant" ? DEMO_ACCOUNTS.merchant : DEMO_ACCOUNTS.consumer;
+  right.appendChild(toConsumer);
+  right.appendChild(toMerchant);
+  right.appendChild(h("div", { class: "account", text: account.nickname + " · " + account.phone }));
+  right.appendChild(resetBtn);
+  topbar.appendChild(left);
+  topbar.appendChild(right);
+
+  if (state.role === "consumer") {
+    nav.appendChild(navLink("/home", "首页商品"));
+    nav.appendChild(navLink("/notes", "内容流"));
+    nav.appendChild(navLink("/cart", "购物车", cartSummary().total_quantity || null));
+    nav.appendChild(navLink("/orders", "我的订单"));
+    nav.appendChild(navLink("/a2ui", "A2UI 导购"));
+  } else {
+    nav.appendChild(navLink("/merchant/dashboard", "经营看板"));
+    nav.appendChild(navLink("/merchant/products", "商品管理"));
+    nav.appendChild(navLink("/a2ui", "A2UI 导购"));
+  }
+}
+
+function switchRole(role) {
+  state.role = role;
+  saveRole();
+  renderShell();
+  window.location.hash = defaultPath();
+}
+
+function renderRoute() {
+  var main = document.getElementById("main");
+  main.innerHTML = "";
+  var path = currentPath();
+  var parts = path.split("/").filter(Boolean);
+
+  var view = null;
+  if (state.role === "consumer") {
+    if (path === "/home") view = homeView();
+    else if (path === "/notes") view = notesView();
+    else if (parts[0] === "notes" && parts[1]) view = noteDetailView(parts[1]);
+    else if (parts[0] === "product" && parts[1]) view = productDetailView(parts[1]);
+    else if (path === "/cart") view = cartView();
+    else if (path === "/checkout") view = checkoutView();
+    else if (path === "/orders") view = ordersView();
+    else if (parts[0] === "order" && parts[1]) view = orderDetailView(parts[1]);
+    else view = homeView();
+  } else {
+    if (path === "/merchant/dashboard") view = dashboardView();
+    else if (path === "/merchant/products") view = merchantProductsView();
+    else if (path === "/a2ui") view = a2uiView();
+    else view = dashboardView();
+  }
+  // A2UI 对两个角色都开放
+  if (path === "/a2ui") view = a2uiView();
+  main.appendChild(view);
+  var foot = h("div", { class: "foot muted" });
+  foot.appendChild(document.createTextNode("无后端单文件演示 · 数据为仓库 seed 的 mock（backend/migrations/0001_init_schema.sql + internal/redcart/infrastructure/postgres/migrate.go） · 购物车/订单持久化于浏览器 localStorage · 刷新页面数据保留"));
+  main.appendChild(foot);
+}
+
+function titleBar(title, text) {
+  var box = h("section", { class: "page-head" });
+  box.appendChild(h("h1", { text: title }));
+  box.appendChild(h("p", { text: text }));
+  return box;
+}
+function metricCard(title, value, hint) {
+  var card = h("section", { class: "card metric" });
+  card.appendChild(h("div", { class: "metric-label", text: title }));
+  card.appendChild(h("div", { class: "metric-value", text: value }));
+  card.appendChild(h("div", { class: "muted", text: hint }));
+  return card;
+}
+function formRow(label, input) {
+  var row = h("label", { class: "form-row" });
+  row.appendChild(h("span", { class: "label", text: label }));
+  row.appendChild(input);
+  return row;
+}
+function emptyBlock(text) { return h("div", { class: "empty", text: text || "暂无数据" }); }
+function errorBlock(text) { return h("div", { class: "error", text: text || "加载失败" }); }
+
+/* ---------- 消费者视图 ---------- */
+
+function homeView() {
+  var wrap = h("div");
+  wrap.appendChild(titleBar("首页商品", "5 件 seed 演示商品，含 SKU 价格与可售库存（stock - locked_stock）。"));
+  var grid = h("div", { class: "grid cols-3" });
+  MOCK_PRODUCTS.forEach(function (p) {
+    var card = h("section", { class: "card" });
+    card.appendChild(coverBlock(p));
+    card.appendChild(h("h3", { text: PRODUCT_CN[p.id] || p.title }));
+    card.appendChild(h("div", { class: "muted", text: p.title }));
+    card.appendChild(h("div", { class: "meta", text: "起售价 " + formatMoney(productMinPrice(p)) + " · 可售库存 " + productStock(p) }));
+    var chips = h("div", { class: "chip-row" });
+    (p.selling_points || []).forEach(function (sp) { chips.appendChild(h("span", { class: "chip static", text: sp })); });
+    card.appendChild(chips);
+    var btn = h("button", { class: "btn primary", text: "查看详情" });
+    btn.addEventListener("click", function () { go("/product/" + p.id); });
+    card.appendChild(h("div", { class: "actions" }, [btn]));
+    grid.appendChild(card);
+  });
+  wrap.appendChild(grid);
+  return wrap;
+}
+
+function notesView() {
+  var wrap = h("div");
+  wrap.appendChild(titleBar("内容种草流", "从笔记进入商品与交易链路（seed 2 条笔记）。"));
+  var grid = h("div", { class: "grid cols-2" });
+  MOCK_NOTES.forEach(function (n) {
+    var card = h("section", { class: "card" });
+    card.appendChild(h("div", { class: "metric-label", text: "笔记 #" + n.id }));
+    card.appendChild(h("h3", { text: n.title }));
+    card.appendChild(h("p", { class: "muted", text: n.content }));
+    card.appendChild(h("div", { class: "meta", text: "浏览 " + n.view_count + " · 点赞 " + n.like_count }));
+    var links = h("div", { class: "chip-row" });
+    n.product_ids.forEach(function (pid) {
+      var p = findProduct(pid);
+      if (!p) return;
+      var chip = h("button", { class: "chip", text: (PRODUCT_CN[pid] || p.title) });
+      chip.addEventListener("click", function () { go("/product/" + pid); });
+      links.appendChild(chip);
+    });
+    card.appendChild(links);
+    var btn = h("button", { class: "btn primary", text: "查看笔记" });
+    btn.addEventListener("click", function () { go("/notes/" + n.id); });
+    card.appendChild(h("div", { class: "actions" }, [btn]));
+    grid.appendChild(card);
+  });
+  wrap.appendChild(grid);
+  return wrap;
+}
+
+function noteDetailView(id) {
+  var wrap = h("div");
+  wrap.appendChild(titleBar("笔记详情", "内容带货与商品挂载。"));
+  var note = null;
+  MOCK_NOTES.forEach(function (n) { if (n.id === Number(id)) note = n; });
+  if (!note) return errorBlock("未找到笔记");
+  var panel = h("section", { class: "panel" });
+  panel.appendChild(h("h2", { text: note.title }));
+  panel.appendChild(h("p", { class: "muted", text: note.content }));
+  panel.appendChild(h("div", { class: "meta", text: "浏览 " + note.view_count + " · 点赞 " + note.like_count }));
+  panel.appendChild(h("h3", { text: "挂载商品" }));
+  var grid = h("div", { class: "grid cols-2" });
+  note.product_ids.forEach(function (pid) {
+    var p = findProduct(pid);
+    if (!p) return;
+    var card = h("section", { class: "card" });
+    card.appendChild(h("h3", { text: PRODUCT_CN[pid] || p.title }));
+    card.appendChild(h("p", { class: "muted", text: p.title }));
+    card.appendChild(h("p", { class: "muted", text: "起售价 " + formatMoney(productMinPrice(p)) + " · 可售库存 " + productStock(p) }));
+    var chips = h("div", { class: "chip-row" });
+    (p.selling_points || []).forEach(function (sp) { chips.appendChild(h("span", { class: "chip static", text: sp })); });
+    card.appendChild(chips);
+    var btn = h("button", { class: "btn primary", text: "进入商品详情" });
+    btn.addEventListener("click", function () { go("/product/" + pid); });
+    card.appendChild(h("div", { class: "actions" }, [btn]));
+    grid.appendChild(card);
+  });
+  panel.appendChild(grid);
+  wrap.appendChild(panel);
+  return wrap;
+}
+
+function productDetailView(id) {
+  var wrap = h("div");
+  wrap.appendChild(titleBar("商品详情", "SKU 选择、价格库存与加购动作。"));
+  var product = findProduct(id);
+  if (!product) return errorBlock("未找到商品");
+  var panel = h("section", { class: "panel" });
+  panel.appendChild(h("h2", { text: PRODUCT_CN[product.id] || product.title }));
+  panel.appendChild(h("p", { class: "muted", text: product.title + " · " + product.description }));
+  panel.appendChild(h("div", { class: "meta", text: "状态 " + product.status + " · 起售价 " + formatMoney(productMinPrice(product)) + " · 可售库存 " + productStock(product) }));
+  var chips = h("div", { class: "chip-row" });
+  (product.selling_points || []).forEach(function (sp) { chips.appendChild(h("span", { class: "chip static", text: sp })); });
+  panel.appendChild(chips);
+
+  var skuSelect = h("select");
+  (product.skus || []).forEach(function (sku, idx) {
+    var option = h("option", {
+      value: String(sku.id),
+      text: sku.sku_name + " · " + formatMoney(sku.price_cent) + " · 可售 " + skuAvailable(sku),
+    });
+    if (idx === 0) option.selected = true;
+    skuSelect.appendChild(option);
+  });
+  var qty = h("input", { type: "number", value: "1", min: "1" });
+  var message = h("div", { class: "error", style: "display:none" });
+  panel.appendChild(formRow("SKU", skuSelect));
+  panel.appendChild(formRow("数量", qty));
+  panel.appendChild(message);
+
+  var add = h("button", { class: "btn primary", text: "加入购物车" });
+  add.addEventListener("click", function () {
+    message.style.display = "none";
+    var result = addToCart(Number(skuSelect.value), Number(qty.value));
+    if (result.ok) {
+      setNotice("已加入购物车", "ok");
+      go("/cart");
+    } else {
+      message.textContent = result.error;
+      message.style.display = "";
+    }
+  });
+  var back = h("button", { class: "btn", text: "回到首页" });
+  back.addEventListener("click", function () { go("/home"); });
+  panel.appendChild(h("div", { class: "actions" }, [add, back]));
+  wrap.appendChild(panel);
+  return wrap;
+}
+
+function cartView() {
+  var wrap = h("div");
+  wrap.appendChild(titleBar("购物车", "勾选、改数量、删除与结算前库存检查。"));
+
+  function refresh() {
+    var body = h("div");
+    var items = loadCart();
+    if (!items.length) {
+      body.appendChild(emptyBlock("购物车为空，可从首页或内容流进入商品后加购。"));
+      wrap.appendChild(body);
+      return;
+    }
+    var panel = h("section", { class: "panel" });
+    var table = h("table", { class: "tbl" });
+    table.appendChild(h("thead", {}, [h("tr", {}, [
+      h("th", { text: "勾选" }), h("th", { text: "商品" }), h("th", { text: "SKU" }),
+      h("th", { text: "单价" }), h("th", { text: "数量" }), h("th", { text: "可售" }), h("th", { text: "操作" }),
+    ])]));
+    var tbody = h("tbody");
+    items.forEach(function (item) {
+      var row = h("tr");
+      var toggle = h("input", { type: "checkbox" });
+      toggle.checked = !!item.selected;
+      toggle.addEventListener("change", function () {
+        updateCartItem(item.id, { selected: toggle.checked });
+        refresh();
+      });
+      row.appendChild(h("td", {}, [toggle]));
+      row.appendChild(h("td", { text: PRODUCT_CN[item.product_id] || item.product_title }));
+      row.appendChild(h("td", { text: item.sku_name }));
+      row.appendChild(h("td", { text: formatMoney(item.price_cent) }));
+      var qtyCell = h("td");
+      var qtyInput = h("input", { type: "number", value: String(item.quantity), min: "1", class: "mini-input" });
+      var save = h("button", { class: "btn mini", text: "更新" });
+      save.addEventListener("click", function () {
+        var r = updateCartItem(item.id, { quantity: Number(qtyInput.value) });
+        if (!r.ok) alert(r.error || "更新失败");
+        refresh();
+      });
+      qtyCell.appendChild(qtyInput);
+      qtyCell.appendChild(h("span", { text: " " }));
+      qtyCell.appendChild(save);
+      row.appendChild(qtyCell);
+      row.appendChild(h("td", { text: String(item.stock) }));
+      var del = h("button", { class: "btn danger mini", text: "删除" });
+      del.addEventListener("click", function () { removeCartItem(item.id); refresh(); });
+      row.appendChild(h("td", {}, [del]));
+      tbody.appendChild(row);
+    });
+    table.appendChild(tbody);
+    panel.appendChild(table);
+
+    var summary = cartSummary();
+    var footer = h("div", { class: "summary-bar" });
+    footer.appendChild(h("div", { text: "已选商品数 " + summary.selected_item_count + " · 已选件数 " + summary.selected_quantity }));
+    footer.appendChild(h("div", { class: "summary-money", text: "合计 " + formatMoney(summary.selected_amount_cent) }));
+    var checkout = h("button", { class: "btn primary", text: "去结算" });
+    checkout.addEventListener("click", function () {
+      if (!summary.selected_item_count) { setNotice("请先勾选商品", "error"); return; }
+      go("/checkout");
+    });
+    footer.appendChild(checkout);
+    panel.appendChild(footer);
+    body.appendChild(panel);
+    wrap.appendChild(body);
+  }
+  refresh();
+  return wrap;
+}
+
+function checkoutView() {
+  var wrap = h("div");
+  wrap.appendChild(titleBar("结算", "预览金额、填写收货信息并发起幂等下单（幂等键防重复提交）。"));
+
+  // 每次进入结算页生成新的幂等键（与 app.ts 的 idemKey 一致）
+  var idemKey = "demo-" + Date.now();
+  var receiverName = h("input", { type: "text", value: "Alice" });
+  var receiverPhone = h("input", { type: "text", value: "13800000001" });
+  var receiverAddress = h("textarea", { rows: "3" });
+  receiverAddress.value = "Shanghai Pudong Demo Road 88";
+  var message = h("div", { class: "error", style: "display:none" });
+  var previewBox = h("div");
+  var resultBox = h("div");
+
+  function loadPreview() {
+    previewBox.innerHTML = "";
+    var preview = checkoutPreview();
+    if (!preview.items.length) {
+      previewBox.appendChild(emptyBlock("没有勾选的商品，请先回到购物车勾选。"));
+      return;
+    }
+    var panel = h("section", { class: "panel" });
+    var table = h("table", { class: "tbl" });
+    table.appendChild(h("thead", {}, [h("tr", {}, [
+      h("th", { text: "商品" }), h("th", { text: "SKU" }), h("th", { text: "单价" }),
+      h("th", { text: "数量" }), h("th", { text: "小计" }),
+    ])]));
+    var tbody = h("tbody");
+    preview.items.forEach(function (item) {
+      tbody.appendChild(h("tr", {}, [
+        h("td", { text: PRODUCT_CN[item.product_id] || item.product_title }),
+        h("td", { text: item.sku_name }),
+        h("td", { text: formatMoney(item.price_cent) }),
+        h("td", { text: String(item.quantity) }),
+        h("td", { text: formatMoney(item.total_amount_cent || item.price_cent * item.quantity) }),
+      ]));
+    });
+    table.appendChild(tbody);
+    panel.appendChild(table);
+    panel.appendChild(h("div", { class: "summary-bar" }, [
+      h("div", { text: "商家 ID " + preview.merchant_id + " · 库存检查 " + (preview.stock_ok ? "通过" : "失败") }),
+      h("div", { class: "summary-money", text: "应付 " + formatMoney(preview.pay_amount_cent) }),
+    ]));
+    previewBox.appendChild(panel);
+  }
+
+  function submitOrder(forceKey) {
+    message.style.display = "none";
+    var key = forceKey || idemKey;
+    var result = createOrder({
+      receiver_name: receiverName.value,
+      receiver_phone: receiverPhone.value,
+      receiver_address: receiverAddress.value,
+      idempotency_key: key,
+    });
+    if (result.error) {
+      message.textContent = result.error;
+      message.style.display = "";
+      return { ok: false };
+    }
+    if (result.duplicate) {
+      // 幂等拦截：同一幂等键已创建过订单，未重复创建
+      setNotice("检测到重复提交（幂等键 " + key + "），已返回原订单，未重复创建。", "info");
+      resultBox.innerHTML = "";
+      resultBox.appendChild(h("div", { class: "idem-panel" }, [
+        h("div", { text: "已拦截重复提交：幂等键 " + key + " 对应订单 #" + result.order.id + "（" + result.order.order_no + "）" }),
+        h("div", { class: "actions" }, [h("button", { class: "btn mini", text: "查看订单" }, )]),
+      ]));
+      resultBox.querySelector("button").addEventListener("click", function () { go("/order/" + result.order.id); });
+      return { ok: true, duplicate: true };
+    }
+    setNotice("订单已创建，可继续支付或取消。", "ok");
+    resultBox.innerHTML = "";
+    var panel = h("div", { class: "idem-panel" });
+    panel.appendChild(h("div", { text: "订单 " + result.order.order_no + " 已创建（#" + result.order.id + "，应付 " + formatMoney(result.order.pay_amount_cent) + "）" }));
+    panel.appendChild(h("div", { class: "muted", text: "本次幂等键: " + key }));
+    panel.appendChild(h("div", { class: "muted", text: "后端通过 uk_user_idempotency_key 唯一约束保证：同一幂等键重复提交不会创建第二个订单。" }));
+    var goOrder = h("button", { class: "btn primary mini", text: "查看订单" });
+    goOrder.addEventListener("click", function () { go("/order/" + result.order.id); });
+    var retryIdem = h("button", { class: "btn mini", text: "用同一幂等键再次提交（应被拦截）" });
+    retryIdem.addEventListener("click", function () { submitOrder(key); });
+    panel.appendChild(h("div", { class: "actions" }, [goOrder, retryIdem]));
+    resultBox.appendChild(panel);
+    return { ok: true };
+  }
+
+  var formPanel = h("section", { class: "panel" });
+  formPanel.appendChild(formRow("收货人", receiverName));
+  formPanel.appendChild(formRow("手机号", receiverPhone));
+  formPanel.appendChild(formRow("收货地址", receiverAddress));
+  formPanel.appendChild(h("div", { class: "meta", text: "本次下单幂等键: " + idemKey }));
+  formPanel.appendChild(message);
+
+  var submit = h("button", { class: "btn primary", text: "提交订单" });
+  submit.addEventListener("click", function () {
+    if (submit.disabled) return; // 幂等保护：提交期间禁用按钮，防止双击连点
+    submit.disabled = true;
+    setTimeout(function () {
+      submitOrder();
+      submit.disabled = false;
+    }, 350);
+  });
+  var reload = h("button", { class: "btn", text: "刷新预览" });
+  reload.addEventListener("click", loadPreview);
+  formPanel.appendChild(h("div", { class: "actions" }, [submit, reload]));
+  wrap.appendChild(formPanel);
+  wrap.appendChild(resultBox);
+  wrap.appendChild(previewBox);
+  loadPreview();
+  return wrap;
+}
+
+// 消费者订单操作：支付/取消（CREATED）、申请退款（PAID/SHIPPED）、确认收货（SHIPPED）——与 app.ts 一致
+function consumerOrderActions(order, host, done) {
+  if (order.status === "CREATED") {
+    var pay = h("button", { class: "btn primary mini", text: "支付" });
+    pay.addEventListener("click", function () {
+      var r = payOrder(order.id);
+      setNotice(r.ok ? "支付成功" : (r.error || "支付失败"), r.ok ? "ok" : "error");
+      if (r.ok) done();
+    });
+    host.appendChild(pay);
+    var cancel = h("button", { class: "btn danger mini", text: "取消" });
+    cancel.addEventListener("click", function () {
+      var r = cancelOrder(order.id);
+      setNotice(r.ok ? "订单已取消" : (r.error || "取消失败"), r.ok ? "info" : "error");
+      if (r.ok) done();
+    });
+    host.appendChild(cancel);
+  }
+  if (order.status === "PAID" || order.status === "SHIPPED") {
+    var refund = h("button", { class: "btn danger mini", text: "申请退款" });
+    refund.addEventListener("click", function () {
+      var reason = prompt("退款原因", "体验不符");
+      if (reason === null) return;
+      var r = requestRefund(order.id, reason);
+      setNotice(r.ok ? "退款申请已提交" : (r.error || "退款失败"), r.ok ? "info" : "error");
+      if (r.ok) done();
+    });
+    host.appendChild(refund);
+  }
+  if (order.status === "SHIPPED") {
+    var finish = h("button", { class: "btn mini", text: "确认收货" });
+    finish.addEventListener("click", function () {
+      var r = finishOrder(order.id);
+      setNotice(r.ok ? "订单已完成" : (r.error || "确认失败"), r.ok ? "ok" : "error");
+      if (r.ok) done();
+    });
+    host.appendChild(finish);
+  }
+}
+
+function ordersView() {
+  var wrap = h("div");
+  wrap.appendChild(titleBar("我的订单", "待支付、已支付、已发货、退款中（seed 3 单 + 新下单）。"));
+  var orders = loadOrders();
+  if (!orders.length) {
+    wrap.appendChild(emptyBlock("暂无订单"));
+    return wrap;
+  }
+  var panel = h("section", { class: "panel" });
+  var table = h("table", { class: "tbl" });
+  table.appendChild(h("thead", {}, [h("tr", {}, [
+    h("th", { text: "订单号" }), h("th", { text: "状态" }), h("th", { text: "应付金额" }),
+    h("th", { text: "创建时间" }), h("th", { text: "操作" }),
+  ])]));
+  var tbody = h("tbody");
+  orders.forEach(function (order) {
+    var row = h("tr");
+    row.appendChild(h("td", { text: order.order_no }));
+    row.appendChild(h("td", {}, [badge(order.status)]));
+    row.appendChild(h("td", { text: formatMoney(order.pay_amount_cent) }));
+    row.appendChild(h("td", { text: prettyTime(order.created_at) }));
+    var actionCell = h("td");
+    var detail = h("button", { class: "btn mini", text: "详情" });
+    detail.addEventListener("click", function () { go("/order/" + order.id); });
+    actionCell.appendChild(detail);
+    consumerOrderActions(order, actionCell, function () { renderRoute(); });
+    row.appendChild(actionCell);
+    tbody.appendChild(row);
+  });
+  table.appendChild(tbody);
+  panel.appendChild(table);
+  wrap.appendChild(panel);
+  return wrap;
+}
+
+function orderItemsPanel(items) {
+  var panel = h("section", { class: "panel" });
+  panel.appendChild(h("h3", { text: "订单明细" }));
+  var table = h("table", { class: "tbl" });
+  table.appendChild(h("thead", {}, [h("tr", {}, [
+    h("th", { text: "商品" }), h("th", { text: "SKU" }), h("th", { text: "单价" }),
+    h("th", { text: "数量" }), h("th", { text: "小计" }),
+  ])]));
+  var tbody = h("tbody");
+  (items || []).forEach(function (item) {
+    tbody.appendChild(h("tr", {}, [
+      h("td", { text: item.product_title }), h("td", { text: item.sku_name }),
+      h("td", { text: formatMoney(item.price_cent) }), h("td", { text: String(item.quantity) }),
+      h("td", { text: formatMoney(item.total_amount_cent) }),
+    ]));
+  });
+  table.appendChild(tbody);
+  panel.appendChild(table);
+  return panel;
+}
+
+function orderEventsPanel(items) {
+  var panel = h("section", { class: "panel" });
+  panel.appendChild(h("h3", { text: "状态事件" }));
+  if (!items || !items.length) { panel.appendChild(emptyBlock("暂无事件")); return panel; }
+  var table = h("table", { class: "tbl" });
+  table.appendChild(h("thead", {}, [h("tr", {}, [
+    h("th", { text: "事件" }), h("th", { text: "流转" }), h("th", { text: "操作人" }),
+    h("th", { text: "备注" }), h("th", { text: "时间" }),
+  ])]));
+  var tbody = h("tbody");
+  items.forEach(function (item) {
+    var flow = (item.from_status ? item.from_status + " -> " : "") + item.to_status;
+    tbody.appendChild(h("tr", {}, [
+      h("td", { text: item.event_type }), h("td", { text: flow }),
+      h("td", { text: item.operator_role + " #" + item.operator_id }),
+      h("td", { text: item.remark || "-" }), h("td", { text: prettyTime(item.created_at) }),
+    ]));
+  });
+  table.appendChild(tbody);
+  panel.appendChild(table);
+  return panel;
+}
+
+function orderLocksPanel(items) {
+  var panel = h("section", { class: "panel" });
+  panel.appendChild(h("h3", { text: "库存锁" }));
+  if (!items || !items.length) { panel.appendChild(emptyBlock("暂无库存锁")); return panel; }
+  var table = h("table", { class: "tbl" });
+  table.appendChild(h("thead", {}, [h("tr", {}, [
+    h("th", { text: "SKU" }), h("th", { text: "数量" }), h("th", { text: "状态" }), h("th", { text: "锁定时间" }),
+  ])]));
+  var tbody = h("tbody");
+  items.forEach(function (item) {
+    tbody.appendChild(h("tr", {}, [
+      h("td", { text: String(item.sku_id) }), h("td", { text: String(item.quantity) }),
+      h("td", { text: item.status }), h("td", { text: prettyTime(item.locked_at) }),
+    ]));
+  });
+  table.appendChild(tbody);
+  panel.appendChild(table);
+  return panel;
+}
+
+function orderDetailView(id) {
+  var wrap = h("div");
+  wrap.appendChild(titleBar("订单详情", "状态机、事件流和库存锁。"));
+  var order = findOrder(id);
+  if (!order) return errorBlock("未找到订单");
+  var head = h("section", { class: "panel" });
+  head.appendChild(h("h2", { text: order.order_no }));
+  head.appendChild(h("div", { class: "meta" }, [badge(order.status), h("span", { text: " 创建于 " + prettyTime(order.created_at) })]));
+  head.appendChild(h("div", { class: "meta", text: "应付 " + formatMoney(order.pay_amount_cent) + " · 收货人 " + order.receiver_name + " · " + order.receiver_phone }));
+  head.appendChild(h("div", { class: "muted", text: order.receiver_address }));
+  var actions = h("div", { class: "actions" });
+  consumerOrderActions(order, actions, function () { renderRoute(); });
+  head.appendChild(actions);
+  wrap.appendChild(head);
+  wrap.appendChild(orderItemsPanel(order.items));
+  wrap.appendChild(orderEventsPanel(order.events));
+  wrap.appendChild(orderLocksPanel(order.inventory_locks));
+  return wrap;
+}
+
+/* ---------- 商家视图 ---------- */
+
+function dashboardView() {
+  var wrap = h("div");
+  wrap.appendChild(titleBar("经营看板", "漏斗、GMV 与商品表现（数值由 seed 行为事件按 service_dashboard.go 口径聚合）。"));
+  var data = deriveDashboard();
+  var s = data.summary, f = data.funnel;
+
+  var cards = h("div", { class: "grid cols-3" });
+  cards.appendChild(metricCard("商品数", String(s.product_count), "在线 " + s.online_product_count));
+  cards.appendChild(metricCard("订单数", String(s.order_count), "已支付 " + s.paid_order_count));
+  cards.appendChild(metricCard("GMV", formatMoney(s.gmv_amount_cent), "退款单 " + s.refund_order_count));
+  cards.appendChild(metricCard("库存预警 SKU", String(s.inventory_warning_sku), "库存 <= 5 视为预警"));
+  cards.appendChild(metricCard("笔记浏览", String(f.note_views), "商品点击 " + f.product_clicks));
+  cards.appendChild(metricCard("加购与支付", String(f.add_to_cart) + " / " + String(f.order_pay), "下单 " + f.order_create));
+  wrap.appendChild(cards);
+
+  var funnelPanel = h("section", { class: "panel" });
+  funnelPanel.appendChild(h("h3", { text: "转化漏斗（seed 行为事件）" }));
+  var max = Math.max(f.note_views, f.product_clicks, f.add_to_cart, f.order_create, f.order_pay, f.order_refund, 1);
+  [
+    ["NOTE_VIEW 浏览", f.note_views], ["PRODUCT_CLICK 点击", f.product_clicks],
+    ["ADD_TO_CART 加购", f.add_to_cart], ["ORDER_CREATE 下单", f.order_create],
+    ["ORDER_PAY 支付", f.order_pay], ["ORDER_REFUND 退款", f.order_refund],
+  ].forEach(function (row) {
+    var pct = Math.round((row[1] / max) * 100);
+    var fr = h("div", { class: "funnel-row" });
+    fr.appendChild(h("div", { class: "fk", text: row[0] }));
+    var barWrap = h("div", { class: "bar" });
+    barWrap.appendChild(h("div", { class: "bar-fill", style: "width:" + pct + "%" }));
+    fr.appendChild(barWrap);
+    fr.appendChild(h("div", { class: "fv", text: String(row[1]) }));
+    funnelPanel.appendChild(fr);
+  });
+  wrap.appendChild(funnelPanel);
+
+  var productPanel = h("section", { class: "panel" });
+  productPanel.appendChild(h("h3", { text: "商品表现" }));
+  var table = h("table", { class: "tbl" });
+  table.appendChild(h("thead", {}, [h("tr", {}, [
+    h("th", { text: "商品" }), h("th", { text: "状态" }), h("th", { text: "曝光" }),
+    h("th", { text: "点击" }), h("th", { text: "加购" }), h("th", { text: "下单" }),
+    h("th", { text: "支付" }), h("th", { text: "退款" }), h("th", { text: "可售库存" }),
+  ])]));
+  var tbody = h("tbody");
+  data.stats.forEach(function (item) {
+    tbody.appendChild(h("tr", {}, [
+      h("td", { text: item.title }), h("td", { text: item.status }),
+      h("td", { text: String(item.exposure) }), h("td", { text: String(item.clicks) }),
+      h("td", { text: String(item.add_to_cart) }), h("td", { text: String(item.orders) }),
+      h("td", { text: String(item.paid) }), h("td", { text: String(item.refunds) }),
+      h("td", { text: String(item.available_stock) }),
+    ]));
+  });
+  table.appendChild(tbody);
+  productPanel.appendChild(table);
+  wrap.appendChild(productPanel);
+  return wrap;
+}
+
+function merchantProductsView() {
+  var wrap = h("div");
+  wrap.appendChild(titleBar("商品管理", "只读列表：起售价（最低 SKU 价）、可售库存（stock - locked_stock）与 SKU 数。"));
+  var panel = h("section", { class: "panel" });
+  var table = h("table", { class: "tbl" });
+  table.appendChild(h("thead", {}, [h("tr", {}, [
+    h("th", { text: "标题" }), h("th", { text: "状态" }), h("th", { text: "起售价" }),
+    h("th", { text: "可售库存" }), h("th", { text: "SKU 数" }),
+  ])]));
+  var tbody = h("tbody");
+  MOCK_PRODUCTS.forEach(function (p) {
+    tbody.appendChild(h("tr", {}, [
+      h("td", { text: PRODUCT_CN[p.id] + " · " + p.title }),
+      h("td", { text: p.status }),
+      h("td", { text: formatMoney(productMinPrice(p)) }),
+      h("td", { text: String(productStock(p)) }),
+      h("td", { text: String((p.skus || []).length) }),
+    ]));
+  });
+  table.appendChild(tbody);
+  panel.appendChild(table);
+  wrap.appendChild(panel);
+  return wrap;
+}
+
+/* ---------- A2UI 智能导购面板 ---------- */
+
+function a2uiView() {
+  var wrap = h("div");
+  wrap.appendChild(titleBar("A2UI 智能导购", "Agent-to-UI：输入意图与上下文，逐行输出 NDJSON 指令（createSurface / updateComponents / updateDataModel）并实时渲染卡片界面。"));
+
+  var panel = h("section", { class: "panel" });
+  var intentInput = h("input", { type: "text", value: "布置 10 平米宿舍书桌，预算 300" });
+  var contextInput = h("textarea", { rows: "3" });
+  contextInput.value = JSON.stringify({ budget: 30000, scene: "dorm_desk" });
+  var message = h("div", { class: "error", style: "display:none" });
+  var output = h("div");
+  var surfaceHost = h("div", { class: "a2ui-surface" });
+
+  panel.appendChild(formRow("意图", intentInput));
+  panel.appendChild(formRow("上下文 JSON（可选，可留空）", contextInput));
+  panel.appendChild(message);
+
+  var loadExample = h("button", { class: "btn", text: "载入示例（宿舍 300 元）" });
+  loadExample.addEventListener("click", function () {
+    intentInput.value = "布置 10 平米宿舍书桌，预算 300";
+    contextInput.value = JSON.stringify({ budget: 30000, scene: "dorm_desk" });
+  });
+  var runGuide = h("button", { class: "btn primary", text: "生成导购页" });
+  runGuide.addEventListener("click", function () { runA2UI("guide", intentInput, contextInput, message, output, surfaceHost); });
+  var runGreeting = h("button", { class: "btn", text: "生成问候卡片" });
+  runGreeting.addEventListener("click", function () { runA2UI("greeting", intentInput, contextInput, message, output, surfaceHost); });
+  panel.appendChild(h("div", { class: "actions" }, [runGuide, runGreeting, loadExample]));
+  wrap.appendChild(panel);
+  wrap.appendChild(output);
+  wrap.appendChild(surfaceHost);
+
+  var hint = h("div", { class: "idem-panel muted", text: "说明：生成导购页时按 service_ai.go 的逻辑解析预算（元/百 → 分）并筛选预算内商品；上下文无预算/无商品时退化为问候界面（mock_provider 行为）。" });
+  wrap.appendChild(hint);
+  return wrap;
+}
+
+// 逐行流式输出 NDJSON 并实时渲染 surface
+function runA2UI(mode, intentInput, contextInput, message, output, surfaceHost) {
+  message.style.display = "none";
+  output.innerHTML = "";
+  surfaceHost.innerHTML = "";
+
+  var intent = intentInput.value;
+  var context = {};
+  if (mode === "guide" && String(contextInput.value || "").trim()) {
+    try {
+      context = JSON.parse(contextInput.value);
+    } catch (e) {
+      message.textContent = "上下文 JSON 解析失败";
+      message.style.display = "";
+      return;
+    }
+  }
+  if (mode === "greeting") context = {};
+
+  var surfaceId = (mode === "guide" ? "guide_surface_" : "greet_surface_") + Date.now();
+  var built;
+  try {
+    built = buildA2UISurface(surfaceId, intent, context);
+  } catch (e) {
+    message.textContent = "生成失败: " + e.message;
+    message.style.display = "";
+    return;
+  }
+
+  var surface = makeSurface(surfaceId);
+  surface.refresh = function () {
+    surfaceHost.innerHTML = "";
+    var root = surface.components.get("root");
+    if (root) surfaceHost.appendChild(a2uiNode(surface, root, surface.dataModel));
+  };
+
+  var terminal = h("div", { class: "terminal" });
+  output.appendChild(h("div", { class: "meta", text: "surface: " + surfaceId + " · 指令数 3 · " + (built.type === "guide" ? "导购专题界面" : "问候界面") }));
+  output.appendChild(terminal);
+  var statusLine = h("div", { class: "term-status" });
+  terminal.appendChild(statusLine);
+
+  var lineNames = ["createSurface", "updateComponents", "updateDataModel"];
+  var idx = 0;
+  function emitNext() {
+    if (idx >= built.lines.length) {
+      statusLine.textContent = "✓ " + built.lines.length + " 条指令解析并应用，surface 已渲染（下方卡片）。";
+      surface.refresh();
+      return;
+    }
+    var line = built.lines[idx];
+    var lineBox = h("div", { class: "term-line" });
+    lineBox.appendChild(h("div", { class: "term-meta", text: (idx + 1) + "/3 · " + lineNames[idx] + " · v0.9" }));
+    var pre = h("pre");
+    pre.textContent = line;
+    lineBox.appendChild(pre);
+    terminal.insertBefore(lineBox, statusLine);
+    try {
+      applySurfaceLine(surface, line);
+      lineBox.classList.add("applied");
+    } catch (e) {
+      lineBox.classList.add("applied");
+    }
+    statusLine.textContent = "已应用 " + lineNames[idx] + "，正在渲染...";
+    // 每行指令应用后即刷新，呈现"实时渲染"效果
+    if (surface.components.get("root")) surface.refresh();
+    idx++;
+    setTimeout(emitNext, 260);
+  }
+  emitNext();
+}
+
+/* =====================================================================
+ * 9. boot（仅浏览器环境执行）
+ * ===================================================================== */
+
+function boot() {
+  appRoot = document.getElementById("app");
+  var topbar = h("header", { class: "topbar" });
+  topbar.id = "topbar";
+  var layout = h("div", { class: "layout" });
+  var nav = h("nav", { class: "nav" });
+  nav.id = "nav";
+  var main = h("main", { class: "main" });
+  main.id = "main";
+  layout.appendChild(nav);
+  layout.appendChild(main);
+  appRoot.appendChild(topbar);
+  appRoot.appendChild(layout);
+  renderShell();
+  renderRoute();
+  window.addEventListener("hashchange", function () { renderShell(); renderRoute(); });
+}
+
+if (typeof document !== "undefined" && document.getElementById("app")) {
+  boot();
+}
+
+/* =====================================================================
+ * 10. node 环境导出（用于语法检查与纯逻辑冒烟测试）
+ * ===================================================================== */
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    MOCK_PRODUCTS: MOCK_PRODUCTS,
+    MOCK_NOTES: MOCK_NOTES,
+    formatMoney: formatMoney,
+    productMinPrice: productMinPrice,
+    productStock: productStock,
+    skuAvailable: skuAvailable,
+    parseBudgetFromIntent: parseBudgetFromIntent,
+    inferSceneFromIntent: inferSceneFromIntent,
+    sceneTitle: sceneTitle,
+    enrichA2UIContext: enrichA2UIContext,
+    buildA2UISurface: buildA2UISurface,
+    buildGreetingSurface: buildGreetingSurface,
+    buildGuideSurface: buildGuideSurface,
+    applySurfaceLine: applySurfaceLine,
+    makeSurface: makeSurface,
+    deriveDashboard: deriveDashboard,
+    addToCart: addToCart,
+    updateCartItem: updateCartItem,
+    removeCartItem: removeCartItem,
+    cartSummary: cartSummary,
+    checkoutPreview: checkoutPreview,
+    createOrder: createOrder,
+    payOrder: payOrder,
+    cancelOrder: cancelOrder,
+    requestRefund: requestRefund,
+    finishOrder: finishOrder,
+    findOrder: findOrder,
+    resetDemo: resetDemo,
+    loadCart: loadCart,
+    loadOrders: loadOrders,
+    loadIdem: loadIdem,
+  };
+}
+</script>
+</body>
+</html>
