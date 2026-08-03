@@ -6,6 +6,7 @@ COPY . .
 RUN go build -o /out/api ./cmd/api
 
 FROM alpine:3.20
+RUN apk add --no-cache curl
 COPY --from=build /out/api /usr/local/bin/redcart-api
 COPY --from=build /src/migrations /app/migrations
 ENV MIGRATIONS_DIR=/app/migrations
