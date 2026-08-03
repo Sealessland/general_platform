@@ -156,15 +156,13 @@ bash scripts/validate-workspace.sh
 <!-- BENCHMARK_RESULTS_START -->
 ## Performance
 
-_Last updated: 2026-08-03 12:36 UTC via GitHub Actions._
+_Last updated: 2026-08-03 16:10 UTC via GitHub Actions._
 
 | Benchmark | QPS | Change vs previous | ns/op | B/op | allocs/op |
 |---|---|---|---|---|---|
-| `BenchmarkPostgresRabbitMQOutboxRelay` | 579.41 | - | 1725892 | 7858 | 197 |
-| `BenchmarkRabbitMQPublish` | 3.90K | -89.1% | 256735 | 3650 | 94 |
-| `BenchmarkLiveHTTPHealthz` | 2.74K | - | 364935 | 15847 | 102 |
-| `BenchmarkLiveHTTPOrderPreview` | 2.54K | - | 393236 | 17271 | 115 |
-| `BenchmarkLiveHTTPCreateOrder` | 252.70 | - | 3957210 | 17329 | 119 |
+| `BenchmarkPostgresRabbitMQOutboxRelay` | 508.94 | -12.2% | 1964864 | 7887 | 198 |
+| `BenchmarkRabbitMQPublish` | 3.86K | -0.9% | 258766 | 3651 | 94 |
+| `BenchmarkLiveHTTPHealthz` | 2.49K | -9.1% | 401443 | 15840 | 102 |
 
 _Only PostgreSQL/Redis/RabbitMQ-backed component benchmarks and live HTTP benchmarks from a running backend process are accepted._
 <!-- BENCHMARK_RESULTS_END -->
