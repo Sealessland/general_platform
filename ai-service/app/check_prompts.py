@@ -1,6 +1,6 @@
 """校验 prompts 目录下必需的提示词模板是否齐全，供 CI/本地脚本调用。
 
-prompt 目录基于本文件位置解析（ai-service/prompts），与运行时的当前工作目录无关。
+prompts 目录基于本文件位置解析（ai-service/prompts），与运行时的当前工作目录无关。
 """
 
 from pathlib import Path

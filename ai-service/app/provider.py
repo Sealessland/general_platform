@@ -1,7 +1,7 @@
 """AI 生成能力的业务提供者：定义请求参数模型，并实现生成卖点、经营复盘、A2UI 界面等能力。
 
-当前实现为本地 Mock 版本（与后端 backend/internal/ai/mock_provider.go 保持逻辑一致），
-后续可替换为真实的大模型调用，对外接口保持不变。
+当前实现为基于本地规则引擎的确定性实现（与后端 backend/internal/ai/mock_provider.go
+逻辑保持一致），后续可替换为真实的大模型调用，对外接口保持不变。
 """
 
 from dataclasses import dataclass
@@ -33,10 +33,11 @@ class A2UISurfaceRequest:
     context_json: str = "{}"
 
 
-class MockAIProvider:
-    """本地 Mock AI 提供者，生成可预期的确定性结果，用于开发与联调。
+class RuleBasedProvider:
+    """基于本地规则引擎的 AI 提供者，生成可预期的确定性结果。
 
-    当前是唯一 provider 兼作生产实现。
+    当前是唯一 provider 兼作生产实现（非测试 Mock）：按固定规则与模板生成
+    卖点、复盘与 A2UI 界面，不依赖外部大模型服务。
     各方法对非法输入抛 ValueError，由 gRPC 层转换为 INVALID_ARGUMENT 状态码。
     """
 

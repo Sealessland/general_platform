@@ -12,7 +12,7 @@ import grpc
 
 from app.ai.v1 import ai_pb2
 from app.ai.v1 import ai_pb2_grpc
-from app.provider import A2UISurfaceRequest, BusinessReviewRequest, MockAIProvider, SellingPointRequest
+from app.provider import A2UISurfaceRequest, BusinessReviewRequest, RuleBasedProvider, SellingPointRequest
 
 _DEFAULT_PORT = "50051"
 _DEFAULT_HOST = "0.0.0.0"
@@ -27,9 +27,9 @@ def _env(key: str, fallback: str) -> str:
 class AIGenerationServicer(ai_pb2_grpc.AIGenerationServiceServicer):
     """AIGenerationService 的实现：商品卖点生成与经营复盘。"""
 
-    def __init__(self, provider: MockAIProvider | None = None) -> None:
-        """初始化 Servicer，未注入 provider 时使用默认的 MockAIProvider。"""
-        self.provider = provider or MockAIProvider()
+    def __init__(self, provider: RuleBasedProvider | None = None) -> None:
+        """初始化 Servicer，未注入 provider 时使用默认的 RuleBasedProvider。"""
+        self.provider = provider or RuleBasedProvider()
 
     def GenerateSellingPoints(
         self,
@@ -79,9 +79,9 @@ class AIGenerationServicer(ai_pb2_grpc.AIGenerationServiceServicer):
 class A2UIServicer(ai_pb2_grpc.A2UIServiceServicer):
     """A2UIService 的实现：按用户意图与上下文生成可渲染的 A2UI 界面 JSON。"""
 
-    def __init__(self, provider: MockAIProvider | None = None) -> None:
-        """初始化 Servicer，未注入 provider 时使用默认的 MockAIProvider。"""
-        self.provider = provider or MockAIProvider()
+    def __init__(self, provider: RuleBasedProvider | None = None) -> None:
+        """初始化 Servicer，未注入 provider 时使用默认的 RuleBasedProvider。"""
+        self.provider = provider or RuleBasedProvider()
 
     def GenerateA2UISurface(
         self,
@@ -107,7 +107,7 @@ class A2UIServicer(ai_pb2_grpc.A2UIServiceServicer):
         )
 
 
-def build_server(provider: MockAIProvider | None = None) -> grpc.Server:
+def build_server(provider: RuleBasedProvider | None = None) -> grpc.Server:
     """构建并注册全部服务的 gRPC server；可通过 provider 参数注入替换实现。"""
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     ai_pb2_grpc.add_AIGenerationServiceServicer_to_server(
