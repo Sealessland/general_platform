@@ -4,6 +4,8 @@ import (
 	"testing"
 )
 
+// TestReadCommittedNoDirtyRead verifies that uncommitted writes are invisible
+// to other transactions under PostgreSQL default READ COMMITTED isolation.
 func TestReadCommittedNoDirtyRead(t *testing.T) {
 	dsn, _ := skipIfNoPostgres(t)
 	db := openRawConn(t, dsn)
@@ -111,8 +113,3 @@ func TestPhantomInventoryLocks(t *testing.T) {
 		t.Fatalf("phantom read did not occur: first=%d second=%d", first, second)
 	}
 }
-
-// TestConcurrentPayOrderNoDoubleConfirm launches multiple PayOrder calls for
-// the same order. Because PayOrder is not wrapped in a transaction, a lost
-// update can double-confirm inventory (stock decremented twice for one order).
-// The test fails if such a regression is introduced.

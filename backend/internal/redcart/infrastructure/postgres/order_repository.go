@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+// FindOrderByUserAndIdempotency 按用户 + 幂等键查询订单，
+// 用于重复提交的下单请求做幂等去重，未命中时返回 (零值, false)。
 func (r *Repository) FindOrderByUserAndIdempotency(userID int64, idempotencyKey string) (domain.Order, bool) {
 	var orderID int64
 	if err := r.db.QueryRow(`SELECT id FROM orders WHERE user_id = $1 AND idempotency_key = $2`, userID, idempotencyKey).Scan(&orderID); err != nil {
@@ -100,6 +102,10 @@ func (r *Repository) SaveOrder(order domain.Order) (domain.Order, error) {
 	return order, nil
 }
 
+// SaveOrderWithInventoryLocks 在单个事务内完成下单：先按 SKU ID 升序逐项
+// 扣减锁定库存（排序保证多订单并发加锁时不会形成死锁环），随后写入订单、
+// 订单明细与库存锁记录。条件更新 stock - locked_stock >= $1 保证库存不足时
+// 返回 ErrInsufficientStock，且整个过程任一步失败都会回滚。
 func (r *Repository) SaveOrderWithInventoryLocks(order domain.Order, locks []domain.InventoryLock) (domain.Order, error) {
 	if order.ID != 0 {
 		return r.SaveOrder(order)
@@ -179,6 +185,8 @@ func (r *Repository) SaveOrderWithInventoryLocks(order domain.Order, locks []dom
 	return order, nil
 }
 
+// pgOrderTx 把底层 SQL 事务适配为 application.OrderTx，使订单状态流转的
+// 副作用（库存确认/释放、事件追加、outbox 记录）能与状态更新在同一事务内提交。
 type pgOrderTx struct {
 	tx *gormTx
 }
@@ -207,6 +215,10 @@ func (t *pgOrderTx) Append(ctx context.Context, evt event.Event) (int64, error) 
 	return appendOutboxEvent(t.tx, evt)
 }
 
+// UpdateOrderStatus 以行锁（FOR UPDATE）读取订单并校验当前状态与 fromStatus
+// 一致后更新状态；UPDATE 的 WHERE status = fromStatus 提供乐观并发保护，
+// 冲突时返回“concurrently modified”。mutator 可调整订单字段，sideEffect 在
+// 同一事务内执行副作用（确认库存、追加事件等），任一步失败都会整体回滚。
 func (r *Repository) UpdateOrderStatus(orderID int64, fromStatus, toStatus string, mutator func(*domain.Order) error, sideEffect func(application.OrderTx, domain.Order) error) (domain.Order, error) {
 	tx, err := r.db.Begin()
 	if err != nil {
@@ -270,13 +282,6 @@ func (r *Repository) UpdateOrderStatus(orderID int64, fromStatus, toStatus strin
 	}
 	order.Items = r.loadOrderItems(order.ID)
 	return order, nil
-}
-
-func nullTimeValue(t *time.Time) sql.NullTime {
-	if t == nil {
-		return sql.NullTime{}
-	}
-	return sql.NullTime{Time: *t, Valid: true}
 }
 
 func (r *Repository) listOrders(query string, arg int64, limit, offset int) []domain.Order {
@@ -355,45 +360,4 @@ func (r *Repository) loadOrderItemsBatch(orderIDs []int64) map[int64][]domain.Or
 		result[item.OrderID] = append(result[item.OrderID], item)
 	}
 	return result
-}
-
-type orderScanner interface {
-	Scan(dest ...any) error
-}
-
-func scanOrder(scanner orderScanner) (domain.Order, error) {
-	var order domain.Order
-	var status string
-	var paidAt, cancelledAt, shippedAt, finishedAt sql.NullTime
-	err := scanner.Scan(
-		&order.ID, &order.OrderNo, &order.UserID, &order.MerchantID, &status,
-		&order.TotalAmountCent, &order.PayAmountCent, &order.DiscountAmountCent, &order.IdempotencyKey,
-		&order.ReceiverName, &order.ReceiverPhone, &order.ReceiverAddress,
-		&paidAt, &cancelledAt, &shippedAt, &finishedAt, &order.CreatedAt, &order.UpdatedAt,
-	)
-	if err != nil {
-		return domain.Order{}, err
-	}
-	order.Status = orderdomain.OrderStatus(status)
-	order.PaidAt = nullTimePtr(paidAt)
-	order.CancelledAt = nullTimePtr(cancelledAt)
-	order.ShippedAt = nullTimePtr(shippedAt)
-	order.FinishedAt = nullTimePtr(finishedAt)
-	return order, nil
-}
-
-type inventoryLockScanner interface {
-	Scan(dest ...any) error
-}
-
-func scanInventoryLock(scanner inventoryLockScanner) (domain.InventoryLock, error) {
-	var lock domain.InventoryLock
-	var confirmedAt, releasedAt sql.NullTime
-	err := scanner.Scan(&lock.ID, &lock.OrderID, &lock.SKUID, &lock.Quantity, &lock.Status, &lock.LockedAt, &confirmedAt, &releasedAt, &lock.CreatedAt, &lock.UpdatedAt)
-	if err != nil {
-		return domain.InventoryLock{}, err
-	}
-	lock.ConfirmedAt = nullTimePtr(confirmedAt)
-	lock.ReleasedAt = nullTimePtr(releasedAt)
-	return lock, nil
 }

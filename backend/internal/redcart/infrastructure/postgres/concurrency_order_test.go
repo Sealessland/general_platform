@@ -11,6 +11,10 @@ import (
 	"time"
 )
 
+// TestConcurrentPayOrderNoDoubleConfirm launches multiple PayOrder calls for
+// the same order. Because PayOrder is not wrapped in a transaction, a lost
+// update can double-confirm inventory (stock decremented twice for one order).
+// The test fails if such a regression is introduced.
 func TestConcurrentPayOrderNoDoubleConfirm(t *testing.T) {
 	repo, service := newPostgresService(t)
 	sku := createStabilityProductAndSKU(t, repo, 10)
@@ -320,8 +324,3 @@ func containsInternal(s, substr string) bool {
 	}
 	return false
 }
-
-// TestPayOrderInventoryFailureRollsBackStatus verifies that if the inventory
-// side effect of PayOrder fails, the order status change is rolled back and the
-// SKU remains unchanged. This confirms status migration and inventory mutation
-// are atomic.

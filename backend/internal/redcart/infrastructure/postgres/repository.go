@@ -1,3 +1,6 @@
+// Package postgres 是 redcart 的 PostgreSQL 基础设施适配层：
+// 以原生 SQL（database/sql）为主、GORM 辅助迁移/种子，向 application 层
+// 提供仓储（Repository）与事务性发件箱（outbox）的实现。
 package postgres
 
 import (
@@ -6,15 +9,17 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"sync"
+	"time"
 
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"sync"
-	"time"
 )
 
+// Repository 实现 application.Repository 接口，持有连接池、outbox 存储
+// 与进程内的会话（token）表；redcart 各业务聚合的数据读写最终都落到这里。
 type Repository struct {
 	db     *gormSQL
 	gormDB *gorm.DB
@@ -25,23 +30,31 @@ type Repository struct {
 	sessions  map[string]sessionEntry
 }
 
+// gormSQL 是 *sql.DB 的薄封装，仅为让仓储与事务共享同一套查询辅助函数
+// （dbQuerier）。名字中的 gorm 是历史遗留：这里实际操作的是标准库 database/sql。
 type gormSQL struct {
 	db *sql.DB
 }
 
+// gormTx 与 gormSQL 类似，是 *sql.Tx 的封装，让查询辅助函数在事务内也能复用。
 type gormTx struct {
 	tx *sql.Tx
 }
 
+// gormResult 模拟 sql.Result 供无法获得真实 Exec 结果的场景（如单元测试）使用；
+// PostgreSQL 不支持自增主键回读，LastInsertId 一律返回错误。
 type gormResult struct {
 	rowsAffected int64
 }
 
+// sessionEntry 记录内存会话的归属用户与其 token 类型（访问/刷新）。
 type sessionEntry struct {
 	userID    int64
 	tokenType application.TokenType
 }
 
+// dbQuerier 抽象出仓储与事务共有的三类查询方法，
+// 使 getSKU、appendOrderEvent 等辅助函数既能作用于普通连接也能作用于事务连接。
 type dbQuerier interface {
 	QueryRow(query string, args ...any) *sql.Row
 	Query(query string, args ...any) (*sql.Rows, error)
@@ -101,6 +114,8 @@ func (r gormResult) RowsAffected() (int64, error) {
 
 var _ application.Repository = (*Repository)(nil)
 
+// NewRepository 打开 PostgreSQL 连接池并完成连通性检查，随后自动执行
+// schema 迁移与种子数据写入，保证开箱即用；任一步失败都会关闭连接返回错误。
 func NewRepository(dsn string) (*Repository, error) {
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
@@ -156,6 +171,8 @@ func (r *Repository) queryMerchant(query string, arg any) (domain.Merchant, erro
 	return merchant, err
 }
 
+// 以下一组辅助函数用于 Go 零值与 SQL NULL 之间的双向转换，
+// 避免在业务代码里到处判断空值：零值（0/空串/零时间）一律落 NULL。
 func nullTimePtr(value sql.NullTime) *time.Time {
 	if !value.Valid {
 		return nil
@@ -193,9 +210,9 @@ func nullableJSON(payload []byte) any {
 }
 
 const (
-	defaultMaxOpenConns     = 10
-	defaultMaxIdleConns     = 10
-	defaultConnMaxLifetime  = 30 * time.Minute
+	defaultMaxOpenConns    = 10
+	defaultMaxIdleConns    = 10
+	defaultConnMaxLifetime = 30 * time.Minute
 )
 
 func poolMaxOpenConns() int {

@@ -97,6 +97,3 @@ func createStabilityOrder(t *testing.T, service *application.Service, sku domain
 	}
 	return view
 }
-
-// TestReadCommittedNoDirtyRead verifies that uncommitted writes are invisible
-// to other transactions under PostgreSQL default READ COMMITTED isolation.

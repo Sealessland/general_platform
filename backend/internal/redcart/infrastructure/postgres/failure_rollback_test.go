@@ -8,6 +8,10 @@ import (
 	"testing"
 )
 
+// TestPayOrderInventoryFailureRollsBackStatus verifies that if the inventory
+// side effect of PayOrder fails, the order status change is rolled back and the
+// SKU remains unchanged. This confirms status migration and inventory mutation
+// are atomic.
 func TestPayOrderInventoryFailureRollsBackStatus(t *testing.T) {
 	dsn, _ := skipIfNoPostgres(t)
 	db := openRawConn(t, dsn)
