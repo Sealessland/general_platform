@@ -1,3 +1,8 @@
+// RedCart Copilot 前端单文件 Demo。
+// 无独立构建工具链：scripts/build.mjs 剥离 TS 类型后内联进 HTML 模板，产出 dist/index.html。
+// 视图均为函数式渲染，通过 hash 路由（#/xxx）切换，数据全部来自后端 HTTP API。
+
+// 订单状态机枚举，与后端 backend/internal/order/domain/order_status.go 保持一致。
 export type OrderStatus =
   | "CREATED"
   | "PAID"
@@ -7,6 +12,7 @@ export type OrderStatus =
   | "REFUNDING"
   | "REFUNDED";
 
+// 商品卡片契约：内容流/笔记详情中挂载商品的展示字段（金额单位均为分）。
 export interface ProductCard {
   id: number;
   title: string;
@@ -15,6 +21,7 @@ export interface ProductCard {
   selling_points: string[];
 }
 
+// 把以「分」为单位的整数金额格式化为人民币字符串，例如 1234 -> "¥12.34"。
 export function formatMoney(cents) {
   if (!Number.isInteger(cents)) {
     throw new Error("amount must be integer cents");
@@ -22,6 +29,8 @@ export function formatMoney(cents) {
   return "¥" + (cents / 100).toFixed(2);
 }
 
+// 运行期配置：API 基址可用 localStorage 覆盖；演示账号由后端内置。
+// PASS_FIELD / AUTH_FIELD 通过字符串拼接拼出字段名，避免源码明文出现敏感字段名触发扫描告警。
 const API_BASE = localStorage.getItem("redcart_api_base") || "http://127.0.0.1:18080";
 const SESSION_STORAGE_KEY = "redcart_demo_session";
 const PASS_FIELD = "pass" + "word";
@@ -31,18 +40,20 @@ const DEMO_ACCOUNTS = {
   merchant: { phone: "13800000002", passcode: "merchant-demo" },
 };
 
+// 全局客户端状态：session 持久化到 localStorage，其余字段为内存态。
 const store = {
   session: localStorage.getItem(SESSION_STORAGE_KEY) || "",
   user: null,
   notice: null,
-  merchantProducts: [],
 };
 
+// 页面挂载点引用，mount() 时初始化，路由渲染时复用。
 let appRoot = null;
 let topBar = null;
 let navRoot = null;
 let mainRoot = null;
 
+// DOM 辅助构造器：attrs 支持 text/html/class/value 特殊键，kids 接受字符串或节点。
 function node(tag, attrs, kids) {
   const item = document.createElement(tag);
   if (attrs) {
@@ -83,6 +94,7 @@ function node(tag, attrs, kids) {
   return item;
 }
 
+// 通用占位块：空态 / 错误 / 加载中。
 function emptyBlock(text) {
   return node("div", { class: "empty", text: text || "暂无数据" });
 }
@@ -98,6 +110,7 @@ function loadBlock(text) {
   ]);
 }
 
+// 订单状态徽标：状态值映射到 CSS 样式类。
 function badge(status) {
   const map = {
     CREATED: "created",
@@ -111,10 +124,12 @@ function badge(status) {
   return node("span", { class: "badge " + (map[status] || "created"), text: status });
 }
 
+// 设置全局提示，renderRoute 渲染时会消费 store.notice。
 function setNotice(text, level) {
   store.notice = text ? { text, level: level || "info" } : null;
 }
 
+// 写入/清除会话并持久化到 localStorage，随后重绘顶栏与导航。
 function setSession(token, user) {
   store.session = token || "";
   store.user = user || null;
@@ -126,6 +141,7 @@ function setSession(token, user) {
   renderShell();
 }
 
+// HTTP 封装：自动附加 Bearer 会话头与 JSON Content-Type，统一解析响应并归一化错误消息。
 async function request(path, opts) {
   const init = opts || {};
   const headers = {};
@@ -166,6 +182,7 @@ async function request(path, opts) {
   return payload;
 }
 
+// hash 路由：routePath 取当前路径（去 query），go 负责跳转，defaultPath 决定登录后的默认落地页。
 function routePath() {
   const raw = window.location.hash ? window.location.hash.slice(1) : "";
   const path = raw || defaultPath();
@@ -183,6 +200,7 @@ function defaultPath() {
   return store.user.role === "merchant" ? "/merchant/dashboard" : "/notes";
 }
 
+// 当前角色中文名：merchant -> 商家，否则为消费者。
 function currentRoleLabel() {
   if (!store.user) {
     return "";
@@ -190,16 +208,19 @@ function currentRoleLabel() {
   return store.user.role === "merchant" ? "商家" : "消费者";
 }
 
+// 把路径拆成段，例如 /merchant/products/3/edit -> ["merchant","products","3","edit"]。
 function idsFromRoute() {
   return routePath()
     .split("/")
     .filter(Boolean);
 }
 
+// 列表型响应统一取 items 字段，缺失时返回空数组。
 function asItems(payload) {
   return payload && Array.isArray(payload.items) ? payload.items : [];
 }
 
+// 字符串数组与多行文本互转，供 textarea 编辑（如卖点、属性）。
 function lineText(list) {
   return (list || []).join("\n");
 }
@@ -211,6 +232,7 @@ function splitLines(text) {
     .filter(Boolean);
 }
 
+// 解析「key: value」多行文本为对象；attrLines 为其反向序列化（SKU 属性编辑用）。
 function parseAttrLines(text) {
   const out = {};
   splitLines(text).forEach((line) => {
@@ -235,6 +257,7 @@ function attrLines(attrs) {
   return rows.join("\n");
 }
 
+// 由 SKU 列表计算起售价（最低价）与可售库存（stock - locked_stock 求和）。
 function calcProductPrice(product) {
   const skus = Array.isArray(product.skus) ? product.skus : [];
   if (!skus.length) {
@@ -253,6 +276,7 @@ function calcProductStock(product) {
   return skus.reduce((sum, sku) => sum + Math.max(0, sku.stock - sku.locked_stock), 0);
 }
 
+// 导航链接：命中当前路径时高亮，点击走 hash 跳转。
 function navLink(path, label) {
   const active = routePath() === path || routePath().startsWith(path + "/");
   const link = node("a", { href: "#" + path, class: active ? "active" : "", text: label });
@@ -263,6 +287,7 @@ function navLink(path, label) {
   return link;
 }
 
+// 一键切换消费者/商家演示账号，登录后跳转对应默认页。
 async function demoLogin(role) {
   const account = DEMO_ACCOUNTS[role];
   const payload = { phone: account.phone };
@@ -276,6 +301,7 @@ async function demoLogin(role) {
   go(defaultPath());
 }
 
+// 渲染顶栏（品牌/角色/切换账号/退出）与侧边导航；未登录时仅显示登录入口。
 function renderShell() {
   topBar.innerHTML = "";
   navRoot.innerHTML = "";
@@ -330,6 +356,7 @@ function renderShell() {
   topBar.appendChild(right);
 }
 
+// 路由分发：按角色与路径渲染对应视图；未登录统一跳转登录页。
 async function renderRoute() {
   renderShell();
   mainRoot.innerHTML = "";
@@ -424,6 +451,7 @@ async function renderRoute() {
   go("/merchant/dashboard");
 }
 
+// 登录视图：一键演示登录 + 手动表单登录。
 function loginView() {
   const wrap = node("div", { class: "panel narrow" });
   wrap.appendChild(node("h2", { text: "登录演示账号" }));
@@ -484,6 +512,7 @@ function loginView() {
   return wrap;
 }
 
+// 内容种草流：笔记卡片 + 挂载商品入口。
 function notesView() {
   const wrap = node("div");
   wrap.appendChild(titleBar("内容种草流", "从笔记进入商品与交易链路。"));
@@ -530,6 +559,7 @@ function notesView() {
   return wrap;
 }
 
+// 笔记详情：展示正文与挂载商品，可进入商品详情。
 function noteDetailView(id) {
   const wrap = node("div");
   wrap.appendChild(titleBar("笔记详情", "内容带货与商品挂载。"));
@@ -570,6 +600,7 @@ function noteDetailView(id) {
   return wrap;
 }
 
+// 商品详情：SKU 选择、数量与加购动作。
 function productDetailView(id) {
   const wrap = node("div");
   wrap.appendChild(titleBar("商品详情", "SKU、库存、卖点与加购动作。"));
@@ -645,6 +676,7 @@ function productDetailView(id) {
   return wrap;
 }
 
+// 购物车：勾选、改数量、删除与去结算。
 function cartView() {
   const wrap = node("div");
   wrap.appendChild(titleBar("购物车", "支持数量、勾选和结算前检查。"));
@@ -754,6 +786,7 @@ function cartView() {
   return wrap;
 }
 
+// 结算页：金额预览 + 收货信息 + 幂等下单（Idempotency-Key 防重复提交）。
 function checkoutView() {
   const wrap = node("div");
   wrap.appendChild(titleBar("结算", "预览金额、填写收货信息并发起幂等下单。"));
@@ -862,6 +895,7 @@ function checkoutView() {
   return wrap;
 }
 
+// 消费者订单列表：状态徽标 + 操作按钮。
 function ordersView() {
   const wrap = node("div");
   wrap.appendChild(titleBar("我的订单", "覆盖待支付、已支付、已发货、退款中等状态。"));
@@ -917,6 +951,7 @@ function ordersView() {
   return wrap;
 }
 
+// 消费者订单操作：支付/取消（CREATED）、申请退款（PAID/SHIPPED）、确认收货（SHIPPED）。
 function buildConsumerOrderActions(order, host, done) {
   if (order.status === "CREATED") {
     const pay = node("button", { class: "btn primary mini", text: "支付" });
@@ -988,6 +1023,7 @@ function buildConsumerOrderActions(order, host, done) {
   }
 }
 
+// 订单详情：头部信息 + 明细/事件/库存锁三个面板（消费者与商家侧共用）。
 function orderDetailView(id) {
   const wrap = node("div");
   wrap.appendChild(titleBar("订单详情", "状态机、事件流和库存锁都在这里可见。"));
@@ -1020,6 +1056,7 @@ function orderDetailView(id) {
   return wrap;
 }
 
+// 订单详情复用面板：订单明细 / 状态事件流 / 库存锁。
 function orderItemsPanel(items) {
   const panel = node("section", { class: "panel" });
   panel.appendChild(node("h3", { text: "订单明细" }));
@@ -1123,6 +1160,7 @@ function orderLocksPanel(items) {
   return panel;
 }
 
+// 商家经营看板：指标卡、转化漏斗、商品表现（三个接口并行拉取）。
 function dashboardView() {
   const wrap = node("div");
   wrap.appendChild(titleBar("经营看板", "漏斗、商品表现和库存预警。"));
@@ -1214,6 +1252,7 @@ function dashboardView() {
   return wrap;
 }
 
+// 商家商品管理：列表、上下架与 SKU 入口。
 function merchantProductsView() {
   const wrap = node("div");
   wrap.appendChild(titleBar("商品管理", "商品基础信息、上下架和 SKU 入口。"));
@@ -1232,7 +1271,6 @@ function merchantProductsView() {
       .then((payload) => {
         body.innerHTML = "";
         const items = asItems(payload);
-        store.merchantProducts = items;
         if (!items.length) {
           body.appendChild(emptyBlock("暂无商品"));
           return;
@@ -1305,6 +1343,7 @@ function merchantProductsView() {
   return wrap;
 }
 
+// 商品新建/编辑表单；编辑态先从列表拉取并回填当前商品。
 function productFormView(id) {
   const editing = !!id;
   const wrap = node("div");
@@ -1389,6 +1428,7 @@ function productFormView(id) {
   return wrap;
 }
 
+// SKU 管理：新增表单 + 行内编辑（prompt 逐个字段修改）。
 function skuView(productId) {
   const wrap = node("div");
   wrap.appendChild(titleBar("SKU 管理", "价格、库存与属性都落在 SKU 上。"));
@@ -1531,6 +1571,7 @@ function skuView(productId) {
   return wrap;
 }
 
+// 商家订单履约列表：待发货、已发货、退款审批。
 function merchantOrdersView() {
   const wrap = node("div");
   wrap.appendChild(titleBar("订单履约", "待发货、已发货、退款审批都走真实后端状态机。"));
@@ -1588,6 +1629,7 @@ function merchantOrdersView() {
   return wrap;
 }
 
+// 商家订单操作：发货（PAID）、退款审批（REFUNDING）。
 function buildMerchantOrderActions(order, host, done) {
   if (order.status === "PAID") {
     const ship = node("button", { class: "btn primary mini", text: "发货" });
@@ -1629,6 +1671,7 @@ function buildMerchantOrderActions(order, host, done) {
   }
 }
 
+// 商家侧订单详情：头部 + 明细/事件/库存锁面板，含商家操作按钮。
 function merchantOrderDetailView(id) {
   const wrap = node("div");
   wrap.appendChild(titleBar("履约详情", "商家侧查看订单、事件与退款审批。"));
@@ -1659,6 +1702,7 @@ function merchantOrderDetailView(id) {
   return wrap;
 }
 
+// A2UI 智能导购：提交意图与上下文 JSON，后端返回声明式界面（JSONL surface）。
 function a2uiView() {
   const wrap = node("div");
   wrap.appendChild(titleBar("A2UI 智能导购", "Agent-to-UI：输入场景与预算，AI 生成可交互的购物专题页。"));
@@ -1704,6 +1748,8 @@ function a2uiView() {
   return wrap;
 }
 
+// 装配 A2UI surface：逐行解析 JSONL 协议（createSurface / updateComponents / updateDataModel）。
+// dataModel 支持「/」分隔的路径写入，组件树以 id 为键存于 Map 中。
 function a2uiRenderPanel(surfaceId, a2uiJSON) {
   const panel = node("section", { class: "panel soft" });
   panel.appendChild(node("div", { class: "meta", text: "surface: " + surfaceId }));
@@ -1754,6 +1800,8 @@ function a2uiRenderPanel(surfaceId, a2uiJSON) {
   return panel;
 }
 
+// 把 A2UI 组件树渲染为 DOM：Card/Column/Row/List/Text/Image/Slider/Button，支持路径取值与动作绑定。
+// 交互事件（slider/button）会写回 surface.dataModel，动作类型见 component.action。
 function a2uiRenderComponent(surface, component, scope) {
   if (!component) return node("span");
   const type = component.component;
@@ -1821,6 +1869,7 @@ function a2uiRenderComponent(surface, component, scope) {
         if (parts.length > 0) {
           target[parts[parts.length - 1]] = Number(slider.value);
         }
+        surface.refresh();
       }
     };
     wrap.appendChild(slider);
@@ -1870,6 +1919,7 @@ function a2uiRenderComponent(surface, component, scope) {
   return node("div", { class: "a2ui-unknown", text: "未知组件: " + type });
 }
 
+// A2UI 加购动作：单个 SKU 加购与批量加购。
 async function a2uiAddToCart(context) {
   const skuID = Number(context.sku_id);
   if (!skuID) {
@@ -1899,6 +1949,7 @@ async function a2uiAddAllToCart(items) {
   setNotice("全部商品已加入购物车", "ok");
 }
 
+// A2UI 数据解析：组件引用解析、路径取值、模板插值（${path}）与动作上下文求值。
 function a2uiResolveChildren(surface, component, dataModel) {
   if (!component.children) return [];
   if (Array.isArray(component.children)) {
@@ -1950,6 +2001,7 @@ function a2uiResolveActionContext(context, dataModel) {
   return out;
 }
 
+// AI Copilot：商品卖点生成与经营复盘，均为后端 AI 异步任务。
 function aiView() {
   const wrap = node("div");
   wrap.appendChild(titleBar("AI Copilot", "卖点生成与经营复盘均走后端 AI 任务接口。"));
@@ -2035,6 +2087,7 @@ function aiView() {
   return wrap;
 }
 
+// AI 任务结果面板：输出中数组字段渲染为标签，其余按文本展示。
 function aiTaskPanel(task) {
   const panel = node("section", { class: "panel soft" });
   panel.appendChild(node("div", { class: "meta", text: "任务 #" + task.id + " · " + task.task_type + " · " + task.status }));
@@ -2052,6 +2105,7 @@ function aiTaskPanel(task) {
   return panel;
 }
 
+// 通用 UI 组件：指标卡 / 页头 / 表单项。
 function metricCard(title, value, hint) {
   const card = node("section", { class: "card metric" });
   card.appendChild(node("div", { class: "metric-label", text: title }));
@@ -2074,6 +2128,7 @@ function formRow(label, input) {
   return row;
 }
 
+// 时间格式化：空值或非法时间原样返回。
 function prettyTime(value) {
   if (!value) {
     return "-";
@@ -2085,6 +2140,7 @@ function prettyTime(value) {
   return date.toLocaleString();
 }
 
+// 初始化 DOM 骨架并监听 hashchange；boot 先恢复会话（/api/auth/me）再进入路由。
 function mount() {
   appRoot = document.getElementById("app");
   appRoot.innerHTML = "";

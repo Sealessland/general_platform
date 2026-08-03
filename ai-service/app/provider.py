@@ -1,14 +1,24 @@
+"""AI 生成能力的业务提供者：定义请求参数模型，并实现生成卖点、经营复盘、A2UI 界面等能力。
+
+当前实现为本地 Mock 版本（与后端 backend/internal/ai/mock_provider.go 保持逻辑一致），
+后续可替换为真实的大模型调用，对外接口保持不变。
+"""
+
 from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
 class SellingPointRequest:
+    """商品卖点生成请求：给定商品名与目标人群，生成若干卖点文案。"""
+
     product_name: str
     audience: str
 
 
 @dataclass(frozen=True)
 class BusinessReviewRequest:
+    """经营复盘请求：基于统计窗口的 GMV 与退款率，产出诊断结论和下一步动作。"""
+
     window_days: int
     gmv: int = 0
     refund_rate: float = 0.0
@@ -16,13 +26,22 @@ class BusinessReviewRequest:
 
 @dataclass(frozen=True)
 class A2UISurfaceRequest:
+    """A2UI 界面生成请求：由 surface_id 标识一次交互界面，context_json 携带可选的业务上下文。"""
+
     surface_id: str
     user_intent: str
     context_json: str = "{}"
 
 
 class MockAIProvider:
+    """本地 Mock AI 提供者，生成可预期的确定性结果，用于开发与联调。
+
+    当前是唯一 provider 兼作生产实现。
+    各方法对非法输入抛 ValueError，由 gRPC 层转换为 INVALID_ARGUMENT 状态码。
+    """
+
     def generate_selling_points(self, request: SellingPointRequest) -> list[str]:
+        """生成商品卖点：校验商品名，按"人群定向"句式产出固定两条卖点。"""
         if not request.product_name:
             raise ValueError("product_name is required")
         audience = request.audience or "target users"
@@ -32,6 +51,7 @@ class MockAIProvider:
         ]
 
     def generate_business_review(self, request: BusinessReviewRequest) -> dict[str, object]:
+        """生成经营复盘：校验统计窗口，返回诊断结论与下一步建议（附带原始入参便于追溯）。"""
         if request.window_days <= 0:
             raise ValueError("window_days must be positive")
         return {
@@ -46,6 +66,11 @@ class MockAIProvider:
         }
 
     def generate_a2ui_surface(self, request: A2UISurfaceRequest) -> dict[str, str]:
+        """生成 A2UI v0.9 界面 JSON：上下文带商品时渲染智能导购页，否则渲染问候页。
+
+        返回 a2ui_json 为多行 JSON（createSurface / updateComponents / updateDataModel），
+        前端按声明式协议渲染，不执行任何 Agent 代码。
+        """
         if not request.surface_id:
             raise ValueError("surface_id is required")
         if not request.user_intent:
@@ -69,6 +94,12 @@ class MockAIProvider:
         return {"surface_id": request.surface_id, "a2ui_json": "\n".join(lines)}
 
     def _generate_shopping_guide(self, request: A2UISurfaceRequest, context: dict, products: list) -> dict[str, str]:
+        """渲染智能导购页：依据上下文里的预算/场景，构建组件树并规范化商品数据。
+
+        - budget 以"分"为单位存储（如 12900 表示 129 元），显示时统一转为"元"字符串；
+        - 商品数据被扁平化为 data model 里的 product 数组，供组件模板按 path 绑定；
+        - 每个卖点数组用 " · " 连接成一个文本字段展示。
+        """
         import json
         budget = context.get("budget", 0)
         scene = context.get("scene", "智能导购专题")
