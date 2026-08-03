@@ -48,6 +48,7 @@
         <a href="#architecture" class="nav-link">架构</a>
         <a href="#a2ui" class="nav-link">A2UI</a>
         <a href="#engineering" class="nav-link">工程化</a>
+        <a href="#benchmarks" class="nav-link">基准</a>
         <a href="#quickstart" class="nav-link">快速开始</a>
         <a href="#closing" class="nav-link">结尾</a>
       </nav>
@@ -59,6 +60,9 @@
 
     <!-- ============ 封面 ============ -->
     <section id="top" class="relative overflow-hidden border-b border-border px-5 pb-20 pt-28 md:px-10 md:pb-28 md:pt-36">
+      <div class="pointer-events-none absolute -top-52 left-1/2 h-[560px] w-[980px] -translate-x-1/2 rounded-full blur-2xl" style="background: radial-gradient(closest-side, rgba(37, 99, 235, 0.16), transparent);"></div>
+      <div class="pointer-events-none absolute -right-40 top-16 h-[480px] w-[480px] rounded-full blur-2xl" style="background: radial-gradient(closest-side, rgba(14, 165, 164, 0.13), transparent);"></div>
+      <div class="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-background to-transparent"></div>
       <div class="pointer-events-none absolute inset-0 grid-bg opacity-50"></div>
       <div class="relative">
         <div class="mb-6 flex items-center gap-3 font-mono text-xs tracking-[0.2em] text-primary">
@@ -75,25 +79,37 @@
         </p>
 
         <div class="mt-12 grid max-w-4xl grid-cols-2 gap-px border border-border bg-border md:grid-cols-4">
-          <div class="bg-card p-5">
-            <div class="font-mono text-xs text-muted">ARCHITECTURE</div>
-            <div class="mt-1 font-serif text-3xl">4 层</div>
-            <div class="mt-1 text-xs text-muted">产品接口 / 运行编排 / 领域能力 / 集成适配</div>
+          <div class="cover-stat bg-card p-5">
+            <div class="flex items-center justify-between">
+              <div class="font-mono text-xs text-muted">ARCHITECTURE</div>
+              <i data-lucide="layers" class="h-4 w-4 text-primary/70"></i>
+            </div>
+            <div class="mt-2 font-serif text-3xl">4 层</div>
+            <div class="mt-1 text-xs leading-5 text-muted">产品接口 / 运行编排 / 领域能力 / 集成适配</div>
           </div>
-          <div class="bg-card p-5">
-            <div class="font-mono text-xs text-muted">COVERAGE GATE</div>
-            <div class="mt-1 font-serif text-3xl text-primary">65.0%</div>
-            <div class="mt-1 text-xs text-muted">后端总覆盖率 CI 门禁阈值</div>
+          <div class="cover-stat bg-card p-5">
+            <div class="flex items-center justify-between">
+              <div class="font-mono text-xs text-muted">COVERAGE GATE</div>
+              <i data-lucide="gauge" class="h-4 w-4 text-primary/70"></i>
+            </div>
+            <div class="mt-2 font-serif text-3xl text-primary">65.0%</div>
+            <div class="mt-1 text-xs leading-5 text-muted">后端总覆盖率 CI 门禁阈值</div>
           </div>
-          <div class="bg-card p-5">
-            <div class="font-mono text-xs text-muted">ORDER STATE</div>
-            <div class="mt-1 font-serif text-3xl">7 态</div>
-            <div class="mt-1 text-xs text-muted">订单状态机（含退款流）</div>
+          <div class="cover-stat bg-card p-5">
+            <div class="flex items-center justify-between">
+              <div class="font-mono text-xs text-muted">ORDER STATE</div>
+              <i data-lucide="workflow" class="h-4 w-4 text-primary/70"></i>
+            </div>
+            <div class="mt-2 font-serif text-3xl">7 态</div>
+            <div class="mt-1 text-xs leading-5 text-muted">订单状态机（含退款流）</div>
           </div>
-          <div class="bg-card p-5">
-            <div class="font-mono text-xs text-muted">AUDIENCE</div>
-            <div class="mt-1 font-serif text-2xl">4 类</div>
-            <div class="mt-1 text-xs text-muted">消费者 · 商家 · AI Copilot · 工程协作</div>
+          <div class="cover-stat bg-card p-5">
+            <div class="flex items-center justify-between">
+              <div class="font-mono text-xs text-muted">AUDIENCE</div>
+              <i data-lucide="users" class="h-4 w-4 text-primary/70"></i>
+            </div>
+            <div class="mt-2 font-serif text-2xl">4 类</div>
+            <div class="mt-1 text-xs leading-5 text-muted">消费者 · 商家 · AI Copilot · 工程协作</div>
           </div>
         </div>
 
@@ -370,6 +386,104 @@
           </div>
         </div>
       </div>
+
+      <!-- 订单状态机（合法迁移，事实源：order_status.go） -->
+      <div id="order-state-machine" class="mt-14 scroll-mt-16">
+        <div class="mb-8 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <div class="mb-3 font-mono text-xs tracking-[0.2em] text-primary">DOMAIN · ORDER STATE MACHINE</div>
+            <h3 class="font-serif text-2xl font-bold md:text-3xl">订单状态机：合法迁移与库存释放</h3>
+          </div>
+          <div class="text-xs leading-6 text-muted">
+            事实源：<code class="code-inline">backend/internal/order/domain/order_status.go</code>
+          </div>
+        </div>
+
+        <div class="border border-border bg-card p-4 md:p-8" data-reveal>
+          <svg viewBox="0 0 1000 440" class="h-auto w-full" role="img" aria-label="订单状态机合法迁移图：CREATED 到 PAID 到 SHIPPED 到 FINISHED 主链路，CANCELLED 终态，REFUNDING 到 REFUNDED 分支">
+            <defs>
+              <marker id="state-arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"></path>
+              </marker>
+            </defs>
+
+            <!-- 主链路横向连线 -->
+            <path d="M190,177 H280" fill="none" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#state-arrow)"></path>
+            <text x="235" y="167" text-anchor="middle" class="edge-label">支付成功</text>
+            <path d="M430,177 H520" fill="none" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#state-arrow)"></path>
+            <text x="475" y="167" text-anchor="middle" class="edge-label">商家发货</text>
+            <path d="M670,177 H760" fill="none" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#state-arrow)"></path>
+            <text x="715" y="167" text-anchor="middle" class="edge-label">确认收货/自动完成</text>
+
+            <!-- 取消分支 -->
+            <path d="M115,204 V320" fill="none" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#state-arrow)"></path>
+            <text x="125" y="250" text-anchor="start" class="edge-label">用户取消 / 支付超时</text>
+            <g class="inv-badge">
+              <rect x="215" y="268" width="150" height="22" rx="11"></rect>
+              <text x="290" y="283" text-anchor="middle">释放库存 · 回滚锁定</text>
+            </g>
+
+            <!-- 退款分支 -->
+            <path d="M355,204 C355,320 470,347 520,347" fill="none" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#state-arrow)"></path>
+            <text x="396" y="280" text-anchor="start" class="edge-label">发货前发起退款</text>
+            <path d="M595,204 V320" fill="none" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#state-arrow)"></path>
+            <text x="605" y="250" text-anchor="start" class="edge-label">发货后发起退款</text>
+            <path d="M670,347 H760" fill="none" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#state-arrow)"></path>
+            <text x="715" y="337" text-anchor="middle" class="edge-label">审批通过 · 退款完成</text>
+            <g class="inv-badge">
+              <rect x="630" y="378" width="172" height="22" rx="11"></rect>
+              <text x="716" y="393" text-anchor="middle">释放库存 · 返还已确认库存</text>
+            </g>
+
+            <!-- 节点 -->
+            <g>
+              <rect x="40" y="150" width="150" height="54" rx="12" fill="#ffffff" stroke="#2563eb" stroke-width="2"></rect>
+              <text x="115" y="177" text-anchor="middle" class="state-name">CREATED</text>
+              <text x="115" y="193" text-anchor="middle" class="state-cn">已下单 · 待支付</text>
+            </g>
+            <g>
+              <rect x="280" y="150" width="150" height="54" rx="12" fill="#ffffff" stroke="#2563eb" stroke-width="2"></rect>
+              <text x="355" y="177" text-anchor="middle" class="state-name">PAID</text>
+              <text x="355" y="193" text-anchor="middle" class="state-cn">已支付</text>
+            </g>
+            <g>
+              <rect x="520" y="150" width="150" height="54" rx="12" fill="#ffffff" stroke="#2563eb" stroke-width="2"></rect>
+              <text x="595" y="177" text-anchor="middle" class="state-name">SHIPPED</text>
+              <text x="595" y="193" text-anchor="middle" class="state-cn">已发货</text>
+            </g>
+            <g>
+              <rect x="760" y="150" width="150" height="54" rx="12" fill="#f8fafc" stroke="#94a3b8" stroke-width="2"></rect>
+              <text x="835" y="177" text-anchor="middle" class="state-name">FINISHED</text>
+              <text x="835" y="193" text-anchor="middle" class="state-cn">已完成</text>
+              <text x="835" y="136" text-anchor="middle" class="state-term-tag">TERMINAL</text>
+            </g>
+            <g>
+              <rect x="40" y="320" width="150" height="54" rx="12" fill="#f8fafc" stroke="#94a3b8" stroke-width="2"></rect>
+              <text x="115" y="347" text-anchor="middle" class="state-name">CANCELLED</text>
+              <text x="115" y="363" text-anchor="middle" class="state-cn">已取消</text>
+              <text x="40" y="306" text-anchor="start" class="state-term-tag">TERMINAL</text>
+            </g>
+            <g>
+              <rect x="520" y="320" width="150" height="54" rx="12" fill="#ffffff" stroke="#0ea5a4" stroke-width="2"></rect>
+              <text x="595" y="347" text-anchor="middle" class="state-name">REFUNDING</text>
+              <text x="595" y="363" text-anchor="middle" class="state-cn">退款中</text>
+            </g>
+            <g>
+              <rect x="760" y="320" width="150" height="54" rx="12" fill="#f8fafc" stroke="#94a3b8" stroke-width="2"></rect>
+              <text x="835" y="347" text-anchor="middle" class="state-name">REFUNDED</text>
+              <text x="835" y="363" text-anchor="middle" class="state-cn">已退款</text>
+              <text x="835" y="306" text-anchor="middle" class="state-term-tag">TERMINAL</text>
+            </g>
+          </svg>
+
+          <div class="mt-5 grid grid-cols-1 gap-2 text-xs leading-6 text-muted md:grid-cols-2">
+            <div>· 蓝色节点 = 主链路：<code class="code-inline">CREATED → PAID → SHIPPED → FINISHED</code>；青色节点 = 退款分支 <code class="code-inline">REFUNDING</code></div>
+            <div>· 灰色描边 + TERMINAL = 终态（<code class="code-inline">IsTerminal</code>：FINISHED / CANCELLED / REFUNDED），不可再流转</div>
+            <div>· 青色徽标 = 迁移触发库存释放（<code class="code-inline">releaseInventory</code>）：取消回滚未扣减锁定；退款返还已确认库存</div>
+            <div>· 迁移表事实源：<code class="code-inline">order_status.go</code> 的 <code class="code-inline">legalTransitions</code>；未列出的迁移由 <code class="code-inline">CanTransition</code> 校验拒绝</div>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- ============ A2UI 核心亮点（含动态演示） ============ -->
@@ -492,8 +606,8 @@
   {"id":"add_btn","component":"Button","text":"加入购物车","variant":"primary","action":{"event":{"name":"add_to_cart"}}}]}}
 {"version":"v0.9","updateDataModel":{"surfaceId":"guide-001","path":"/","value":{"budget":12900,"products":[
   {"id":1,"title":"LED Desk Lamp","price_yuan":"79.00","selling_points":"宿舍护眼 · 三档调光"},
-  {"id":2,"title":"Desk Storage Box Set","price_yuan":"39.90","selling_points":"桌面收纳 · 多格分区"},
-  {"id":3,"title":"USB Power Strip","price_yuan":"49.00","selling_points":"多口快充 · 宿舍友好"}]}}}</code></pre>
+  {"id":2,"title":"Desk Storage Box Set","price_yuan":"49.00","selling_points":"桌面收纳 · 多格分区"},
+  {"id":3,"title":"USB Power Strip","price_yuan":"59.00","selling_points":"多口快充 · 宿舍友好"}]}}}</code></pre>
           </div>
         </div>
       </div>
@@ -585,7 +699,7 @@
                 <div class="flex gap-3"><span class="font-mono text-xs text-accent">✓</span><span>订单状态变更先写入数据库 outbox 表，再经 relay 轮询发布到 RabbitMQ（exchange 默认 <code class="code-inline">redcart.events</code>），发布器启用 confirm 模式、失败进死信、<code class="code-inline">FOR UPDATE SKIP LOCKED</code> 轮询。</span></div>
                 <div class="flex gap-3"><span class="font-mono text-xs text-accent">✓</span><span>业务写入与事件入箱在同一数据库事务内，保证「先记后发」的强一致；消费侧有 <code class="code-inline">event_id</code> 幂等去重与 DLX 死信队列。</span></div>
                 <div class="flex gap-3"><span class="font-mono text-xs text-accent">✓</span><span>事件成为「逻辑服务」之间的边界：未来通知、分析、库存等消费者可以独立成进程，订单核心服务仍保留在单体内部，不引入 Saga/TCC。</span></div>
-                <div class="flex gap-3"><span class="font-mono text-xs text-accent">✓</span><span>设计评审构建的控制变量 benchmark（ADR 0006 记录）：模拟 3 个 500μs 下游调用时，发件箱模式吞吐提升约 365 倍；该数据仅用于决策，不进入 README 性能表。</span></div>
+                <div class="flex gap-3"><span class="font-mono text-xs text-accent">✓</span><span>设计评审构建的控制变量 benchmark（AI_WORKFLOW.md 会话记录）：模拟 3 个 500μs 下游调用时，发件箱模式吞吐提升约 365 倍；该数据仅用于决策，不进入 README 性能表。</span></div>
               </div>
             </div>
             <div class="tab-panel" data-panel="option-a" hidden>
@@ -601,10 +715,93 @@
       </div>
     </section>
 
+    <!-- ============ 运行时基准 ============ -->
+    <section id="benchmarks" class="border-b border-border bg-[linear-gradient(180deg,rgba(245,247,250,0.96),rgba(250,250,250,1))] px-5 py-20 md:px-10 md:py-28">
+      <div class="mb-10">
+        <div class="mb-3 font-mono text-xs tracking-[0.2em] text-primary">05 / RUNTIME BENCHMARKS</div>
+        <h2 class="font-serif text-3xl font-bold md:text-4xl">运行时基准：横跨 6 个量级的真实 QPS</h2>
+        <p class="mt-4 max-w-3xl text-sm leading-7 text-muted">
+          数据来源：<code class="code-inline">README.md</code> 性能表（<code class="code-inline">&lt;!-- BENCHMARK_RESULTS_START --&gt;</code> 区块，
+          2026-06-17 12:50 UTC GitHub Actions 实测）。9 个 benchmark 的 QPS 从 <strong>333.11</strong> 到 <strong>90.74M</strong>，
+          线性比例无法同图可比，故条形图采用<strong>对数刻度</strong>（10² → 10⁸ QPS）；数值与 README 表逐一致。
+        </p>
+      </div>
+
+      <!-- 246.5x 对比：同步副作用 vs 发件箱 -->
+      <div class="mb-10 grid grid-cols-1 gap-px border border-border bg-border md:grid-cols-3" data-reveal>
+        <div class="bg-card p-6">
+          <div class="font-mono text-xs text-muted">OPTION A · 对照</div>
+          <div class="mt-2 font-mono text-2xl font-semibold tracking-tight">467.14 QPS</div>
+          <div class="mt-1 text-xs leading-6 text-muted">同步副作用 <code class="code-inline">BenchmarkCreateOrderSyncSideEffects</code>（下游内联调用拖慢请求路径）</div>
+          <div class="mt-4 h-2.5 rounded-full bg-[#eef2f7]"><div class="h-full w-[11.2%] rounded-full bg-[#94a3b8]"></div></div>
+        </div>
+        <div class="bg-card p-6 text-center">
+          <div class="font-mono text-xs text-muted">THROUGHPUT GAP</div>
+          <div class="mt-3 font-mono text-4xl font-bold text-primary">246.5x</div>
+          <div class="mt-2 text-xs leading-6 text-muted">发件箱模式 create-order 吞吐提升（README 性能表口径）</div>
+        </div>
+        <div class="bg-card p-6">
+          <div class="font-mono text-xs text-accent">OPTION B · 已采用</div>
+          <div class="mt-2 font-mono text-2xl font-semibold tracking-tight">115.15K QPS</div>
+          <div class="mt-1 text-xs leading-6 text-muted">事务性发件箱 <code class="code-inline">BenchmarkCreateOrderOutbox</code>（业务写入 + 事件入箱同一事务）</div>
+          <div class="mt-4 h-2.5 rounded-full bg-[#eef2f7]"><div class="h-full w-[51%] rounded-full bg-[#0ea5a4]"></div></div>
+        </div>
+      </div>
+
+      <!-- 两组条形图：HTTP 基准 / Outbox 组件基准 -->
+      <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div class="border border-border bg-card p-6" data-reveal>
+          <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <div class="font-mono text-xs tracking-[0.16em] text-primary">GROUP A · HTTP 基准</div>
+            <div class="font-mono text-[10px] text-muted">对数刻度 10² → 10⁸ QPS</div>
+          </div>
+          <div class="bench-row"><div class="bench-name">BenchmarkHTTPOrderPreview</div><div class="bench-track"><div class="bench-bar" style="width:49.6%"></div></div><div class="bench-val"><strong>94.76K</strong><span>QPS · 10553 ns/op</span></div></div>
+          <div class="bench-row"><div class="bench-name">BenchmarkHTTPNotes</div><div class="bench-track"><div class="bench-bar" style="width:48.4%"></div></div><div class="bench-val"><strong>80.64K</strong><span>QPS · 12401 ns/op</span></div></div>
+          <div class="bench-row"><div class="bench-name">BenchmarkHTTPPostgresOrderPreview</div><div class="bench-track"><div class="bench-bar" style="width:24.0%"></div></div><div class="bench-val"><strong>2.76K</strong><span>QPS · 362071 ns/op</span></div></div>
+          <div class="bench-row"><div class="bench-name">BenchmarkHTTPPostgresCreateOrder</div><div class="bench-track"><div class="bench-bar" style="width:8.7%"></div></div><div class="bench-val"><strong>333.11</strong><span>QPS · 3001980 ns/op</span></div></div>
+          <div class="bench-scale">
+            <i style="left:0%"></i><span style="left:0%">10²</span>
+            <i style="left:16.67%"></i><span style="left:16.67%">10³</span>
+            <i style="left:33.33%"></i><span style="left:33.33%">10⁴</span>
+            <i style="left:50%"></i><span style="left:50%">10⁵</span>
+            <i style="left:66.67%"></i><span style="left:66.67%">10⁶</span>
+            <i style="left:83.33%"></i><span style="left:83.33%">10⁷</span>
+            <i style="left:100%"></i><span style="left:100%">10⁸</span>
+          </div>
+        </div>
+
+        <div class="border border-border bg-card p-6" data-reveal>
+          <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <div class="font-mono text-xs tracking-[0.16em] text-accent">GROUP B · OUTBOX 组件基准</div>
+            <div class="font-mono text-[10px] text-muted">对数刻度 10² → 10⁸ QPS</div>
+          </div>
+          <div class="bench-row"><div class="bench-name">BenchmarkOutboxRelay</div><div class="bench-track"><div class="bench-bar teal" style="width:99.3%"></div></div><div class="bench-val"><strong>90.74M</strong><span>QPS · 11.02 ns/op</span></div></div>
+          <div class="bench-row"><div class="bench-name">BenchmarkOutboxAppend</div><div class="bench-track"><div class="bench-bar teal" style="width:79.6%"></div></div><div class="bench-val"><strong>5.93M</strong><span>QPS · 168.7 ns/op</span></div></div>
+          <div class="bench-row"><div class="bench-name">BenchmarkCreateOrderOutbox</div><div class="bench-track"><div class="bench-bar teal" style="width:51.0%"></div></div><div class="bench-val"><strong>115.15K</strong><span>QPS · 8684 ns/op</span></div></div>
+          <div class="bench-row"><div class="bench-name">BenchmarkRabbitMQPublish</div><div class="bench-track"><div class="bench-bar teal" style="width:42.5%"></div></div><div class="bench-val"><strong>35.58K</strong><span>QPS · 28106 ns/op</span></div></div>
+          <div class="bench-row"><div class="bench-name">BenchmarkCreateOrderSyncSideEffects</div><div class="bench-track"><div class="bench-bar slate" style="width:11.2%"></div></div><div class="bench-val"><strong>467.14</strong><span>QPS · 2140685 ns/op</span></div></div>
+          <div class="bench-scale">
+            <i style="left:0%"></i><span style="left:0%">10²</span>
+            <i style="left:16.67%"></i><span style="left:16.67%">10³</span>
+            <i style="left:33.33%"></i><span style="left:33.33%">10⁴</span>
+            <i style="left:50%"></i><span style="left:50%">10⁵</span>
+            <i style="left:66.67%"></i><span style="left:66.67%">10⁶</span>
+            <i style="left:83.33%"></i><span style="left:83.33%">10⁷</span>
+            <i style="left:100%"></i><span style="left:100%">10⁸</span>
+          </div>
+        </div>
+      </div>
+
+      <p class="mt-5 text-xs leading-6 text-muted">
+        条形宽度 = (log₁₀ QPS − 2) / 6，锚定 10²（100 QPS）→ 10⁸（100M QPS），仅用于量级对比，非线性比例；
+        QPS 与 ns/op 均取自 README 性能表 <code class="code-inline">&lt;!-- BENCHMARK_RESULTS_START --&gt;</code> 区块（2026-06-17 12:50 UTC）。
+      </p>
+    </section>
+
     <!-- ============ 快速开始 ============ -->
     <section id="quickstart" class="border-b border-border px-5 py-20 md:px-10 md:py-28">
       <div class="mb-10">
-        <div class="mb-3 font-mono text-xs tracking-[0.2em] text-primary">05 / QUICK START</div>
+        <div class="mb-3 font-mono text-xs tracking-[0.2em] text-primary">06 / QUICK START</div>
         <h2 class="font-serif text-3xl font-bold md:text-4xl">快速开始：clone 后即可跑起来的 MVP</h2>
         <p class="mt-4 max-w-3xl text-sm leading-7 text-muted">
           以下命令与 <code class="code-inline">README.md</code> 完全一致；本地 MVP 同时启动 PostgreSQL、Redis、RabbitMQ、
@@ -691,7 +888,7 @@ GOCACHE=/tmp/go-build-cache go run ./cmd/api</code></pre>
     <!-- ============ 结尾 ============ -->
     <section id="closing" class="border-b border-border px-5 py-20 md:px-10 md:py-28">
       <div class="mb-10">
-        <div class="mb-3 font-mono text-xs tracking-[0.2em] text-primary">06 / CLOSING</div>
+        <div class="mb-3 font-mono text-xs tracking-[0.2em] text-primary">07 / CLOSING</div>
         <h2 class="font-serif text-3xl font-bold md:text-4xl">总结与更多材料</h2>
       </div>
 
@@ -941,6 +1138,56 @@ GOCACHE=/tmp/go-build-cache go run ./cmd/api</code></pre>
       white-space: nowrap;
     }
 
+    /* 封面事实格 */
+    .cover-stat { position: relative; overflow: hidden; transition: transform 0.2s ease, box-shadow 0.2s ease; }
+    .cover-stat::before {
+      content: "";
+      position: absolute;
+      left: 0; right: 0; top: 0;
+      height: 2px;
+      background: linear-gradient(90deg, #2563eb, #0ea5a4);
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+    .cover-stat:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(37, 99, 235, 0.10); }
+    .cover-stat:hover::before { opacity: 1; }
+
+    /* 运行时基准条形图 */
+    .bench-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 7px 0; }
+    .bench-name {
+      flex: 1 1 100%;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 11px;
+      color: #5f6f82;
+    }
+    .bench-track { position: relative; flex: 1 1 auto; height: 16px; border-radius: 999px; background: #eef2f7; overflow: hidden; }
+    .bench-bar { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; background: #2563eb; }
+    .bench-bar.teal { background: #0ea5a4; }
+    .bench-bar.slate { background: #94a3b8; }
+    .bench-val { flex: 0 0 120px; text-align: right; font-family: "JetBrains Mono", monospace; }
+    .bench-val strong { display: block; font-size: 13px; font-weight: 600; color: #132033; letter-spacing: 0; line-height: 1.25; }
+    .bench-val span { display: block; font-size: 9.5px; color: #94a3b8; line-height: 1.4; }
+    .bench-scale { position: relative; height: 16px; margin-top: 6px; margin-left: 232px; margin-right: 132px; }
+    .bench-scale i { position: absolute; top: 0; width: 1px; height: 6px; background: #dce4ee; }
+    .bench-scale span { position: absolute; top: 7px; transform: translateX(-50%); font-family: "JetBrains Mono", monospace; font-size: 9.5px; color: #94a3b8; }
+    @media (max-width: 767px) { .bench-scale { display: none; } }
+    @media (min-width: 768px) {
+      .bench-row { flex-wrap: nowrap; }
+      .bench-name { flex: 0 0 220px; }
+    }
+
+    /* 订单状态机 SVG */
+    .state-name { font-family: "JetBrains Mono", monospace; font-size: 14px; font-weight: 700; fill: #132033; letter-spacing: 0.06em; }
+    .state-cn { font-size: 10.5px; fill: #5f6f82; }
+    .state-term-tag { font-family: "JetBrains Mono", monospace; font-size: 9px; fill: #94a3b8; letter-spacing: 0.18em; }
+    .edge-label { font-family: "JetBrains Mono", monospace; font-size: 11px; fill: #475569; stroke: #ffffff; stroke-width: 5px; paint-order: stroke; }
+    .inv-badge rect { fill: #0ea5a4; }
+    .inv-badge text { font-family: "JetBrains Mono", monospace; font-size: 11px; fill: #ffffff; letter-spacing: 0.02em; }
+
     [data-reveal-item] {
       opacity: 0;
       transform: translateY(24px);
@@ -966,6 +1213,7 @@ GOCACHE=/tmp/go-build-cache go run ./cmd/api</code></pre>
         const bar = document.getElementById("progress-bar");
         const links = document.querySelectorAll(".nav-link");
         const sections = Array.from(document.querySelectorAll("section[id]"));
+        // 滚动处理：更新进度条宽度并高亮当前章节导航项
         function onScroll() {
           const root = document.documentElement;
           const scrolled = root.scrollTop;
@@ -994,6 +1242,7 @@ GOCACHE=/tmp/go-build-cache go run ./cmd/api</code></pre>
           element.setAttribute("data-reveal-item", "");
           element.style.transitionDelay = (index % 6) * 60 + "ms";
         });
+        // 相交观察器：元素进入视口即标记显现并停止观察
         const io = new IntersectionObserver((entries) => {
           entries.forEach((entry) => {
             if (entry.isIntersecting) {
@@ -1016,8 +1265,8 @@ GOCACHE=/tmp/go-build-cache go run ./cmd/api</code></pre>
     (function () {
       var PRODUCTS = [
         { title: "LED Desk Lamp", price_yuan: "79.00", points: "宿舍护眼 · 三档调光" },
-        { title: "Desk Storage Box Set", price_yuan: "39.90", points: "桌面收纳 · 多格分区" },
-        { title: "USB Power Strip", price_yuan: "49.00", points: "多口快充 · 宿舍友好" }
+        { title: "Desk Storage Box Set", price_yuan: "49.00", points: "桌面收纳 · 多格分区" },
+        { title: "USB Power Strip", price_yuan: "59.00", points: "多口快充 · 宿舍友好" }
       ];
       var STEPS = [
         {
@@ -1043,6 +1292,7 @@ GOCACHE=/tmp/go-build-cache go run ./cmd/api</code></pre>
       ];
       var FINAL_INDEX = STEPS.length - 1;
 
+      // 创建 DOM 元素（tag + class + 文本内容）
       function el(tag, className, text) {
         var node = document.createElement(tag);
         if (className) node.className = className;
@@ -1050,6 +1300,7 @@ GOCACHE=/tmp/go-build-cache go run ./cmd/api</code></pre>
         return node;
       }
 
+      // 构建 A2UI 商品卡片（缩略图、标题、价格卖点与加购按钮）
       function productCard(product) {
         var card = el("div", "a2ui-product");
         var thumb = el("div", "a2ui-thumb", "🛍");
@@ -1064,6 +1315,7 @@ GOCACHE=/tmp/go-build-cache go run ./cmd/api</code></pre>
         return card;
       }
 
+      // 按步骤渲染 A2UI 画布：surface 外壳、标题区、预算滑块与商品列表
       function renderCanvas(stepIndex) {
         var host = document.getElementById("a2ui-canvas");
         if (!host) return;
@@ -1081,7 +1333,7 @@ GOCACHE=/tmp/go-build-cache go run ./cmd/api</code></pre>
         } else {
           var pad = el("div", "a2ui-pad space-y-3");
           pad.appendChild(el("div", "font-serif text-[15px] font-bold text-foreground", "宿舍书桌场景好物"));
-          pad.appendChild(el("div", "text-[12px] text-muted", "已为你筛选 3 件预算内好物"));
+          pad.appendChild(el("div", "text-[12px] text-muted", "已为你筛选预算内好物"));
           var row = el("div", "flex items-center gap-3");
           row.appendChild(el("span", "text-[11px] text-muted", "预算: ¥129.00"));
           var slider = document.createElement("input");
@@ -1104,6 +1356,7 @@ GOCACHE=/tmp/go-build-cache go run ./cmd/api</code></pre>
         host.appendChild(shell);
       }
 
+      // 高亮当前步骤对应的指令行
       function paintLines(activeLines) {
         var lines = document.querySelectorAll("#a2ui-lines .a2ui-line");
         lines.forEach(function (line) {
@@ -1112,6 +1365,7 @@ GOCACHE=/tmp/go-build-cache go run ./cmd/api</code></pre>
         });
       }
 
+      // 渲染第 index 步：指令行高亮 + 画布 + 状态标题/详情
       function paint(index) {
         var step = STEPS[index];
         paintLines(step.lines);
@@ -1122,6 +1376,7 @@ GOCACHE=/tmp/go-build-cache go run ./cmd/api</code></pre>
         if (detail) detail.textContent = step.detail;
       }
 
+      // 初始化 A2UI 演示：播放/重置按钮与定时重放，初始即最终态
       function initA2UIDemo() {
         var play = document.getElementById("a2ui-play");
         var reset = document.getElementById("a2ui-reset");
@@ -1129,6 +1384,7 @@ GOCACHE=/tmp/go-build-cache go run ./cmd/api</code></pre>
         var running = false;
         var timer = null;
 
+        // 从第 i 步开始顺序播放，逐步推进并安排下一次定时触发
         function playFrom(i) {
           if (i >= STEPS.length) {
             running = false;
@@ -1138,11 +1394,13 @@ GOCACHE=/tmp/go-build-cache go run ./cmd/api</code></pre>
           timer = window.setTimeout(function () { playFrom(i + 1); }, 1000);
         }
 
+        // 播放：从第 0 步开始自动重放
         play.addEventListener("click", function () {
           if (running) return;
           running = true;
           playFrom(0);
         });
+        // 重置：清除定时器并回到初始步骤
         reset.addEventListener("click", function () {
           if (timer) window.clearTimeout(timer);
           running = false;
@@ -1161,6 +1419,7 @@ GOCACHE=/tmp/go-build-cache go run ./cmd/api</code></pre>
         if (!bar) return;
         const buttons = bar.querySelectorAll(".tab-btn");
         const panels = document.querySelectorAll(".tab-panel");
+        // 激活指定标签：更新按钮高亮与面板显隐
         function activate(name) {
           buttons.forEach((button) => {
             button.setAttribute("data-active", button.dataset.tab === name ? "true" : "false");
@@ -1170,6 +1429,7 @@ GOCACHE=/tmp/go-build-cache go run ./cmd/api</code></pre>
           });
         }
         buttons.forEach((button) => {
+          // 点击标签按钮：切换到对应面板
           button.addEventListener("click", function () {
             activate(button.dataset.tab);
           });
@@ -1179,6 +1439,7 @@ GOCACHE=/tmp/go-build-cache go run ./cmd/api</code></pre>
       window.__initTabs = initTabs;
     })();
 
+    // 页面加载完成：初始化 lucide 图标、导航、滚动显现、标签页与 A2UI 演示
     document.addEventListener("DOMContentLoaded", function () {
       if (window.lucide) window.lucide.createIcons();
       if (window.__initNav) window.__initNav();

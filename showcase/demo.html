@@ -133,7 +133,7 @@
   .muted { color: var(--muted); font-size: 12.5px; }
   .meta { color: var(--muted); font-size: 12.5px; }
 
-  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; margin-bottom: 16px; box-shadow: var(--shadow); }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; margin-bottom: 16px; box-shadow: var(--shadow); overflow-x: auto; }
   .panel.soft { background: #f8fbfd; }
   .panel h2, .panel h3 { margin: 0 0 10px; }
   .panel h2 { font-size: 17px; }
@@ -205,12 +205,41 @@
   .metric-value { font-size: 24px; font-weight: 700; color: var(--ink); }
   .metric .muted { margin-top: 2px; }
 
-  /* 漏斗条 */
-  .funnel-row { display: grid; grid-template-columns: 130px 1fr 70px; align-items: center; gap: 10px; padding: 6px 0; font-size: 13px; }
-  .funnel-row .fk { color: var(--muted); font-size: 12px; }
+  /* 漏斗行（条形宽度与各阶段事件数成比例，右侧标注转化率/退款率） */
+  .funnel-row { display: grid; grid-template-columns: 118px minmax(0, 1fr) 52px 56px; align-items: center; gap: 10px; padding: 7px 0; font-size: 13px; }
+  .funnel-row .fk { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .bar { height: 12px; background: #e7eef6; border-radius: 999px; overflow: hidden; }
   .bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--primary-2), var(--accent)); }
   .funnel-row .fv { text-align: right; font-variant-numeric: tabular-nums; }
+  .funnel-row .frate { text-align: right; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* 商品 GMV 占比条形 */
+  .gmv-cell { min-width: 148px; }
+  .gmv-bar { height: 8px; background: #e7eef6; border-radius: 999px; overflow: hidden; margin-top: 3px; }
+  .gmv-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--primary), var(--primary-2)); }
+
+  /* 订单状态步骤条：主路径 CREATED→PAID→SHIPPED→FINISHED，含 CANCELLED/REFUNDING 分支 */
+  .step-track { display: flex; align-items: flex-start; overflow-x: auto; padding: 8px 2px 2px; }
+  .step-node { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 6px; width: 76px; }
+  .step-dot { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; border: 2px solid; background: #fff; }
+  .step-node.done .step-dot { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .step-node.current .step-dot { background: var(--accent-soft); border-color: var(--primary); color: var(--primary); box-shadow: 0 0 0 3px rgba(14, 116, 144, .15); }
+  .step-node.upcoming .step-dot { border-color: var(--border); color: #b7c6d6; }
+  .step-node.branch-cancelled.current .step-dot { background: #fdecef; border-color: var(--danger); color: var(--danger); box-shadow: 0 0 0 3px rgba(211, 58, 79, .15); }
+  .step-node.branch-refunding.current .step-dot { background: #ffedd5; border-color: #c2410c; color: #c2410c; box-shadow: 0 0 0 3px rgba(194, 65, 12, .15); }
+  .step-node.branch-refunded.current .step-dot { background: #f3e8ff; border-color: #7e22ce; color: #7e22ce; box-shadow: 0 0 0 3px rgba(126, 34, 206, .15); }
+  .step-node.branch.done .step-dot { background: #e9f9ef; border-color: var(--ok); color: var(--ok); }
+  .step-label { font-size: 12px; color: var(--ink); text-align: center; line-height: 1.3; white-space: nowrap; }
+  .step-code { font-size: 10px; color: var(--muted); text-align: center; letter-spacing: .2px; white-space: nowrap; }
+  .step-link { flex: 1 1 18px; min-width: 14px; height: 2px; background: var(--border); margin-top: 12px; }
+  .step-link.done { background: var(--primary-2); }
+
+  /* 分支态行：独立于主路径展示，窄屏可换行 */
+  .step-branch { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border); flex-wrap: wrap; }
+  .step-branch .step-node { width: auto; }
+  .step-branch-arrow { color: var(--muted); font-size: 13px; }
+  .step-branch-mark { font-size: 11px; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; flex-shrink: 0; }
+  .step-branch-note { font-size: 12px; }
 
   /* 终端式 NDJSON 输出 */
   .terminal {
@@ -242,6 +271,16 @@
   .idem-panel { border: 1px dashed #9bd7e8; background: #f2fbfd; border-radius: 10px; padding: 10px 14px; margin-top: 10px; font-size: 12.5px; }
   .foot { margin-top: 26px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; }
   .json-pre { background: #f6fafd; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+
+  /* 移动端（须置于所有基础规则之后，否则会被源顺序覆盖） */
+  @media (max-width: 480px) {
+    .main { padding: 14px 12px 32px; }
+    .topbar { padding: 8px 12px; }
+    .funnel-row { grid-template-columns: 92px minmax(0, 1fr) 40px 46px; gap: 6px; }
+    .step-node { width: 62px; }
+    .step-link { min-width: 10px; }
+    .gmv-cell { min-width: 132px; }
+  }
 </style>
 </head>
 <body>
@@ -435,15 +474,19 @@ function formatMoney(cents) {
   if (!Number.isInteger(cents)) { throw new Error("amount must be integer cents"); }
   return "¥" + (cents / 100).toFixed(2);
 }
+// 分 → 元字符串（两位小数），供 A2UI 数据模型展示价格
 function fmtYuan(cents) { return (cents / 100).toFixed(2); }
+// 时间格式化：空值显示 "-"，非法时间原样返回，合法时间按 zh-CN 本地化
 function prettyTime(value) {
   if (!value) return "-";
   var d = new Date(value);
   if (Number.isNaN(d.getTime())) return String(value);
   return d.toLocaleString("zh-CN");
 }
+// 计算 n 小时前的 ISO 时间戳，用于 seed 订单时间偏移
 function hoursAgo(h) { return new Date(Date.now() - h * 3600 * 1000).toISOString(); }
 
+// 按 id 查找商品，未找到返回 null
 function findProduct(id) {
   for (var i = 0; i < MOCK_PRODUCTS.length; i++) {
     if (MOCK_PRODUCTS[i].id === Number(id)) return MOCK_PRODUCTS[i];
@@ -460,6 +503,7 @@ function findProductBySku(skuId) {
   }
   return null;
 }
+// 按 id 全局查找 SKU（跨商品扫描），未找到返回 null
 function findSku(skuId) {
   for (var i = 0; i < MOCK_PRODUCTS.length; i++) {
     var skus = MOCK_PRODUCTS[i].skus;
@@ -486,6 +530,7 @@ function productStock(product) {
   for (var i = 0; i < skus.length; i++) sum += Math.max(0, skus[i].stock - skus[i].locked_stock);
   return sum;
 }
+// SKU 可售库存 = stock - locked_stock（下限 0）
 function skuAvailable(sku) { return Math.max(0, sku.stock - sku.locked_stock); }
 
 /* =====================================================================
@@ -499,6 +544,7 @@ var LS_KEY = {
   idem: "redcart_demo_idem_v1",
 };
 
+// 从 localStorage 读取并 JSON 反序列化，异常或环境不支持时返回默认值
 function lsGet(key, fb) {
   try {
     if (typeof localStorage === "undefined") return fb;
@@ -506,6 +552,7 @@ function lsGet(key, fb) {
     return raw == null ? fb : JSON.parse(raw);
   } catch (e) { return fb; }
 }
+// 将值 JSON 序列化后写入 localStorage，异常时静默忽略（如隐私模式）
 function lsSet(key, val) {
   try {
     if (typeof localStorage === "undefined") return;
@@ -520,6 +567,7 @@ var state = {
   idem: null,
 };
 
+// 加载购物车：内存缓存 + localStorage 兜底，首次为空则写入 seed
 function loadCart() {
   if (state.cart == null) {
     state.cart = lsGet(LS_KEY.cart, null);
@@ -527,6 +575,7 @@ function loadCart() {
   }
   return state.cart;
 }
+// 加载订单列表：内存缓存 + localStorage 兜底，首次为空则写入 seed
 function loadOrders() {
   if (state.orders == null) {
     state.orders = lsGet(LS_KEY.orders, null);
@@ -534,22 +583,29 @@ function loadOrders() {
   }
   return state.orders;
 }
+// 加载幂等键 → 订单 id 映射表（内存缓存 + localStorage 兜底）
 function loadIdem() {
   if (state.idem == null) {
     state.idem = lsGet(LS_KEY.idem, {});
   }
   return state.idem;
 }
+// 持久化购物车到 localStorage
 function saveCart() { lsSet(LS_KEY.cart, state.cart); }
+// 持久化订单列表到 localStorage
 function saveOrders() { lsSet(LS_KEY.orders, state.orders); }
+// 持久化幂等键映射表到 localStorage
 function saveIdem() { lsSet(LS_KEY.idem, state.idem); }
+// 持久化当前角色（消费者/商家）
 function saveRole() { lsSet(LS_KEY.role, state.role); }
 
+// 生成下一个购物车条目 id（当前最大 id + 1）
 function nextCartId() {
   var max = 0;
   loadCart().forEach(function (i) { if (i.id > max) max = i.id; });
   return max + 1;
 }
+// 生成下一个订单 id（当前最大 id + 1）
 function nextOrderId() {
   var max = 0;
   loadOrders().forEach(function (o) { if (o.id > max) max = o.id; });
@@ -579,6 +635,7 @@ function resetDemo() {
  * 4. 业务逻辑：购物车 / 结算 / 订单状态机 / 幂等下单
  * ===================================================================== */
 
+// 加购：校验 SKU 与可售库存，已有条目则累加数量；返回 {ok} 或 {error}
 function addToCart(skuId, quantity) {
   var sku = findSku(skuId);
   if (!sku) return { error: "SKU 不存在" };
@@ -602,6 +659,7 @@ function addToCart(skuId, quantity) {
   return { ok: true };
 }
 
+// 更新购物车条目（数量/勾选），数量受可售库存约束；返回 {ok} 或 {error}
 function updateCartItem(id, patch) {
   var item = null;
   var cart = loadCart();
@@ -619,12 +677,14 @@ function updateCartItem(id, patch) {
   return { ok: true };
 }
 
+// 按条目 id 从购物车删除并持久化
 function removeCartItem(id) {
   var cart = loadCart();
   state.cart = cart.filter(function (i) { return i.id !== Number(id); });
   saveCart();
 }
 
+// 汇总购物车：总件数、勾选件数、勾选数量与勾选金额（分）
 function cartSummary() {
   var items = loadCart();
   var sel = items.filter(function (i) { return i.selected; });
@@ -709,12 +769,14 @@ function createOrder(input) {
   return { duplicate: false, order: order };
 }
 
+// 按 id 查找订单，未找到返回 null
 function findOrder(id) {
   var orders = loadOrders();
   for (var i = 0; i < orders.length; i++) { if (orders[i].id === Number(id)) return orders[i]; }
   return null;
 }
 
+// 向订单追加一条状态事件（消费者视角的操作者信息）
 function pushEvent(order, from, to, type, remark) {
   order.events.push({
     from_status: from, to_status: to, event_type: type,
@@ -783,6 +845,7 @@ function parseBudgetFromIntent(intent) {
   return num * 100;
 }
 
+// 从意图文本推断场景：宿舍 / 通勤办公 / 出行 / 通用
 function inferSceneFromIntent(intent) {
   var t = String(intent || "").toLowerCase();
   if (t.indexOf("宿舍") >= 0) return "dorm_desk";
@@ -791,6 +854,7 @@ function inferSceneFromIntent(intent) {
   return "general";
 }
 
+// 场景枚举 → 中文导购标题，未知场景用通用标题
 function sceneTitle(scene) {
   var map = { dorm_desk: "宿舍书桌改造方案", office_desk: "通勤办公桌面方案", travel: "出行收纳方案" };
   return map[scene] || "智能导购专题";
@@ -847,6 +911,7 @@ function normalizeProducts(list) {
     };
   });
 }
+// 笔记标准化：映射为 A2UI 数据模型字段（id/标题/浏览/点赞）
 function normalizeNotes(list) {
   return (list || []).map(function (n) {
     return { id: n.id, title: n.title, view_count: Number(n.view_count) || 0, like_count: Number(n.like_count) || 0 };
@@ -998,6 +1063,25 @@ function deriveDashboard() {
     });
     return s;
   });
+  // 商品级 GMV：与 summary.gmv 同口径（仅已支付口径订单：PAID/SHIPPED/FINISHED/REFUNDING/REFUNDED），
+  // 按订单项小计归属到商品（order item 以 sku_name 反查商品，seed 中唯一）；订单级折扣按小计占比分摊，
+  // 保证 Σ 商品 GMV === summary.gmv_amount_cent（本 demo 订单折扣恒为 0，即逐项小计相加）。
+  var skuOwner = {};
+  MOCK_PRODUCTS.forEach(function (p) { p.skus.forEach(function (s) { skuOwner[s.sku_name] = p.id; }); });
+  var gmvByProduct = {};
+  orders.forEach(function (o) {
+    if (["PAID", "SHIPPED", "FINISHED", "REFUNDING", "REFUNDED"].indexOf(o.status) < 0) return;
+    var oItems = o.items || [];
+    var oTotal = oItems.reduce(function (a, it) { return a + Number(it.total_amount_cent || 0); }, 0);
+    if (oTotal <= 0) return;
+    oItems.forEach(function (it) {
+      var pid = skuOwner[it.sku_name];
+      if (pid == null) return;
+      var share = Number(it.total_amount_cent || 0) / oTotal * Number(o.pay_amount_cent || 0);
+      gmvByProduct[pid] = (gmvByProduct[pid] || 0) + share;
+    });
+  });
+  stats.forEach(function (s) { s.gmv_cent = Math.round(gmvByProduct[s.id] || 0); });
   return { summary: summary, funnel: funnel, stats: stats };
 }
 
@@ -1005,6 +1089,7 @@ function deriveDashboard() {
  * 6. DOM 辅助与全局通知
  * ===================================================================== */
 
+// DOM 创建工具：props 支持 text/class/value 与普通属性，kids 支持文本与子元素
 function h(tag, props, kids) {
   var el = document.createElement(tag);
   if (props) {
@@ -1026,6 +1111,7 @@ function h(tag, props, kids) {
 }
 
 var noticeTimer = null;
+// 顶部通知条：按 level 区分样式，4.2 秒后自动消失
 function setNotice(text, level) {
   var bar = document.querySelector(".notice");
   if (bar && bar.parentNode) bar.parentNode.removeChild(bar);
@@ -1036,6 +1122,7 @@ function setNotice(text, level) {
     main.insertBefore(n, main.firstChild);
   }
   if (noticeTimer) clearTimeout(noticeTimer);
+  // 定时自动移除通知条
   noticeTimer = setTimeout(function () {
     var bar2 = document.querySelector(".notice");
     if (bar2 && bar2.parentNode) bar2.parentNode.removeChild(bar2);
@@ -1057,6 +1144,7 @@ function coverBlock(product, small) {
  *    支持 Card/Column/Row/List/Text/Image/Slider/Button，路径取值、formatString 与动作绑定。
  * ===================================================================== */
 
+// 按 "/" 路径从数据模型中取值，路径无效返回 undefined
 function a2uiPath(dataModel, path) {
   if (path == null) return dataModel;
   var parts = String(path).split("/").filter(function (p) { return p; });
@@ -1068,6 +1156,7 @@ function a2uiPath(dataModel, path) {
   return target;
 }
 
+// 解析 A2UI 值：字面量、{path} 路径引用与 formatString 模板
 function a2uiValue(value, scope) {
   if (value == null) return "";
   if (typeof value === "object") {
@@ -1085,6 +1174,7 @@ function a2uiValue(value, scope) {
   return String(value);
 }
 
+// 解析动作上下文：逐键将值经 a2uiValue 解析为字符串
 function a2uiActionContext(context, scope) {
   if (!context || typeof context !== "object") return {};
   var out = {};
@@ -1100,8 +1190,10 @@ function resolveSkuFor(productId, skuId) {
   return product.skus.find(function (s) { return s.status === "active" && skuAvailable(s) > 0; }) || product.skus[0] || null;
 }
 
+// 解析组件 children/child 引用并递归渲染子节点
 function a2uiChildren(surface, comp, scope) {
-  if (!comp.children) return [];
+  // children 与 child 均缺失才返回空；否则 Card 等以 child 引用子组件的容器会被提前短路而渲染为空壳
+  if (comp.children == null && comp.child == null) return [];
   if (Array.isArray(comp.children)) {
     return comp.children.map(function (id) { return a2uiNode(surface, surface.components.get(id), scope); }).filter(Boolean);
   }
@@ -1112,6 +1204,7 @@ function a2uiChildren(surface, comp, scope) {
   return [];
 }
 
+// A2UI 组件渲染器：Card/Column/Row/List/Text/Image/Slider/Button 与动作绑定
 function a2uiNode(surface, comp, scope) {
   if (!comp) return h("span");
   var dataModel = scope || surface.dataModel;
@@ -1160,6 +1253,7 @@ function a2uiNode(surface, comp, scope) {
       return h("div", { class: "cover g" + g }, [h("div", { text: String(alt).slice(0, 2) })]);
     }
     var img = h("img", { class: "a2ui-image", src: url, alt: alt });
+    // 图片加载失败时隐藏（离线占位图兜底）
     img.onerror = function () { img.style.display = "none"; };
     return img;
   }
@@ -1168,6 +1262,7 @@ function a2uiNode(surface, comp, scope) {
     var max = Number(comp.max) || 100;
     var slider = h("input", { type: "range", min: String(comp.min || 0), max: String(max), value: String(a2uiValue(comp.value, dataModel) || max) });
     var label = h("span", { class: "a2ui-slider-label", text: slider.value });
+    // 滑块输入：更新标签并回写数据模型路径后刷新 surface
     slider.addEventListener("input", function () {
       label.textContent = slider.value;
       if (comp.value && comp.value.path) {
@@ -1191,6 +1286,7 @@ function a2uiNode(surface, comp, scope) {
       if (comp.action.event) {
         var eventName = comp.action.event.name;
         var context = a2uiActionContext(comp.action.event.context, dataModel);
+        // 按钮 A2UI 事件分发：add_to_cart / add_all_to_cart / a2ui_ack 等
         btn.addEventListener("click", function () {
           if (eventName === "add_to_cart") {
             var sku = resolveSkuFor(Number(context.product_id), Number(context.sku_id));
@@ -1219,6 +1315,7 @@ function a2uiNode(surface, comp, scope) {
       } else if (comp.action.functionCall) {
         var call = comp.action.functionCall.call;
         var args = a2uiActionContext(comp.action.functionCall.args, dataModel);
+        // 按钮函数调用动作：openUrl 站内 hash 跳转或站外新窗口
         btn.addEventListener("click", function () {
           if (call === "openUrl") {
             var url = args.url || "";
@@ -1235,6 +1332,7 @@ function a2uiNode(surface, comp, scope) {
   return h("div", { class: "a2ui-unknown muted", text: "未知组件: " + comp.component });
 }
 
+// 创建 A2UI surface（组件表 + 数据模型 + 刷新钩子）
 function makeSurface(surfaceId) {
   return { surfaceId: surfaceId, components: new Map(), dataModel: {}, refresh: null };
 }
@@ -1267,20 +1365,26 @@ function applySurfaceLine(surface, line) {
 
 var appRoot = null;
 
+// 读取当前 hash 路由（去 ? 查询串），为空用默认路径
 function currentPath() {
   var raw = window.location.hash ? window.location.hash.slice(1) : "";
   return (raw || defaultPath()).split("?")[0];
 }
+// 通过修改 hash 触发路由跳转
 function go(path) { window.location.hash = path; }
+// 按角色返回默认路由：商家看板 / 消费者首页
 function defaultPath() { return state.role === "merchant" ? "/merchant/dashboard" : "/home"; }
+// 角色中文名（商家 / 消费者）
 function roleLabel() { return state.role === "merchant" ? "商家" : "消费者"; }
 
+// 订单状态徽标：英文状态码 + 中文说明
 function badge(status) {
   var zh = { CREATED: "待支付", PAID: "已支付", SHIPPED: "已发货", FINISHED: "已完成", CANCELLED: "已取消", REFUNDING: "退款中", REFUNDED: "已退款" };
   var map = { CREATED: "created", PAID: "paid", SHIPPED: "shipped", FINISHED: "finished", CANCELLED: "cancelled", REFUNDING: "refunding", REFUNDED: "refunded" };
   return h("span", { class: "badge " + (map[status] || "created"), text: status + " " + (zh[status] || "") });
 }
 
+// 生成导航链接：当前路径高亮，可选角标数字
 function navLink(path, label, badgeCount) {
   var active = currentPath() === path || currentPath().indexOf(path + "/") === 0;
   var link = h("a", { href: "#" + path, class: active ? "active" : "", text: label });
@@ -1288,6 +1392,7 @@ function navLink(path, label, badgeCount) {
   return link;
 }
 
+// 渲染顶栏与导航：品牌、角色切换、清空按钮与按角色生成导航项
 function renderShell() {
   var topbar = document.getElementById("topbar");
   var nav = document.getElementById("nav");
@@ -1300,10 +1405,13 @@ function renderShell() {
   ]);
   var right = h("div", { class: "top-right" });
   var toConsumer = h("button", { class: "btn ghost mini", text: "消费者演示" });
+  // 切换到消费者视角
   toConsumer.addEventListener("click", function () { switchRole("consumer"); });
   var toMerchant = h("button", { class: "btn ghost mini", text: "商家演示" });
+  // 切换到商家视角
   toMerchant.addEventListener("click", function () { switchRole("merchant"); });
   var resetBtn = h("button", { class: "btn ghost mini", text: "清空本地数据" });
+  // 清空本地数据并回到消费者视角（需用户确认）
   resetBtn.addEventListener("click", function () {
     if (!confirm("确认清空本地购物车/订单数据并回到 seed 初始态？")) return;
     resetDemo();
@@ -1330,6 +1438,7 @@ function renderShell() {
   }
 }
 
+// 切换演示角色：持久化、重绘导航并跳转默认路由
 function switchRole(role) {
   state.role = role;
   saveRole();
@@ -1337,6 +1446,7 @@ function switchRole(role) {
   window.location.hash = defaultPath();
 }
 
+// 路由分发：按当前 hash 渲染对应视图（消费者/商家）并附加页脚
 function renderRoute() {
   var main = document.getElementById("main");
   main.innerHTML = "";
@@ -1364,16 +1474,23 @@ function renderRoute() {
   if (path === "/a2ui") view = a2uiView();
   main.appendChild(view);
   var foot = h("div", { class: "foot muted" });
-  foot.appendChild(document.createTextNode("无后端单文件演示 · 数据为仓库 seed 的 mock（backend/migrations/0001_init_schema.sql + internal/redcart/infrastructure/postgres/migrate.go） · 购物车/订单持久化于浏览器 localStorage · 刷新页面数据保留"));
+  foot.appendChild(document.createTextNode("无后端单文件演示 · 数据为仓库 seed 的 mock（backend/migrations/0001_init_schema.sql + internal/redcart/infrastructure/postgres/migrate.go） · 购物车/订单持久化于浏览器 localStorage · 刷新页面数据保留 · "));
+  var linkShowcase = h("a", { href: "index.html" }, ["项目展示页"]);
+  var linkReadme = h("a", { href: "README.md" }, ["介绍文档"]);
+  foot.appendChild(linkShowcase);
+  foot.appendChild(document.createTextNode(" · "));
+  foot.appendChild(linkReadme);
   main.appendChild(foot);
 }
 
+// 页面标题栏（大标题 + 说明文字）
 function titleBar(title, text) {
   var box = h("section", { class: "page-head" });
   box.appendChild(h("h1", { text: title }));
   box.appendChild(h("p", { text: text }));
   return box;
 }
+// 指标卡片（标题 + 数值 + 说明）
 function metricCard(title, value, hint) {
   var card = h("section", { class: "card metric" });
   card.appendChild(h("div", { class: "metric-label", text: title }));
@@ -1381,17 +1498,21 @@ function metricCard(title, value, hint) {
   card.appendChild(h("div", { class: "muted", text: hint }));
   return card;
 }
+// 表单行（标签 + 输入控件）
 function formRow(label, input) {
   var row = h("label", { class: "form-row" });
   row.appendChild(h("span", { class: "label", text: label }));
   row.appendChild(input);
   return row;
 }
+// 空态占位块
 function emptyBlock(text) { return h("div", { class: "empty", text: text || "暂无数据" }); }
+// 错误提示块
 function errorBlock(text) { return h("div", { class: "error", text: text || "加载失败" }); }
 
 /* ---------- 消费者视图 ---------- */
 
+// 首页视图：seed 商品卡片、卖点与查看详情入口
 function homeView() {
   var wrap = h("div");
   wrap.appendChild(titleBar("首页商品", "5 件 seed 演示商品，含 SKU 价格与可售库存（stock - locked_stock）。"));
@@ -1406,6 +1527,7 @@ function homeView() {
     (p.selling_points || []).forEach(function (sp) { chips.appendChild(h("span", { class: "chip static", text: sp })); });
     card.appendChild(chips);
     var btn = h("button", { class: "btn primary", text: "查看详情" });
+    // 跳转到商品详情页
     btn.addEventListener("click", function () { go("/product/" + p.id); });
     card.appendChild(h("div", { class: "actions" }, [btn]));
     grid.appendChild(card);
@@ -1414,6 +1536,7 @@ function homeView() {
   return wrap;
 }
 
+// 内容流视图：笔记卡片 + 挂载商品快捷跳转
 function notesView() {
   var wrap = h("div");
   wrap.appendChild(titleBar("内容种草流", "从笔记进入商品与交易链路（seed 2 条笔记）。"));
@@ -1429,11 +1552,13 @@ function notesView() {
       var p = findProduct(pid);
       if (!p) return;
       var chip = h("button", { class: "chip", text: (PRODUCT_CN[pid] || p.title) });
+      // 点击商品 chip：跳转到商品详情
       chip.addEventListener("click", function () { go("/product/" + pid); });
       links.appendChild(chip);
     });
     card.appendChild(links);
     var btn = h("button", { class: "btn primary", text: "查看笔记" });
+    // 跳转到笔记详情页
     btn.addEventListener("click", function () { go("/notes/" + n.id); });
     card.appendChild(h("div", { class: "actions" }, [btn]));
     grid.appendChild(card);
@@ -1442,6 +1567,7 @@ function notesView() {
   return wrap;
 }
 
+// 笔记详情视图：正文 + 挂载商品列表
 function noteDetailView(id) {
   var wrap = h("div");
   wrap.appendChild(titleBar("笔记详情", "内容带货与商品挂载。"));
@@ -1465,6 +1591,7 @@ function noteDetailView(id) {
     (p.selling_points || []).forEach(function (sp) { chips.appendChild(h("span", { class: "chip static", text: sp })); });
     card.appendChild(chips);
     var btn = h("button", { class: "btn primary", text: "进入商品详情" });
+    // 跳转到商品详情页
     btn.addEventListener("click", function () { go("/product/" + pid); });
     card.appendChild(h("div", { class: "actions" }, [btn]));
     grid.appendChild(card);
@@ -1474,6 +1601,7 @@ function noteDetailView(id) {
   return wrap;
 }
 
+// 商品详情视图：SKU 选择、数量与加购（含库存校验与错误提示）
 function productDetailView(id) {
   var wrap = h("div");
   wrap.appendChild(titleBar("商品详情", "SKU 选择、价格库存与加购动作。"));
@@ -1503,6 +1631,7 @@ function productDetailView(id) {
   panel.appendChild(message);
 
   var add = h("button", { class: "btn primary", text: "加入购物车" });
+  // 加购：成功跳转购物车，失败就地展示错误
   add.addEventListener("click", function () {
     message.style.display = "none";
     var result = addToCart(Number(skuSelect.value), Number(qty.value));
@@ -1515,16 +1644,19 @@ function productDetailView(id) {
     }
   });
   var back = h("button", { class: "btn", text: "回到首页" });
+  // 返回首页
   back.addEventListener("click", function () { go("/home"); });
   panel.appendChild(h("div", { class: "actions" }, [add, back]));
   wrap.appendChild(panel);
   return wrap;
 }
 
+// 购物车视图：勾选/改数量/删除/结算，操作后局部刷新
 function cartView() {
   var wrap = h("div");
   wrap.appendChild(titleBar("购物车", "勾选、改数量、删除与结算前库存检查。"));
 
+  // 重绘购物车面板：条目表格、合计与结算按钮
   function refresh() {
     var body = h("div");
     var items = loadCart();
@@ -1544,6 +1676,7 @@ function cartView() {
       var row = h("tr");
       var toggle = h("input", { type: "checkbox" });
       toggle.checked = !!item.selected;
+      // 勾选状态变更后更新条目并刷新
       toggle.addEventListener("change", function () {
         updateCartItem(item.id, { selected: toggle.checked });
         refresh();
@@ -1555,6 +1688,7 @@ function cartView() {
       var qtyCell = h("td");
       var qtyInput = h("input", { type: "number", value: String(item.quantity), min: "1", class: "mini-input" });
       var save = h("button", { class: "btn mini", text: "更新" });
+      // 更新数量：失败弹窗提示，成功刷新
       save.addEventListener("click", function () {
         var r = updateCartItem(item.id, { quantity: Number(qtyInput.value) });
         if (!r.ok) alert(r.error || "更新失败");
@@ -1566,6 +1700,7 @@ function cartView() {
       row.appendChild(qtyCell);
       row.appendChild(h("td", { text: String(item.stock) }));
       var del = h("button", { class: "btn danger mini", text: "删除" });
+      // 删除该条目并刷新
       del.addEventListener("click", function () { removeCartItem(item.id); refresh(); });
       row.appendChild(h("td", {}, [del]));
       tbody.appendChild(row);
@@ -1578,6 +1713,7 @@ function cartView() {
     footer.appendChild(h("div", { text: "已选商品数 " + summary.selected_item_count + " · 已选件数 " + summary.selected_quantity }));
     footer.appendChild(h("div", { class: "summary-money", text: "合计 " + formatMoney(summary.selected_amount_cent) }));
     var checkout = h("button", { class: "btn primary", text: "去结算" });
+    // 去结算：未勾选商品时提示，否则跳转结算页
     checkout.addEventListener("click", function () {
       if (!summary.selected_item_count) { setNotice("请先勾选商品", "error"); return; }
       go("/checkout");
@@ -1591,6 +1727,7 @@ function cartView() {
   return wrap;
 }
 
+// 结算视图：金额预览、收货信息与幂等下单
 function checkoutView() {
   var wrap = h("div");
   wrap.appendChild(titleBar("结算", "预览金额、填写收货信息并发起幂等下单（幂等键防重复提交）。"));
@@ -1605,6 +1742,7 @@ function checkoutView() {
   var previewBox = h("div");
   var resultBox = h("div");
 
+  // 渲染结算预览：勾选条目、库存检查与应付金额
   function loadPreview() {
     previewBox.innerHTML = "";
     var preview = checkoutPreview();
@@ -1637,6 +1775,7 @@ function checkoutView() {
     previewBox.appendChild(panel);
   }
 
+  // 提交订单：幂等键防重复，重复提交被拦截并返回原订单
   function submitOrder(forceKey) {
     message.style.display = "none";
     var key = forceKey || idemKey;
@@ -1659,6 +1798,7 @@ function checkoutView() {
         h("div", { text: "已拦截重复提交：幂等键 " + key + " 对应订单 #" + result.order.id + "（" + result.order.order_no + "）" }),
         h("div", { class: "actions" }, [h("button", { class: "btn mini", text: "查看订单" }, )]),
       ]));
+      // 跳转到原订单详情
       resultBox.querySelector("button").addEventListener("click", function () { go("/order/" + result.order.id); });
       return { ok: true, duplicate: true };
     }
@@ -1669,8 +1809,10 @@ function checkoutView() {
     panel.appendChild(h("div", { class: "muted", text: "本次幂等键: " + key }));
     panel.appendChild(h("div", { class: "muted", text: "后端通过 uk_user_idempotency_key 唯一约束保证：同一幂等键重复提交不会创建第二个订单。" }));
     var goOrder = h("button", { class: "btn primary mini", text: "查看订单" });
+    // 跳转到新订单详情
     goOrder.addEventListener("click", function () { go("/order/" + result.order.id); });
     var retryIdem = h("button", { class: "btn mini", text: "用同一幂等键再次提交（应被拦截）" });
+    // 用同一幂等键再次提交，验证幂等拦截
     retryIdem.addEventListener("click", function () { submitOrder(key); });
     panel.appendChild(h("div", { class: "actions" }, [goOrder, retryIdem]));
     resultBox.appendChild(panel);
@@ -1685,6 +1827,7 @@ function checkoutView() {
   formPanel.appendChild(message);
 
   var submit = h("button", { class: "btn primary", text: "提交订单" });
+  // 提交订单：防双击连点（禁用按钮 + 350ms 延迟）
   submit.addEventListener("click", function () {
     if (submit.disabled) return; // 幂等保护：提交期间禁用按钮，防止双击连点
     submit.disabled = true;
@@ -1694,6 +1837,7 @@ function checkoutView() {
     }, 350);
   });
   var reload = h("button", { class: "btn", text: "刷新预览" });
+  // 重新渲染结算预览
   reload.addEventListener("click", loadPreview);
   formPanel.appendChild(h("div", { class: "actions" }, [submit, reload]));
   wrap.appendChild(formPanel);
@@ -1707,6 +1851,7 @@ function checkoutView() {
 function consumerOrderActions(order, host, done) {
   if (order.status === "CREATED") {
     var pay = h("button", { class: "btn primary mini", text: "支付" });
+    // 支付订单并刷新列表
     pay.addEventListener("click", function () {
       var r = payOrder(order.id);
       setNotice(r.ok ? "支付成功" : (r.error || "支付失败"), r.ok ? "ok" : "error");
@@ -1714,6 +1859,7 @@ function consumerOrderActions(order, host, done) {
     });
     host.appendChild(pay);
     var cancel = h("button", { class: "btn danger mini", text: "取消" });
+    // 取消订单并刷新列表
     cancel.addEventListener("click", function () {
       var r = cancelOrder(order.id);
       setNotice(r.ok ? "订单已取消" : (r.error || "取消失败"), r.ok ? "info" : "error");
@@ -1723,6 +1869,7 @@ function consumerOrderActions(order, host, done) {
   }
   if (order.status === "PAID" || order.status === "SHIPPED") {
     var refund = h("button", { class: "btn danger mini", text: "申请退款" });
+    // 申请退款（prompt 输入原因）并刷新
     refund.addEventListener("click", function () {
       var reason = prompt("退款原因", "体验不符");
       if (reason === null) return;
@@ -1734,6 +1881,7 @@ function consumerOrderActions(order, host, done) {
   }
   if (order.status === "SHIPPED") {
     var finish = h("button", { class: "btn mini", text: "确认收货" });
+    // 确认收货并刷新
     finish.addEventListener("click", function () {
       var r = finishOrder(order.id);
       setNotice(r.ok ? "订单已完成" : (r.error || "确认失败"), r.ok ? "ok" : "error");
@@ -1743,6 +1891,7 @@ function consumerOrderActions(order, host, done) {
   }
 }
 
+// 订单列表视图：状态徽标 + 每行可执行操作
 function ordersView() {
   var wrap = h("div");
   wrap.appendChild(titleBar("我的订单", "待支付、已支付、已发货、退款中（seed 3 单 + 新下单）。"));
@@ -1766,6 +1915,7 @@ function ordersView() {
     row.appendChild(h("td", { text: prettyTime(order.created_at) }));
     var actionCell = h("td");
     var detail = h("button", { class: "btn mini", text: "详情" });
+    // 跳转到订单详情
     detail.addEventListener("click", function () { go("/order/" + order.id); });
     actionCell.appendChild(detail);
     consumerOrderActions(order, actionCell, function () { renderRoute(); });
@@ -1778,6 +1928,7 @@ function ordersView() {
   return wrap;
 }
 
+// 订单明细面板（商品/SKU/单价/数量/小计）
 function orderItemsPanel(items) {
   var panel = h("section", { class: "panel" });
   panel.appendChild(h("h3", { text: "订单明细" }));
@@ -1799,6 +1950,7 @@ function orderItemsPanel(items) {
   return panel;
 }
 
+// 状态事件面板（事件/流转/操作人/备注/时间）
 function orderEventsPanel(items) {
   var panel = h("section", { class: "panel" });
   panel.appendChild(h("h3", { text: "状态事件" }));
@@ -1822,6 +1974,7 @@ function orderEventsPanel(items) {
   return panel;
 }
 
+// 库存锁面板（SKU/数量/状态/锁定时间）
 function orderLocksPanel(items) {
   var panel = h("section", { class: "panel" });
   panel.appendChild(h("h3", { text: "库存锁" }));
@@ -1842,6 +1995,87 @@ function orderLocksPanel(items) {
   return panel;
 }
 
+// 订单状态步骤条：主路径 CREATED→PAID→SHIPPED→FINISHED，CANCELLED 与 REFUNDING→REFUNDED 为分支态
+// （状态定义与合法迁移见 backend/internal/order/domain/order_status.go）
+function orderStatusPanel(order) {
+  var panel = h("section", { class: "panel" });
+  panel.appendChild(h("h3", { text: "订单状态流转" }));
+  var MAIN = [
+    { key: "CREATED", zh: "创建" },
+    { key: "PAID", zh: "支付" },
+    { key: "SHIPPED", zh: "发货" },
+    { key: "FINISHED", zh: "完成" },
+  ];
+  var idxOf = {};
+  MAIN.forEach(function (s, i) { idxOf[s.key] = i; });
+
+  var done = {}, current = null, chain = null, branchFrom = null;
+  var status = order.status;
+  if (status === "CANCELLED") {
+    // CREATED -> CANCELLED（终态，分支自 CREATED 之后）
+    done["CREATED"] = true;
+    chain = [{ key: "CANCELLED", zh: "已取消", cls: "branch-cancelled" }];
+    branchFrom = "CREATED";
+  } else if (status === "REFUNDING" || status === "REFUNDED") {
+    // PAID/SHIPPED -> REFUNDING -> REFUNDED（分支自退款申请时的已达状态之后）
+    var from = "PAID";
+    (order.events || []).forEach(function (e) {
+      if (e.event_type === "ORDER_REFUND_REQUESTED" && e.from_status && idxOf[e.from_status] != null) from = e.from_status;
+    });
+    var reached = idxOf[from];
+    for (var i = 0; i <= reached; i++) done[MAIN[i].key] = true;
+    branchFrom = from;
+    chain = status === "REFUNDED"
+      ? [{ key: "REFUNDING", zh: "退款中", cls: "branch-refunding" },
+         { key: "REFUNDED", zh: "已退款", cls: "branch-refunded" }]
+      : [{ key: "REFUNDING", zh: "退款中", cls: "branch-refunding" }];
+  } else if (idxOf[status] != null) {
+    var pos = idxOf[status];
+    for (var j = 0; j < pos; j++) done[MAIN[j].key] = true;
+    current = MAIN[pos];
+  } else {
+    current = MAIN[0];
+  }
+
+  var track = h("div", { class: "step-track" });
+  MAIN.forEach(function (s, i) {
+    var cls = done[s.key] ? "done" : (current && current.key === s.key ? "current" : "upcoming");
+    var node = h("div", { class: "step-node " + cls });
+    node.appendChild(h("div", { class: "step-dot", text: done[s.key] ? "✓" : (current && current.key === s.key ? String(i + 1) : "·") }));
+    node.appendChild(h("div", { class: "step-label", text: s.zh }));
+    node.appendChild(h("div", { class: "step-code", text: s.key }));
+    track.appendChild(node);
+    if (i < MAIN.length - 1) {
+      // 只有跨过该连接（下一节点已完成）才着色，分支态不会错误点亮未经过的路径
+      track.appendChild(h("div", { class: "step-link" + (done[MAIN[i + 1].key] ? " done" : "") }));
+    }
+  });
+  panel.appendChild(track);
+  // 分支态单独一行展示，避免在主路径末端引出误导性的虚线连接
+  if (chain) {
+    var note = status === "CANCELLED"
+      ? "分支态：CREATED → CANCELLED（终态，未进入支付）"
+      : (status === "REFUNDED"
+        ? "分支态：" + branchFrom + " → REFUNDING → REFUNDED（终态）"
+        : "分支态：" + branchFrom + " → REFUNDING（退款申请进行中）");
+    var branchRow = h("div", { class: "step-branch" });
+    branchRow.appendChild(h("span", { class: "step-branch-mark", text: "分支" }));
+    chain.forEach(function (b, i) {
+      if (i > 0) branchRow.appendChild(h("span", { class: "step-branch-arrow", text: "→" }));
+      var last = i === chain.length - 1;
+      var node = h("div", { class: "step-node branch " + b.cls + (last ? " current" : " done") });
+      node.appendChild(h("div", { class: "step-dot", text: last ? "!" : "✓" }));
+      node.appendChild(h("div", { class: "step-label", text: b.zh }));
+      node.appendChild(h("div", { class: "step-code", text: b.key }));
+      branchRow.appendChild(node);
+    });
+    branchRow.appendChild(h("div", { class: "step-branch-note muted", text: note }));
+    panel.appendChild(branchRow);
+  }
+  return panel;
+}
+
+// 订单详情视图：头部信息 + 状态步骤条 + 明细/事件/库存锁面板
 function orderDetailView(id) {
   var wrap = h("div");
   wrap.appendChild(titleBar("订单详情", "状态机、事件流和库存锁。"));
@@ -1856,6 +2090,7 @@ function orderDetailView(id) {
   consumerOrderActions(order, actions, function () { renderRoute(); });
   head.appendChild(actions);
   wrap.appendChild(head);
+  wrap.appendChild(orderStatusPanel(order));
   wrap.appendChild(orderItemsPanel(order.items));
   wrap.appendChild(orderEventsPanel(order.events));
   wrap.appendChild(orderLocksPanel(order.inventory_locks));
@@ -1864,6 +2099,7 @@ function orderDetailView(id) {
 
 /* ---------- 商家视图 ---------- */
 
+// 商家看板：指标卡 + 转化漏斗 + 商品表现表
 function dashboardView() {
   var wrap = h("div");
   wrap.appendChild(titleBar("经营看板", "漏斗、GMV 与商品表现（数值由 seed 行为事件按 service_dashboard.go 口径聚合）。"));
@@ -1881,19 +2117,24 @@ function dashboardView() {
 
   var funnelPanel = h("section", { class: "panel" });
   funnelPanel.appendChild(h("h3", { text: "转化漏斗（seed 行为事件）" }));
+  funnelPanel.appendChild(h("div", { class: "muted", text: "条形宽度与各阶段事件数成比例；转化率 = 当前阶段 ÷ 上一阶段（末行为退款率，相对支付数）。" }));
   var max = Math.max(f.note_views, f.product_clicks, f.add_to_cart, f.order_create, f.order_pay, f.order_refund, 1);
-  [
+  var stages = [
     ["NOTE_VIEW 浏览", f.note_views], ["PRODUCT_CLICK 点击", f.product_clicks],
     ["ADD_TO_CART 加购", f.add_to_cart], ["ORDER_CREATE 下单", f.order_create],
     ["ORDER_PAY 支付", f.order_pay], ["ORDER_REFUND 退款", f.order_refund],
-  ].forEach(function (row) {
+  ];
+  stages.forEach(function (row, i) {
     var pct = Math.round((row[1] / max) * 100);
+    var rate = "—";
+    if (i > 0 && stages[i - 1][1] > 0) rate = Math.round((row[1] / stages[i - 1][1]) * 100) + "%";
     var fr = h("div", { class: "funnel-row" });
     fr.appendChild(h("div", { class: "fk", text: row[0] }));
     var barWrap = h("div", { class: "bar" });
     barWrap.appendChild(h("div", { class: "bar-fill", style: "width:" + pct + "%" }));
     fr.appendChild(barWrap);
     fr.appendChild(h("div", { class: "fv", text: String(row[1]) }));
+    fr.appendChild(h("div", { class: "frate", text: i === 0 ? "—" : rate }));
     funnelPanel.appendChild(fr);
   });
   wrap.appendChild(funnelPanel);
@@ -1905,15 +2146,25 @@ function dashboardView() {
     h("th", { text: "商品" }), h("th", { text: "状态" }), h("th", { text: "曝光" }),
     h("th", { text: "点击" }), h("th", { text: "加购" }), h("th", { text: "下单" }),
     h("th", { text: "支付" }), h("th", { text: "退款" }), h("th", { text: "可售库存" }),
+    h("th", { text: "GMV 占比" }),
   ])]));
   var tbody = h("tbody");
   data.stats.forEach(function (item) {
+    var gmvShare = s.gmv_amount_cent > 0 ? Math.round((item.gmv_cent / s.gmv_amount_cent) * 100) : 0;
+    var gmvCell = h("td", { class: "gmv-cell" });
+    gmvCell.appendChild(h("div", { text: formatMoney(item.gmv_cent) + (s.gmv_amount_cent > 0 ? " · " + gmvShare + "%" : "") }));
+    if (s.gmv_amount_cent > 0 && item.gmv_cent > 0) {
+      var gmvBar = h("div", { class: "gmv-bar" });
+      gmvBar.appendChild(h("div", { class: "gmv-fill", style: "width:" + gmvShare + "%" }));
+      gmvCell.appendChild(gmvBar);
+    }
     tbody.appendChild(h("tr", {}, [
       h("td", { text: item.title }), h("td", { text: item.status }),
       h("td", { text: String(item.exposure) }), h("td", { text: String(item.clicks) }),
       h("td", { text: String(item.add_to_cart) }), h("td", { text: String(item.orders) }),
       h("td", { text: String(item.paid) }), h("td", { text: String(item.refunds) }),
       h("td", { text: String(item.available_stock) }),
+      gmvCell,
     ]));
   });
   table.appendChild(tbody);
@@ -1922,6 +2173,7 @@ function dashboardView() {
   return wrap;
 }
 
+// 商品管理只读列表：起售价、可售库存与 SKU 数
 function merchantProductsView() {
   var wrap = h("div");
   wrap.appendChild(titleBar("商品管理", "只读列表：起售价（最低 SKU 价）、可售库存（stock - locked_stock）与 SKU 数。"));
@@ -1949,6 +2201,7 @@ function merchantProductsView() {
 
 /* ---------- A2UI 智能导购面板 ---------- */
 
+// A2UI 导购面板：意图/上下文输入，生成导购页或问候卡片
 function a2uiView() {
   var wrap = h("div");
   wrap.appendChild(titleBar("A2UI 智能导购", "Agent-to-UI：输入意图与上下文，逐行输出 NDJSON 指令（createSurface / updateComponents / updateDataModel）并实时渲染卡片界面。"));
@@ -1966,13 +2219,16 @@ function a2uiView() {
   panel.appendChild(message);
 
   var loadExample = h("button", { class: "btn", text: "载入示例（宿舍 300 元）" });
+  // 载入示例意图与上下文
   loadExample.addEventListener("click", function () {
     intentInput.value = "布置 10 平米宿舍书桌，预算 300";
     contextInput.value = JSON.stringify({ budget: 30000, scene: "dorm_desk" });
   });
   var runGuide = h("button", { class: "btn primary", text: "生成导购页" });
+  // 生成导购页并流式渲染
   runGuide.addEventListener("click", function () { runA2UI("guide", intentInput, contextInput, message, output, surfaceHost); });
   var runGreeting = h("button", { class: "btn", text: "生成问候卡片" });
+  // 生成问候卡片并流式渲染
   runGreeting.addEventListener("click", function () { runA2UI("greeting", intentInput, contextInput, message, output, surfaceHost); });
   panel.appendChild(h("div", { class: "actions" }, [runGuide, runGreeting, loadExample]));
   wrap.appendChild(panel);
@@ -2014,6 +2270,7 @@ function runA2UI(mode, intentInput, contextInput, message, output, surfaceHost) 
   }
 
   var surface = makeSurface(surfaceId);
+  // surface 刷新钩子：按 root 组件与数据模型重绘
   surface.refresh = function () {
     surfaceHost.innerHTML = "";
     var root = surface.components.get("root");
@@ -2028,6 +2285,7 @@ function runA2UI(mode, intentInput, contextInput, message, output, surfaceHost) 
 
   var lineNames = ["createSurface", "updateComponents", "updateDataModel"];
   var idx = 0;
+  // 逐行输出 NDJSON 并应用：每行应用后刷新 surface，完成后渲染最终界面
   function emitNext() {
     if (idx >= built.lines.length) {
       statusLine.textContent = "✓ " + built.lines.length + " 条指令解析并应用，surface 已渲染（下方卡片）。";
@@ -2060,6 +2318,7 @@ function runA2UI(mode, intentInput, contextInput, message, output, surfaceHost) 
  * 9. boot（仅浏览器环境执行）
  * ===================================================================== */
 
+// 应用启动：构建顶栏/导航/主区域，渲染首屏并监听 hash 变化
 function boot() {
   appRoot = document.getElementById("app");
   var topbar = h("header", { class: "topbar" });
@@ -2075,6 +2334,7 @@ function boot() {
   appRoot.appendChild(layout);
   renderShell();
   renderRoute();
+  // hash 变化：重绘导航与路由视图
   window.addEventListener("hashchange", function () { renderShell(); renderRoute(); });
 }
 
