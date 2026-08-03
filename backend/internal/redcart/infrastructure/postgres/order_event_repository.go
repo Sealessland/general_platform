@@ -35,7 +35,7 @@ func appendOrderEvent(q dbQuerier, event domain.OrderEvent) (domain.OrderEvent, 
 		`INSERT INTO order_events (order_id, from_status, to_status, event_type, operator_id, operator_role, remark, created_at)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,COALESCE($8, CURRENT_TIMESTAMP))
 		RETURNING id, created_at`,
-		event.OrderID, nullableString(event.FromStatus), event.ToStatus, event.EventType, event.OperatorID, event.OperatorRole, event.Remark, nullTime(event.CreatedAt),
+		event.OrderID, nullableString(event.FromStatus), event.ToStatus, event.EventType, event.OperatorID, event.OperatorRole, event.Remark, timeToSQL(event.CreatedAt),
 	).Scan(&event.ID, &event.CreatedAt)
 	if err != nil {
 		return domain.OrderEvent{}, err

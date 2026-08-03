@@ -60,7 +60,7 @@ RETURNING id, created_at, updated_at`
 		if err := q.QueryRow(
 			query,
 			sku.ProductID, sku.SKUName, string(attrs), sku.PriceCent, sku.Stock, sku.LockedStock, sku.Status,
-			nullTime(sku.CreatedAt), nullTime(sku.UpdatedAt),
+			timeToSQL(sku.CreatedAt), timeToSQL(sku.UpdatedAt),
 		).Scan(&sku.ID, &sku.CreatedAt, &sku.UpdatedAt); err != nil {
 			return domain.SKU{}, err
 		}

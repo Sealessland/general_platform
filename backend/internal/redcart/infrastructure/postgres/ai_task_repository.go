@@ -20,7 +20,7 @@ func (r *Repository) CreateAITask(task domain.AIGenerationTask) (domain.AIGenera
 		`INSERT INTO ai_generation_tasks (user_id, merchant_id, task_type, input_json, output_json, status, error_message, created_at, updated_at)
 		VALUES ($1,$2,$3,$4::jsonb,$5::jsonb,$6,$7,COALESCE($8, CURRENT_TIMESTAMP),COALESCE($9, CURRENT_TIMESTAMP))
 		RETURNING id, created_at, updated_at`,
-		nullInt64(task.UserID), nullInt64(task.MerchantID), task.TaskType, string(inputJSON), nullableJSON(outputJSON), task.Status, task.ErrorMessage, nullTime(task.CreatedAt), nullTime(task.UpdatedAt),
+		nullInt64(task.UserID), nullInt64(task.MerchantID), task.TaskType, string(inputJSON), nullableJSON(outputJSON), task.Status, task.ErrorMessage, timeToSQL(task.CreatedAt), timeToSQL(task.UpdatedAt),
 	).Scan(&task.ID, &task.CreatedAt, &task.UpdatedAt)
 	if err != nil {
 		return domain.AIGenerationTask{}, err

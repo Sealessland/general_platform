@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -316,20 +317,5 @@ func isDeadlock(err error) bool {
 	if err == nil {
 		return false
 	}
-	return contains(err.Error(), "deadlock") || contains(err.Error(), "40P01")
-}
-
-// contains 判断字符串 s 是否包含子串 substr（大小写敏感的简单子串匹配）。
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsInternal(s, substr))
-}
-
-// containsInternal 子串查找的核心循环实现。
-func containsInternal(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
+	return strings.Contains(err.Error(), "deadlock") || strings.Contains(err.Error(), "40P01")
 }

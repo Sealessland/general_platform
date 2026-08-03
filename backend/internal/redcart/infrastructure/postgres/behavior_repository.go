@@ -11,7 +11,7 @@ func (r *Repository) AppendBehaviorEvent(event domain.BehaviorEvent) (domain.Beh
 		`INSERT INTO behavior_events (user_id, event_type, note_id, product_id, sku_id, order_id, merchant_id, created_at)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,COALESCE($8, CURRENT_TIMESTAMP))
 		RETURNING id, created_at`,
-		nullInt64(event.UserID), event.EventType, nullInt64(event.NoteID), nullInt64(event.ProductID), nullInt64(event.SKUID), nullInt64(event.OrderID), nullInt64(event.MerchantID), nullTime(event.CreatedAt),
+		nullInt64(event.UserID), event.EventType, nullInt64(event.NoteID), nullInt64(event.ProductID), nullInt64(event.SKUID), nullInt64(event.OrderID), nullInt64(event.MerchantID), timeToSQL(event.CreatedAt),
 	).Scan(&event.ID, &event.CreatedAt)
 	if err != nil {
 		return domain.BehaviorEvent{}, err

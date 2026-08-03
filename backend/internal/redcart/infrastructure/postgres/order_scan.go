@@ -8,9 +8,9 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 )
 
-// nullTimeValue 把 *time.Time 指针转换为 sql.NullTime，
-// 用于 UPDATE 语句向可空时间列写回值。
-func nullTimeValue(t *time.Time) sql.NullTime {
+// toNullTime 把 *time.Time 指针转换为 sql.NullTime，
+// 用于 UPDATE 语句向可空时间列写回值；nil 指针转换为无效 NullTime（NULL）。
+func toNullTime(t *time.Time) sql.NullTime {
 	if t == nil {
 		return sql.NullTime{}
 	}
@@ -37,10 +37,10 @@ func scanOrder(scanner orderScanner) (domain.Order, error) {
 		return domain.Order{}, err
 	}
 	order.Status = orderdomain.OrderStatus(status)
-	order.PaidAt = nullTimePtr(paidAt)
-	order.CancelledAt = nullTimePtr(cancelledAt)
-	order.ShippedAt = nullTimePtr(shippedAt)
-	order.FinishedAt = nullTimePtr(finishedAt)
+	order.PaidAt = timeFromSQL(paidAt)
+	order.CancelledAt = timeFromSQL(cancelledAt)
+	order.ShippedAt = timeFromSQL(shippedAt)
+	order.FinishedAt = timeFromSQL(finishedAt)
 	return order, nil
 }
 
@@ -57,7 +57,7 @@ func scanInventoryLock(scanner inventoryLockScanner) (domain.InventoryLock, erro
 	if err != nil {
 		return domain.InventoryLock{}, err
 	}
-	lock.ConfirmedAt = nullTimePtr(confirmedAt)
-	lock.ReleasedAt = nullTimePtr(releasedAt)
+	lock.ConfirmedAt = timeFromSQL(confirmedAt)
+	lock.ReleasedAt = timeFromSQL(releasedAt)
 	return lock, nil
 }

@@ -59,8 +59,8 @@ RETURNING id, created_at, updated_at`
 			product.CategoryID,
 			product.Status,
 			string(payload),
-			nullTime(product.CreatedAt),
-			nullTime(product.UpdatedAt),
+			timeToSQL(product.CreatedAt),
+			timeToSQL(product.UpdatedAt),
 		).Scan(&product.ID, &product.CreatedAt, &product.UpdatedAt); err != nil {
 			return domain.Product{}, err
 		}

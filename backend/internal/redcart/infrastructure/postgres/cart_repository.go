@@ -43,7 +43,7 @@ INSERT INTO cart_items (cart_id, user_id, product_id, sku_id, quantity, selected
 VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, CURRENT_TIMESTAMP), COALESCE($8, CURRENT_TIMESTAMP))
 RETURNING id, created_at, updated_at`
 		if err := r.db.QueryRow(
-			query, nil, item.UserID, item.ProductID, item.SKUID, item.Quantity, item.Selected, nullTime(item.CreatedAt), nullTime(item.UpdatedAt),
+			query, nil, item.UserID, item.ProductID, item.SKUID, item.Quantity, item.Selected, timeToSQL(item.CreatedAt), timeToSQL(item.UpdatedAt),
 		).Scan(&item.ID, &item.CreatedAt, &item.UpdatedAt); err != nil {
 			return domain.CartItem{}, err
 		}

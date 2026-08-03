@@ -3,6 +3,7 @@ package postgres
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -17,6 +18,23 @@ type scanFunc func(dest ...any) error
 // Scan 将函数适配为本地 scanner 接口，供扫描辅助函数的单元测试使用。
 func (f scanFunc) Scan(dest ...any) error {
 	return f(dest...)
+}
+
+// sqlResult 是 sql.Result 的内存模拟实现，供单元测试验证 Exec 影响行数；
+// 真实数据库读写无需实例化它。PostgreSQL 不支持自增主键回读，
+// LastInsertId 一律返回错误。
+type sqlResult struct {
+	rowsAffected int64
+}
+
+// LastInsertId 不支持自增主键回读，一律返回错误。
+func (r sqlResult) LastInsertId() (int64, error) {
+	return 0, fmt.Errorf("last insert id is not supported")
+}
+
+// RowsAffected 返回影响行数。
+func (r sqlResult) RowsAffected() (int64, error) {
+	return r.rowsAffected, nil
 }
 
 // 验证各 scan* 辅助函数能正确解码模拟的数据库行。
@@ -199,21 +217,27 @@ func TestScanHelpersReturnScannerErrors(t *testing.T) {
 	}
 }
 
-// 验证 NULL 转换辅助函数、gormResult 与迁移目录解析逻辑。
+// 验证 NULL 转换辅助函数、sqlResult 与迁移目录解析逻辑。
 func TestPostgresNullableHelpersAndMigrationResolution(t *testing.T) {
 	now := time.Date(2026, 6, 6, 10, 0, 0, 0, time.UTC)
 
-	if nullTimePtr(sql.NullTime{}) != nil {
+	if timeFromSQL(sql.NullTime{}) != nil {
 		t.Fatal("expected invalid sql null time to become nil")
 	}
-	if got := nullTimePtr(sql.NullTime{Time: now, Valid: true}); got == nil || !got.Equal(now) {
+	if got := timeFromSQL(sql.NullTime{Time: now, Valid: true}); got == nil || !got.Equal(now) {
 		t.Fatalf("expected valid sql null time pointer, got %v", got)
 	}
-	if nullTime(time.Time{}) != nil {
+	if timeToSQL(time.Time{}) != nil {
 		t.Fatal("expected zero time to become nil")
 	}
-	if nullTime(now) != now {
+	if timeToSQL(now) != now {
 		t.Fatal("expected non-zero time to pass through")
+	}
+	if toNullTime(nil) != (sql.NullTime{}) {
+		t.Fatal("expected nil pointer to become invalid null time")
+	}
+	if got := toNullTime(&now); !got.Valid || !got.Time.Equal(now) {
+		t.Fatalf("expected valid null time from pointer, got %v", got)
 	}
 	if nullableString("") != nil || nullableString("x") != "x" {
 		t.Fatal("unexpected nullable string result")
@@ -225,7 +249,7 @@ func TestPostgresNullableHelpersAndMigrationResolution(t *testing.T) {
 		t.Fatal("unexpected nullable json result")
 	}
 
-	result := gormResult{rowsAffected: 3}
+	result := sqlResult{rowsAffected: 3}
 	if rows, err := result.RowsAffected(); err != nil || rows != 3 {
 		t.Fatalf("expected rows affected, got rows=%d err=%v", rows, err)
 	}

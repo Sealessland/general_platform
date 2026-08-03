@@ -154,21 +154,21 @@ func (s *outboxStore) MarkFailed(ctx context.Context, id int64, reason string) e
 
 // BeginTx 开启底层数据库事务并包装为 event.OutboxTx。
 func (s *outboxStore) BeginTx(ctx context.Context) (event.OutboxTx, error) {
-	sqlDB, ok := s.db.(*gormSQL)
+	stdDB, ok := s.db.(*sqlDB)
 	if !ok {
-		return nil, fmt.Errorf("outbox BeginTx: underlying db must be *gormSQL")
+		return nil, fmt.Errorf("outbox BeginTx: underlying db must be *sqlDB")
 	}
-	tx, err := sqlDB.Begin()
+	tx, err := stdDB.Begin()
 	if err != nil {
 		return nil, fmt.Errorf("begin outbox tx: %w", err)
 	}
 	return &outboxTx{tx: tx}, nil
 }
 
-// outboxTx 是事务版 outbox 存储的适配器，把 *gormTx 包装为 event.OutboxTx，
+// outboxTx 是事务版 outbox 存储的适配器，把 *sqlTx 包装为 event.OutboxTx，
 // 使事件投递能与业务数据变更在同一事务中提交。
 type outboxTx struct {
-	tx *gormTx
+	tx *sqlTx
 }
 
 // Commit 提交 outbox 事务。

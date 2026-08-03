@@ -17,8 +17,8 @@ RETURNING id, created_at, updated_at`
 		merchant.Name,
 		merchant.Description,
 		merchant.Status,
-		nullTime(merchant.CreatedAt),
-		nullTime(merchant.UpdatedAt),
+		timeToSQL(merchant.CreatedAt),
+		timeToSQL(merchant.UpdatedAt),
 	).Scan(&merchant.ID, &merchant.CreatedAt, &merchant.UpdatedAt); err != nil {
 		return domain.Merchant{}, err
 	}

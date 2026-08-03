@@ -18,8 +18,8 @@ RETURNING id, created_at, updated_at`
 		user.Phone,
 		user.PasswordHash,
 		user.Role,
-		nullTime(user.CreatedAt),
-		nullTime(user.UpdatedAt),
+		timeToSQL(user.CreatedAt),
+		timeToSQL(user.UpdatedAt),
 	).Scan(&user.ID, &user.CreatedAt, &user.UpdatedAt); err != nil {
 		return domain.User{}, err
 	}

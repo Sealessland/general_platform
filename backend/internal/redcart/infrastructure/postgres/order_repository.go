@@ -62,7 +62,7 @@ func (r *Repository) SaveOrder(order domain.Order) (domain.Order, error) {
 			RETURNING id, created_at, updated_at`,
 			order.OrderNo, order.UserID, order.MerchantID, string(order.Status), order.TotalAmountCent, order.PayAmountCent, order.DiscountAmountCent, order.IdempotencyKey,
 			order.ReceiverName, order.ReceiverPhone, order.ReceiverAddress, order.PaidAt, order.CancelledAt, order.ShippedAt, order.FinishedAt,
-			nullTime(order.CreatedAt), nullTime(order.UpdatedAt),
+			timeToSQL(order.CreatedAt), timeToSQL(order.UpdatedAt),
 		).Scan(&order.ID, &order.CreatedAt, &order.UpdatedAt)
 		if err != nil {
 			return domain.Order{}, err
@@ -76,7 +76,7 @@ func (r *Repository) SaveOrder(order domain.Order) (domain.Order, error) {
 				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,COALESCE($9, CURRENT_TIMESTAMP),COALESCE($10, CURRENT_TIMESTAMP))
 				RETURNING id, created_at, updated_at`,
 				item.OrderID, item.ProductID, item.SKUID, item.ProductTitleSnapshot, item.SKUNameSnapshot, item.PriceCentSnapshot, item.Quantity, item.TotalAmountCent,
-				nullTime(item.CreatedAt), nullTime(item.UpdatedAt),
+				timeToSQL(item.CreatedAt), timeToSQL(item.UpdatedAt),
 			).Scan(&item.ID, &item.CreatedAt, &item.UpdatedAt); err != nil {
 				return domain.Order{}, err
 			}
@@ -150,7 +150,7 @@ func (r *Repository) SaveOrderWithInventoryLocks(order domain.Order, locks []dom
 		RETURNING id, created_at, updated_at`,
 		order.OrderNo, order.UserID, order.MerchantID, string(order.Status), order.TotalAmountCent, order.PayAmountCent, order.DiscountAmountCent, order.IdempotencyKey,
 		order.ReceiverName, order.ReceiverPhone, order.ReceiverAddress, order.PaidAt, order.CancelledAt, order.ShippedAt, order.FinishedAt,
-		nullTime(order.CreatedAt), nullTime(order.UpdatedAt),
+		timeToSQL(order.CreatedAt), timeToSQL(order.UpdatedAt),
 	).Scan(&order.ID, &order.CreatedAt, &order.UpdatedAt)
 	if err != nil {
 		return domain.Order{}, err
@@ -164,7 +164,7 @@ func (r *Repository) SaveOrderWithInventoryLocks(order domain.Order, locks []dom
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,COALESCE($9, CURRENT_TIMESTAMP),COALESCE($10, CURRENT_TIMESTAMP))
 			RETURNING id, created_at, updated_at`,
 			item.OrderID, item.ProductID, item.SKUID, item.ProductTitleSnapshot, item.SKUNameSnapshot, item.PriceCentSnapshot, item.Quantity, item.TotalAmountCent,
-			nullTime(item.CreatedAt), nullTime(item.UpdatedAt),
+			timeToSQL(item.CreatedAt), timeToSQL(item.UpdatedAt),
 		).Scan(&item.ID, &item.CreatedAt, &item.UpdatedAt); err != nil {
 			return domain.Order{}, err
 		}
@@ -176,7 +176,7 @@ func (r *Repository) SaveOrderWithInventoryLocks(order domain.Order, locks []dom
 			`INSERT INTO inventory_locks (order_id, sku_id, quantity, status, locked_at, confirmed_at, released_at, created_at, updated_at)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,COALESCE($8, CURRENT_TIMESTAMP),COALESCE($9, CURRENT_TIMESTAMP))
 			RETURNING id, created_at, updated_at`,
-			order.ID, lock.SKUID, lock.Quantity, lock.Status, lock.LockedAt, lock.ConfirmedAt, lock.ReleasedAt, nullTime(lock.CreatedAt), nullTime(lock.UpdatedAt),
+			order.ID, lock.SKUID, lock.Quantity, lock.Status, lock.LockedAt, lock.ConfirmedAt, lock.ReleasedAt, timeToSQL(lock.CreatedAt), timeToSQL(lock.UpdatedAt),
 		).Scan(&lock.ID, &lock.CreatedAt, &lock.UpdatedAt); err != nil {
 			return domain.Order{}, err
 		}
@@ -192,7 +192,7 @@ func (r *Repository) SaveOrderWithInventoryLocks(order domain.Order, locks []dom
 // pgOrderTx 把底层 SQL 事务适配为 application.OrderTx，使订单状态流转的
 // 副作用（库存确认/释放、事件追加、outbox 记录）能与状态更新在同一事务内提交。
 type pgOrderTx struct {
-	tx *gormTx
+	tx *sqlTx
 }
 
 // GetSKU 在事务内按 ID 查询 SKU。
@@ -267,7 +267,7 @@ func (r *Repository) UpdateOrderStatus(orderID int64, fromStatus, toStatus strin
 		WHERE id = $13 AND status = $14`,
 		order.Status, order.TotalAmountCent, order.PayAmountCent, order.DiscountAmountCent,
 		order.ReceiverName, order.ReceiverPhone, order.ReceiverAddress,
-		nullTimeValue(order.PaidAt), nullTimeValue(order.CancelledAt), nullTimeValue(order.ShippedAt), nullTimeValue(order.FinishedAt),
+		toNullTime(order.PaidAt), toNullTime(order.CancelledAt), toNullTime(order.ShippedAt), toNullTime(order.FinishedAt),
 		order.UpdatedAt, order.ID, fromStatus,
 	)
 	if err != nil {

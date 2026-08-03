@@ -21,30 +21,25 @@ import (
 // Repository 实现 application.Repository 接口，持有连接池、outbox 存储
 // 与进程内的会话（token）表；redcart 各业务聚合的数据读写最终都落到这里。
 type Repository struct {
-	db     *gormSQL
-	gormDB *gorm.DB
-	sqlDB  *sql.DB
+	db     *sqlDB   // 查询辅助函数（dbQuerier）共用的标准库 database/sql 句柄
+	gormDB *gorm.DB // GORM 句柄，仅用于 schema 迁移与种子数据
+	rawDB  *sql.DB  // 原生连接池，用于连接配置与 Close
 	Outbox *outboxStore
 
 	sessionMu sync.RWMutex
 	sessions  map[string]sessionEntry
 }
 
-// gormSQL 是 *sql.DB 的薄封装，仅为让仓储与事务共享同一套查询辅助函数
-// （dbQuerier）。名字中的 gorm 是历史遗留：这里实际操作的是标准库 database/sql。
-type gormSQL struct {
+// sqlDB 是标准库 database/sql 的 *sql.DB 薄封装，仅为让仓储与事务共享
+// 同一套查询辅助函数（dbQuerier）。GORM 只负责打开连接与迁移/种子，
+// 这里实际操作的始终是 database/sql。
+type sqlDB struct {
 	db *sql.DB
 }
 
-// gormTx 与 gormSQL 类似，是 *sql.Tx 的封装，让查询辅助函数在事务内也能复用。
-type gormTx struct {
+// sqlTx 与 sqlDB 类似，是 *sql.Tx 的封装，让查询辅助函数在事务内也能复用。
+type sqlTx struct {
 	tx *sql.Tx
-}
-
-// gormResult 模拟 sql.Result 供无法获得真实 Exec 结果的场景（如单元测试）使用；
-// PostgreSQL 不支持自增主键回读，LastInsertId 一律返回错误。
-type gormResult struct {
-	rowsAffected int64
 }
 
 // sessionEntry 记录内存会话的归属用户与其 token 类型（访问/刷新）。
@@ -61,66 +56,56 @@ type dbQuerier interface {
 	Exec(query string, args ...any) (sql.Result, error)
 }
 
-var _ dbQuerier = (*gormSQL)(nil)
-var _ dbQuerier = (*gormTx)(nil)
+var _ dbQuerier = (*sqlDB)(nil)
+var _ dbQuerier = (*sqlTx)(nil)
 
 // QueryRow 执行单行查询。
-func (g *gormSQL) QueryRow(query string, args ...any) *sql.Row {
-	return g.db.QueryRow(query, args...)
+func (s *sqlDB) QueryRow(query string, args ...any) *sql.Row {
+	return s.db.QueryRow(query, args...)
 }
 
 // Query 执行多行查询。
-func (g *gormSQL) Query(query string, args ...any) (*sql.Rows, error) {
-	return g.db.Query(query, args...)
+func (s *sqlDB) Query(query string, args ...any) (*sql.Rows, error) {
+	return s.db.Query(query, args...)
 }
 
 // Exec 执行写操作。
-func (g *gormSQL) Exec(query string, args ...any) (sql.Result, error) {
-	return g.db.Exec(query, args...)
+func (s *sqlDB) Exec(query string, args ...any) (sql.Result, error) {
+	return s.db.Exec(query, args...)
 }
 
-// Begin 开启数据库事务并包装为 gormTx。
-func (g *gormSQL) Begin() (*gormTx, error) {
-	tx, err := g.db.Begin()
+// Begin 开启数据库事务并包装为 sqlTx。
+func (s *sqlDB) Begin() (*sqlTx, error) {
+	tx, err := s.db.Begin()
 	if err != nil {
 		return nil, err
 	}
-	return &gormTx{tx: tx}, nil
+	return &sqlTx{tx: tx}, nil
 }
 
 // QueryRow 在事务内执行单行查询。
-func (tx *gormTx) QueryRow(query string, args ...any) *sql.Row {
+func (tx *sqlTx) QueryRow(query string, args ...any) *sql.Row {
 	return tx.tx.QueryRow(query, args...)
 }
 
 // Query 在事务内执行多行查询。
-func (tx *gormTx) Query(query string, args ...any) (*sql.Rows, error) {
+func (tx *sqlTx) Query(query string, args ...any) (*sql.Rows, error) {
 	return tx.tx.Query(query, args...)
 }
 
 // Exec 在事务内执行写操作。
-func (tx *gormTx) Exec(query string, args ...any) (sql.Result, error) {
+func (tx *sqlTx) Exec(query string, args ...any) (sql.Result, error) {
 	return tx.tx.Exec(query, args...)
 }
 
 // Commit 提交事务。
-func (tx *gormTx) Commit() error {
+func (tx *sqlTx) Commit() error {
 	return tx.tx.Commit()
 }
 
 // Rollback 回滚事务。
-func (tx *gormTx) Rollback() error {
+func (tx *sqlTx) Rollback() error {
 	return tx.tx.Rollback()
-}
-
-// LastInsertId 不支持自增主键回读，一律返回错误。
-func (r gormResult) LastInsertId() (int64, error) {
-	return 0, fmt.Errorf("last insert id is not supported")
-}
-
-// RowsAffected 返回影响行数。
-func (r gormResult) RowsAffected() (int64, error) {
-	return r.rowsAffected, nil
 }
 
 var _ application.Repository = (*Repository)(nil)
@@ -132,34 +117,34 @@ func NewRepository(dsn string) (*Repository, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open postgres with gorm: %w", err)
 	}
-	sqlDB, err := db.DB()
+	rawDB, err := db.DB()
 	if err != nil {
 		return nil, fmt.Errorf("get postgres sql db from gorm: %w", err)
 	}
-	sqlDB.SetMaxOpenConns(poolMaxOpenConns())
-	sqlDB.SetMaxIdleConns(poolMaxIdleConns())
-	sqlDB.SetConnMaxLifetime(poolConnMaxLifetime())
+	rawDB.SetMaxOpenConns(poolMaxOpenConns())
+	rawDB.SetMaxIdleConns(poolMaxIdleConns())
+	rawDB.SetConnMaxLifetime(poolConnMaxLifetime())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := sqlDB.PingContext(ctx); err != nil {
-		_ = sqlDB.Close()
+	if err := rawDB.PingContext(ctx); err != nil {
+		_ = rawDB.Close()
 		return nil, fmt.Errorf("ping postgres: %w", err)
 	}
 
 	repo := &Repository{
-		db:       &gormSQL{db: sqlDB},
+		db:       &sqlDB{db: rawDB},
 		gormDB:   db,
-		sqlDB:    sqlDB,
-		Outbox:   newOutboxStore(&gormSQL{db: sqlDB}),
+		rawDB:    rawDB,
+		Outbox:   newOutboxStore(&sqlDB{db: rawDB}),
 		sessions: make(map[string]sessionEntry),
 	}
 	if err := repo.migrate(ctx); err != nil {
-		_ = sqlDB.Close()
+		_ = rawDB.Close()
 		return nil, err
 	}
 	if err := repo.seed(ctx); err != nil {
-		_ = sqlDB.Close()
+		_ = rawDB.Close()
 		return nil, err
 	}
 	return repo, nil
@@ -167,7 +152,7 @@ func NewRepository(dsn string) (*Repository, error) {
 
 // Close 关闭底层数据库连接池。
 func (r *Repository) Close() error {
-	return r.sqlDB.Close()
+	return r.rawDB.Close()
 }
 
 // queryUser 执行用户单行查询并解码为 domain.User。
@@ -188,7 +173,9 @@ func (r *Repository) queryMerchant(query string, arg any) (domain.Merchant, erro
 
 // 以下一组辅助函数用于 Go 零值与 SQL NULL 之间的双向转换，
 // 避免在业务代码里到处判断空值：零值（0/空串/零时间）一律落 NULL。
-func nullTimePtr(value sql.NullTime) *time.Time {
+//
+// timeFromSQL 将数据库读出的 sql.NullTime 转为 *time.Time，NULL（无效值）转为 nil 指针。
+func timeFromSQL(value sql.NullTime) *time.Time {
 	if !value.Valid {
 		return nil
 	}
@@ -196,8 +183,8 @@ func nullTimePtr(value sql.NullTime) *time.Time {
 	return &result
 }
 
-// nullTime 将零值时间转为 nil（NULL），非零时间原样返回。
-func nullTime(value time.Time) any {
+// timeToSQL 将零值时间转为 SQL NULL（nil）写参，非零时间原样返回。
+func timeToSQL(value time.Time) any {
 	if value.IsZero() {
 		return nil
 	}
