@@ -1,9 +1,12 @@
+// 构建脚本：读取 src/app.ts，剥离 TS 类型后内联进 HTML 模板，产出单文件 dist/index.html。
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
 mkdirSync("dist", { recursive: true });
 
 const source = readFileSync("src/app.ts", "utf8");
 
+// 用正则剥离 TS 类型语法（interface/type/export），使源码可在浏览器直接执行；
+// 依赖的类型声明均以分号或右花括号收尾、且内部不出现同名结构的约定。
 function stripTs(src) {
   return src
     .replace(/export\s+interface\s+\w+\s*{[\s\S]*?}\s*/g, "")

@@ -8,8 +8,11 @@ from app.grpc_server import build_server
 
 
 class TestAIGenerationGRPCServer(unittest.TestCase):
+    """通过真实 gRPC server（随机端口）做端到端验证：正常路径 + 参数校验映射。"""
+
     @classmethod
     def setUpClass(cls) -> None:
+        # 用临时端口启动 server，避免与本地已运行实例冲突。
         cls.server = build_server()
         cls.port = cls.server.add_insecure_port("[::]:0")
         cls.server.start()

@@ -24,6 +24,7 @@
 - `ci/scripts/check-openapi.sh`：OpenAPI 契约快速检查
 - `ci/scripts/scan-secrets.sh`：密钥泄露扫描
 - `ci/scripts/validate-workspace.sh`：仓库结构验证
+- `ci/scripts/update-benchmark-readme.py`：解析 Go benchmark 输出并更新 README 性能表（由 `.github/workflows/benchmark.yml` 调用）
 
 ## 设计原则
 

@@ -1,3 +1,4 @@
+// 契约测试：基于源码文本做正则断言，锁定关键契约字符串，防止契约被无意改动。
 import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 

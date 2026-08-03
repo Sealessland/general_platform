@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# worktree 生命周期管理：创建/列出/查询路径/移除/清理，并在变动后刷新本地分支状态板。
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_NAME="$(basename "$ROOT_DIR")"
+# worktree 统一放在 /tmp 下，可用环境变量 WORKTREE_BASE 覆盖基目录
 WORKTREE_BASE="${WORKTREE_BASE:-/tmp}"
+# 分支/工作区变动后以 fast 模式刷新状态板（fast 只做本地 git 汇总，不做 AI 摘要）
 STATUS_SCRIPT="$ROOT_DIR/scripts/update-branch-status.py"
 
 usage() {
@@ -17,10 +20,12 @@ Usage:
 EOF
 }
 
+# 将分支名中的 '/' 与 ':' 归一化为 '-'，避免在路径中产生额外层级
 slugify_branch() {
   printf '%s' "$1" | tr '/:' '--'
 }
 
+# 分支对应的 worktree 路径：$WORKTREE_BASE/<仓库名>-<分支 slug>
 worktree_path_for_branch() {
   local branch="$1"
   printf '%s/%s-%s\n' "$WORKTREE_BASE" "$REPO_NAME" "$(slugify_branch "$branch")"
@@ -36,6 +41,7 @@ cmd_create() {
   fi
 
   path="$(worktree_path_for_branch "$branch")"
+  # 分支已存在则直接检出到新 worktree，否则基于 start_point 新建分支
   if git -C "$ROOT_DIR" show-ref --verify --quiet "refs/heads/$branch"; then
     git -C "$ROOT_DIR" worktree add "$path" "$branch"
   else

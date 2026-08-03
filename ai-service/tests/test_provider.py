@@ -4,6 +4,7 @@ from app.provider import BusinessReviewRequest, MockAIProvider, SellingPointRequ
 
 
 class MockAIProviderTest(unittest.TestCase):
+    """MockAIProvider 单元测试：覆盖正常生成与非法入参（ValueError）两条路径。"""
     def test_generate_selling_points(self) -> None:
         provider = MockAIProvider()
         points = provider.generate_selling_points(

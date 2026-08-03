@@ -9,10 +9,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 README = ROOT / "README.md"
 
+# 匹配 go test -bench 的输出行，例如:
+# BenchmarkHTTPPostgresOrderPreview-12  100  2000000 ns/op  123 B/op  4 allocs/op
 BENCH_RE = re.compile(
     r"^(Benchmark\w+)-\d+\s+(\d+)\s+([\d.]+)\s+ns/op\s+([\d.]+)\s+B/op\s+([\d.]+)\s+allocs/op"
 )
 
+# 白名单：只允许真实运行时/中间件依赖（PostgreSQL、RabbitMQ、live HTTP）的基准，
+# 内存仓储、空 publisher 或模拟延迟 benchmark 不允许进入 README 性能表
 ALLOWED_BENCHMARKS = {
     "BenchmarkHTTPPostgresOrderPreview",
     "BenchmarkHTTPPostgresCreateOrder",
@@ -26,6 +30,7 @@ ALLOWED_BENCHMARKS = {
 
 
 def format_qps(ns_per_op: float) -> str:
+    # 将 ns/op 换算为 QPS，并按数量级格式化为 M/K 单位便于阅读
     qps = 1_000_000_000.0 / ns_per_op
     if qps >= 1_000_000:
         return f"{qps / 1_000_000:.2f}M"
@@ -41,6 +46,7 @@ def parse_benchmarks(text: str) -> list[dict]:
         if not match:
             continue
         name, _, ns, b, allocs = match.groups()
+        # 白名单之外的一律拒绝，防止本地调试基准污染性能表
         if name not in ALLOWED_BENCHMARKS:
             raise ValueError(f"refusing non-runtime benchmark result: {name}")
         results.append(
@@ -58,6 +64,8 @@ def parse_benchmarks(text: str) -> list[dict]:
 
 def parse_existing_table(content: str) -> dict[str, float]:
     """Extract QPS numbers from the existing README performance table."""
+    # 解析当前 README 中的性能表（| Benchmark | QPS | ... 与 | `xxx` | ... 行），
+    # 用于计算与上次结果的环比变化
     old = {}
     in_table = False
     for line in content.splitlines():
@@ -125,6 +133,8 @@ def render_table(results: list[dict]) -> str:
 
 
 def update_readme(table_markdown: str) -> None:
+    # 用一对标记（BENCHMARK_RESULTS_START/END）定位并替换 README 中的性能表区块；
+    # 若标记不存在则先在文件末尾初始化
     start_marker = "<!-- BENCHMARK_RESULTS_START -->\n"
     end_marker = "\n<!-- BENCHMARK_RESULTS_END -->"
 

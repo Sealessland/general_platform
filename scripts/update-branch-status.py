@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Generate a local branch/worktree status file for the primary workspace."""
+"""Generate a local branch/worktree status file for the primary workspace.
+
+生成主工作区（主仓库，而非 worktree）的本地分支状态文件 BRANCH_STATUS.local.md。
+"""
 
 from __future__ import annotations
 
@@ -11,11 +14,13 @@ import textwrap
 from datetime import datetime, timezone
 from pathlib import Path
 
+# 状态文件固定写入主工作区根目录；MAX_CONTEXT_CHARS 截断喂给 AI 的 git 上下文
 STATUS_FILE = "BRANCH_STATUS.local.md"
 MAX_CONTEXT_CHARS = 16000
 
 
 def run(args: list[str], cwd: Path) -> str:
+    """执行命令并返回 stdout；返回码非零时抛错。"""
     proc = subprocess.run(
         args,
         cwd=str(cwd),
@@ -35,6 +40,7 @@ def maybe_run(
     input_text: str | None = None,
     timeout: int = 120,
 ) -> tuple[bool, str]:
+    """尽力执行命令（带超时与可选 stdin）；返回 (是否成功, 合并后的输出)。"""
     proc = subprocess.run(
         args,
         cwd=str(cwd),
@@ -49,16 +55,19 @@ def maybe_run(
 
 
 def tool_args(args: list[str]) -> list[str]:
+    """本仓库约定经 rtk 包装执行命令；环境无 rtk 时直接执行。"""
     if shutil.which("rtk"):
         return ["rtk", *args]
     return args
 
 
 def repo_root(cwd: Path) -> Path:
+    """返回仓库顶层目录（git rev-parse --show-toplevel）。"""
     return Path(run(["git", "rev-parse", "--show-toplevel"], cwd).strip())
 
 
 def common_git_dir(cwd: Path) -> Path:
+    """返回共享 git 目录（--git-common-dir），在 worktree 中也能定位主仓库元数据。"""
     raw = run(["git", "rev-parse", "--git-common-dir"], cwd).strip()
     path = Path(raw)
     if not path.is_absolute():
@@ -67,10 +76,12 @@ def common_git_dir(cwd: Path) -> Path:
 
 
 def primary_root(cwd: Path) -> Path:
+    """主工作区根目录 = 共享 git 目录的父目录（主仓库，而非当前 worktree）。"""
     return common_git_dir(cwd).parent
 
 
 def ensure_local_exclude(cwd: Path, pattern: str) -> None:
+    """把 pattern 追加到 .git/info/exclude，使生成的状态文件不被 git 追踪。"""
     exclude_path = common_git_dir(cwd) / "info" / "exclude"
     existing = exclude_path.read_text(encoding="utf-8") if exclude_path.exists() else ""
     lines = [line.strip() for line in existing.splitlines()]
@@ -83,6 +94,7 @@ def ensure_local_exclude(cwd: Path, pattern: str) -> None:
 
 
 def worktrees(cwd: Path) -> list[dict[str, str]]:
+    """解析 git worktree list --porcelain，返回每个 worktree 的键值对字典。"""
     blocks = run(["git", "worktree", "list", "--porcelain"], cwd).strip().split("\n\n")
     out: list[dict[str, str]] = []
     for block in blocks:
@@ -97,6 +109,7 @@ def worktrees(cwd: Path) -> list[dict[str, str]]:
 
 
 def branch_rows(cwd: Path) -> list[dict[str, str]]:
+    """列出本地分支（按最近提交时间倒序），返回分支/日期/sha/主题。"""
     output = run(
         [
             "git",
@@ -124,6 +137,7 @@ def branch_rows(cwd: Path) -> list[dict[str, str]]:
 
 
 def worktree_status(path: Path) -> str:
+    """返回 worktree 的简洁状态：clean 或 dirty (路径数)。"""
     output = run(["git", "status", "--short"], path)
     lines = [line for line in output.splitlines() if line.strip()]
     if not lines:
@@ -132,21 +146,25 @@ def worktree_status(path: Path) -> str:
 
 
 def current_branch(path: Path) -> str:
+    """返回当前所在分支名。"""
     return run(["git", "branch", "--show-current"], path).strip()
 
 
 def changed_paths(path: Path) -> list[str]:
+    """返回未提交变更的文件路径列表（去掉状态标记列）。"""
     output = run(["git", "status", "--short"], path)
     return [line[3:] for line in output.splitlines() if line.strip()]
 
 
 def clip(text: str, limit: int = MAX_CONTEXT_CHARS) -> str:
+    """超出 limit 的文本截断到前 limit 字符并加标记，避免上下文过大。"""
     if len(text) <= limit:
         return text
     return text[:limit] + "\n...[truncated]..."
 
 
 def git_block(path: Path, title: str, args: list[str]) -> str:
+    """生成一个 git 命令输出的 markdown 小节；失败或空输出时返回空串。"""
     ok, output = maybe_run(["git", *args], path)
     if not ok or not output:
         return ""
@@ -154,6 +172,7 @@ def git_block(path: Path, title: str, args: list[str]) -> str:
 
 
 def build_context(path: Path, branch: str, status: str) -> str:
+    """汇总 worktree 的 git 上下文（提交或未提交变更的各类 diff），供 AI 摘要使用。"""
     lines = [
         f"# Branch: {branch}",
         f"# Path: {path}",
@@ -179,6 +198,7 @@ def build_context(path: Path, branch: str, status: str) -> str:
 
 
 def fallback_outline(path: Path, branch: str, status: str) -> str:
+    """无 codex 或调用失败时的确定性大纲：只用本地 git 信息生成中文 markdown。"""
     if status == "clean":
         latest = run(
             ["git", "log", "-1", "--pretty=format:%h %s (%cs)"],
@@ -209,6 +229,7 @@ def fallback_outline(path: Path, branch: str, status: str) -> str:
 
 
 def ai_outline(path: Path, branch: str, status: str) -> str:
+    """用 codex exec 基于 git 上下文生成中文变更大纲；不可用时回退到 fallback_outline。"""
     if shutil.which("codex") is None:
         return fallback_outline(path, branch, status)
 
@@ -237,6 +258,7 @@ def ai_outline(path: Path, branch: str, status: str) -> str:
         """
     ).strip()
 
+    # codex 把最终消息写入临时文件再读取，避免与进度日志混在 stdout 中
     with tempfile.NamedTemporaryFile(prefix="branch-outline-", suffix=".md", delete=False) as tmp:
         output_path = Path(tmp.name)
     try:
@@ -274,6 +296,7 @@ def ai_outline(path: Path, branch: str, status: str) -> str:
 
 
 def render(cwd: Path, *, mode: str) -> str:
+    """渲染完整状态板 markdown：worktree 表、未检出分支、stash 与变更大纲。"""
     root = repo_root(cwd)
     main_root = primary_root(cwd)
     wt_entries = worktrees(cwd)
@@ -299,6 +322,7 @@ def render(cwd: Path, *, mode: str) -> str:
     for entry in wt_entries:
         path = Path(entry.get("worktree", ""))
         branch_ref = entry.get("branch", "")
+        # porcelain 中 detached 状态的 worktree 没有 branch 字段，此时回退读取当前分支名
         branch = branch_ref.removeprefix("refs/heads/") or current_branch(path)
         seen_branches.add(branch)
         sha = entry.get("HEAD", "")[:7]
@@ -306,6 +330,7 @@ def render(cwd: Path, *, mode: str) -> str:
         info = branch_info.get(branch, {})
         latest = info.get("subject", "")
         lines.append(f"| `{branch}` | `{path}` | {status} | `{sha}` | {latest} |")
+        # 只对主工作区或脏 worktree 生成大纲，避免对大量干净 worktree 白跑 AI 摘要
         if path == root or status != "clean":
             outlines.append((branch, status, path))
 
@@ -349,6 +374,7 @@ def render(cwd: Path, *, mode: str) -> str:
 
 
 def main() -> int:
+    """入口：解析 fast/full 模式并写状态文件到主工作区根目录。"""
     cwd = Path.cwd()
     mode = "full"
     if len(sys.argv) > 1:
