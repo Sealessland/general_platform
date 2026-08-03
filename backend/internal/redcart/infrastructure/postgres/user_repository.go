@@ -6,6 +6,7 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 )
 
+// CreateUser 创建用户并返回带数据库生成 ID 与时间戳的记录。
 func (r *Repository) CreateUser(user domain.User) (domain.User, error) {
 	query := `
 INSERT INTO users (nickname, phone, password_hash, role, created_at, updated_at)
@@ -25,6 +26,7 @@ RETURNING id, created_at, updated_at`
 	return user, nil
 }
 
+// FindUserByPhone 按手机号查询用户；不存在返回 (零值, false)。
 func (r *Repository) FindUserByPhone(phone string) (domain.User, bool) {
 	user, err := r.queryUser(`SELECT id, nickname, phone, password_hash, role, created_at, updated_at FROM users WHERE phone = $1`, phone)
 	if err == sql.ErrNoRows {
@@ -33,6 +35,7 @@ func (r *Repository) FindUserByPhone(phone string) (domain.User, bool) {
 	return user, err == nil
 }
 
+// GetUser 按 ID 查询用户；不存在返回 (零值, false)。
 func (r *Repository) GetUser(id int64) (domain.User, bool) {
 	user, err := r.queryUser(`SELECT id, nickname, phone, password_hash, role, created_at, updated_at FROM users WHERE id = $1`, id)
 	if err == sql.ErrNoRows {
@@ -54,6 +57,7 @@ func (r *Repository) SaveSession(accessToken, refreshToken string, userID int64)
 	return nil
 }
 
+// GetUserByToken 按 token 查询对应用户与 token 类型；未命中返回 (零值, "", false)。
 func (r *Repository) GetUserByToken(token string) (domain.User, application.TokenType, bool) {
 	r.sessionMu.RLock()
 	entry, ok := r.sessions[token]

@@ -15,6 +15,7 @@ import (
 // the same order. Because PayOrder is not wrapped in a transaction, a lost
 // update can double-confirm inventory (stock decremented twice for one order).
 // The test fails if such a regression is introduced.
+// 并发支付同一订单不应导致库存被双重确认扣减（回归测试）。
 func TestConcurrentPayOrderNoDoubleConfirm(t *testing.T) {
 	repo, service := newPostgresService(t)
 	sku := createStabilityProductAndSKU(t, repo, 10)
@@ -61,6 +62,7 @@ func TestConcurrentPayOrderNoDoubleConfirm(t *testing.T) {
 // TestConcurrentPayAndCancelNoInventoryCorruption interleaves PayOrder and
 // CancelOrder on the same order. Only one should win; inventory must remain
 // consistent (no negative stock or negative locked_stock).
+// 并发执行支付与取消，二者只能成功其一，且库存不可为负或被破坏。
 func TestConcurrentPayAndCancelNoInventoryCorruption(t *testing.T) {
 	repo, service := newPostgresService(t)
 	sku := createStabilityProductAndSKU(t, repo, 10)
@@ -118,6 +120,7 @@ func TestConcurrentPayAndCancelNoInventoryCorruption(t *testing.T) {
 // TestConcurrentRefundAndFinishNoInventoryCorruption pays an order and then
 // races a consumer FinishOrder against a merchant refund approval. Only one
 // should win; inventory must remain consistent.
+// 并发执行完成订单与退款审批，二者只能成功其一，且库存保持一致。
 func TestConcurrentRefundAndFinishNoInventoryCorruption(t *testing.T) {
 	repo, service := newPostgresService(t)
 	sku := createStabilityProductAndSKU(t, repo, 10)
@@ -184,6 +187,7 @@ func TestConcurrentRefundAndFinishNoInventoryCorruption(t *testing.T) {
 // more workers than available stock. Exactly `stock` orders should succeed and
 // the final inventory must equal the initial stock with all successful orders
 // reserved.
+// 高并发抢库存：并发数远超库存时，恰好只有库存数量的下单成功且不超卖。
 func TestMassConcurrentStockReservation(t *testing.T) {
 	repo, service := newPostgresService(t)
 	const stock int = 50
@@ -231,11 +235,13 @@ func TestMassConcurrentStockReservation(t *testing.T) {
 // opposite orders. PayOrder/CancelOrder release inventory by iterating locks in
 // database order, not SKU order, so concurrent release can form a deadlock
 // cycle. The test fails if a deadlock (or timeout) is detected.
+// 两个订单以相反顺序操作同一组 SKU，验证并发释放库存不会形成死锁。
 func TestCyclicSKUAccessNoDeadlock(t *testing.T) {
 	repo, service := newPostgresService(t)
 	skuA := createStabilityProductAndSKU(t, repo, 10)
 	skuB := createStabilityProductAndSKU(t, repo, 10)
 
+	// createOrderWithTwoSKUs 创建同时包含两个 SKU 的订单，供死锁回归测试复用。
 	createOrderWithTwoSKUs := func() *application.OrderView {
 		t.Helper()
 		view, err := service.CreateOrder(context.Background(), application.Actor{UserID: 1, Role: domain.RoleConsumer}, fmt.Sprintf("cycle-%d-%d", skuA.ID, time.Now().UnixNano()), application.CheckoutInput{
@@ -305,6 +311,7 @@ func TestCyclicSKUAccessNoDeadlock(t *testing.T) {
 	}
 }
 
+// isDeadlock 判断错误是否为 PostgreSQL 死锁（SQLSTATE 40P01 或关键字匹配）。
 func isDeadlock(err error) bool {
 	if err == nil {
 		return false
@@ -312,10 +319,12 @@ func isDeadlock(err error) bool {
 	return contains(err.Error(), "deadlock") || contains(err.Error(), "40P01")
 }
 
+// contains 判断字符串 s 是否包含子串 substr（大小写敏感的简单子串匹配）。
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsInternal(s, substr))
 }
 
+// containsInternal 子串查找的核心循环实现。
 func containsInternal(s, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {
 		if s[i:i+len(substr)] == substr {

@@ -22,6 +22,7 @@ func (e *AppError) Error() string {
 	return e.Message
 }
 
+// newError 构造应用层错误，统一携带错误分类与面向调用方的描述，供接口层映射。
 func newError(kind ErrorKind, message string) error {
 	return &AppError{Kind: kind, Message: message}
 }

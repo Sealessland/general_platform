@@ -19,16 +19,19 @@ type countingRepo struct {
 	skuListReads int
 }
 
+// GetProduct 统计商品读取次数后透传到底层仓库，供断言缓存命中而非回源使用。
 func (r *countingRepo) GetProduct(id int64) (domain.Product, bool) {
 	r.productReads++
 	return r.Repository.GetProduct(id)
 }
 
+// GetSKU 统计 SKU 读取次数后透传到底层仓库，供断言缓存命中而非回源使用。
 func (r *countingRepo) GetSKU(id int64) (domain.SKU, bool) {
 	r.skuReads++
 	return r.Repository.GetSKU(id)
 }
 
+// ListSKUsByProduct 统计 SKU 列表读取次数后透传到底层仓库，供断言缓存命中而非回源使用。
 func (r *countingRepo) ListSKUsByProduct(productID int64) []domain.SKU {
 	r.skuListReads++
 	return r.Repository.ListSKUsByProduct(productID)

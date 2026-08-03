@@ -11,6 +11,7 @@ import (
 )
 
 // skipIfNoRabbitMQ skips the benchmark when RABBITMQ_ADDR is not set.
+// skipIfNoRabbitMQ 在未配置 RABBITMQ_ADDR 时跳过基准测试，并返回该地址。
 func skipIfNoRabbitMQ(b *testing.B) string {
 	b.Helper()
 	addr := os.Getenv("RABBITMQ_ADDR")
@@ -20,6 +21,7 @@ func skipIfNoRabbitMQ(b *testing.B) string {
 	return addr
 }
 
+// BenchmarkRabbitMQPublish 压测 RabbitMQ 发布路径；仅在设置 RABBITMQ_ADDR 时执行。
 func BenchmarkRabbitMQPublish(b *testing.B) {
 	addr := skipIfNoRabbitMQ(b)
 	publisher, err := NewPublisher(addr, os.Getenv("RABBITMQ_EXCHANGE"))

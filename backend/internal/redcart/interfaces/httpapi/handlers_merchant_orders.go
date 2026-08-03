@@ -70,6 +70,7 @@ func (s *Server) handleMerchantOrderByID(w http.ResponseWriter, r *http.Request,
 	}
 }
 
+// handleMerchantDashboardFunnel 返回商家经营漏斗统计（浏览→加购→下单→支付）。
 func (s *Server) handleMerchantDashboardFunnel(w http.ResponseWriter, r *http.Request, actor application.Actor) {
 	if r.Method != http.MethodGet {
 		writeMethodNotAllowed(w)
@@ -83,6 +84,7 @@ func (s *Server) handleMerchantDashboardFunnel(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, result)
 }
 
+// handleMerchantDashboardProducts 返回商家商品维度的经营排行。
 func (s *Server) handleMerchantDashboardProducts(w http.ResponseWriter, r *http.Request, actor application.Actor) {
 	if r.Method != http.MethodGet {
 		writeMethodNotAllowed(w)
@@ -96,6 +98,7 @@ func (s *Server) handleMerchantDashboardProducts(w http.ResponseWriter, r *http.
 	writeJSON(w, http.StatusOK, map[string]any{"items": result})
 }
 
+// handleMerchantDashboardSummary 返回商家经营总览统计。
 func (s *Server) handleMerchantDashboardSummary(w http.ResponseWriter, r *http.Request, actor application.Actor) {
 	if r.Method != http.MethodGet {
 		writeMethodNotAllowed(w)

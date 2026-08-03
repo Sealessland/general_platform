@@ -10,8 +10,7 @@ import (
 // ErrInsufficientStock 是仓储层在库存不足/并发扣减失败时返回的哨兵错误，由调用方映射为冲突响应。
 var ErrInsufficientStock = errors.New("stock is insufficient")
 
-// TokenType distinguishes access tokens from refresh tokens so the service
-// layer can reject refresh tokens used for API access and vice versa.
+// TokenType 区分访问令牌与刷新令牌，应用层据此拒绝把刷新令牌当作访问令牌使用（反之亦然）。
 type TokenType string
 
 const (
@@ -19,10 +18,8 @@ const (
 	TokenTypeRefresh TokenType = "refresh"
 )
 
-// OrderTx exposes repository operations that can be performed inside the
-// transaction scoped to an order status transition. It is passed to the
-// sideEffect callback of UpdateOrderStatus so that inventory changes and
-// event writes are committed atomically with the status change.
+// OrderTx 暴露可在订单状态流转事务内执行的仓储操作；它被传入 UpdateOrderStatus 的
+// sideEffect 回调，使库存变更与事件写入随状态变更原子提交。
 type OrderTx interface {
 	event.Outbox
 	GetSKU(id int64) (domain.SKU, bool)

@@ -6,6 +6,7 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 )
 
+// handleCart 查询当前用户的购物车。
 func (s *Server) handleCart(w http.ResponseWriter, r *http.Request, actor application.Actor) {
 	if r.Method != http.MethodGet {
 		writeMethodNotAllowed(w)
@@ -19,6 +20,7 @@ func (s *Server) handleCart(w http.ResponseWriter, r *http.Request, actor applic
 	writeJSON(w, http.StatusOK, result)
 }
 
+// handleCartItems 向购物车新增条目。
 func (s *Server) handleCartItems(w http.ResponseWriter, r *http.Request, actor application.Actor) {
 	if r.Method != http.MethodPost {
 		writeMethodNotAllowed(w)

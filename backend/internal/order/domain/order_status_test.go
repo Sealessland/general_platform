@@ -2,6 +2,7 @@ package domain
 
 import "testing"
 
+// TestLegalOrderTransitions 验证状态机中所有合法迁移均被允许。
 func TestLegalOrderTransitions(t *testing.T) {
 	cases := []struct {
 		from OrderStatus
@@ -23,6 +24,7 @@ func TestLegalOrderTransitions(t *testing.T) {
 	}
 }
 
+// TestIllegalOrderTransitions 验证所有非法迁移都会被拒绝。
 func TestIllegalOrderTransitions(t *testing.T) {
 	cases := []struct {
 		from OrderStatus
@@ -42,6 +44,7 @@ func TestIllegalOrderTransitions(t *testing.T) {
 	}
 }
 
+// TestTerminalStates 验证终态集合中的状态均被识别为终态。
 func TestTerminalStates(t *testing.T) {
 	for _, status := range []OrderStatus{StatusFinished, StatusCancelled, StatusRefunded} {
 		if !status.IsTerminal() {

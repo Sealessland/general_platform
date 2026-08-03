@@ -15,6 +15,7 @@ import (
 	postgresrepo "github.com/example/redcart-copilot/backend/internal/redcart/infrastructure/postgres"
 )
 
+// TestPostgresApplicationAuthCartCheckoutAndOrderLifecycle 验证登录、购物车、结算预演与下单→支付→发货→收货的完整链路。
 func TestPostgresApplicationAuthCartCheckoutAndOrderLifecycle(t *testing.T) {
 	repo, service := newPostgresApplicationService(t)
 	ctx := context.Background()
@@ -99,6 +100,7 @@ func TestPostgresApplicationAuthCartCheckoutAndOrderLifecycle(t *testing.T) {
 	}
 }
 
+// TestPostgresApplicationRefundReturnsInventory 验证退款审批通过后，库存（可用/锁定）恢复原状。
 func TestPostgresApplicationRefundReturnsInventory(t *testing.T) {
 	repo, service := newPostgresApplicationService(t)
 	ctx := context.Background()
@@ -142,6 +144,7 @@ func TestPostgresApplicationRefundReturnsInventory(t *testing.T) {
 	}
 }
 
+// TestPostgresApplicationMerchantDashboardAndAI 验证商家漏斗/汇总/商品统计，以及卖点生成与 AI 任务越权读取被拒。
 func TestPostgresApplicationMerchantDashboardAndAI(t *testing.T) {
 	repo, service := newPostgresApplicationService(t)
 	ctx := context.Background()
@@ -260,6 +263,7 @@ func createPostgresApplicationProductAndSKU(t *testing.T, repo *postgresrepo.Rep
 	return product.ID, sku.ID
 }
 
+// isAppError 判断错误是否为指定分类的应用层错误。
 func isAppError(err error, kind application.ErrorKind) bool {
 	var appErr *application.AppError
 	return errors.As(err, &appErr) && appErr.Kind == kind

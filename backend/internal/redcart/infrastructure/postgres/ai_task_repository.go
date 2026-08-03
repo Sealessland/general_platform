@@ -6,6 +6,7 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 )
 
+// CreateAITask 创建一条 AI 生成任务，输入/输出以 JSONB 落库，返回带数据库生成 ID 与时间戳的任务。
 func (r *Repository) CreateAITask(task domain.AIGenerationTask) (domain.AIGenerationTask, error) {
 	inputJSON, err := json.Marshal(task.Input)
 	if err != nil {
@@ -27,6 +28,7 @@ func (r *Repository) CreateAITask(task domain.AIGenerationTask) (domain.AIGenera
 	return task, nil
 }
 
+// UpdateAITask 更新已有 AI 任务的状态、输入输出与错误信息，按 ID 定位。
 func (r *Repository) UpdateAITask(task domain.AIGenerationTask) error {
 	inputJSON, err := json.Marshal(task.Input)
 	if err != nil {
@@ -43,6 +45,7 @@ func (r *Repository) UpdateAITask(task domain.AIGenerationTask) error {
 	return err
 }
 
+// GetAITask 按 ID 查询 AI 任务；不存在时返回 (零值, false)。
 func (r *Repository) GetAITask(id int64) (domain.AIGenerationTask, bool) {
 	row := r.db.QueryRow(`SELECT id, user_id, merchant_id, task_type, input_json, output_json, status, error_message, created_at, updated_at FROM ai_generation_tasks WHERE id = $1`, id)
 	task, err := scanAITask(row)

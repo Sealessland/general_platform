@@ -7,6 +7,7 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 )
 
+// handleAISellingPoints 处理商家提交商品信息、生成卖点提炼的 POST 请求。
 func (s *Server) handleAISellingPoints(w http.ResponseWriter, r *http.Request, actor application.Actor) {
 	if r.Method != http.MethodPost {
 		writeMethodNotAllowed(w)
@@ -25,6 +26,7 @@ func (s *Server) handleAISellingPoints(w http.ResponseWriter, r *http.Request, a
 	writeJSON(w, http.StatusOK, result)
 }
 
+// handleAIBusinessReview 处理商家提交窗口参数、生成经营复盘的 POST 请求。
 func (s *Server) handleAIBusinessReview(w http.ResponseWriter, r *http.Request, actor application.Actor) {
 	if r.Method != http.MethodPost {
 		writeMethodNotAllowed(w)
@@ -70,6 +72,7 @@ func (s *Server) handleAIA2UISurface(w http.ResponseWriter, r *http.Request, act
 	writeJSON(w, http.StatusOK, result)
 }
 
+// handleAITaskByID 按 ID 查询 AI 生成任务的执行结果。
 func (s *Server) handleAITaskByID(w http.ResponseWriter, r *http.Request, actor application.Actor) {
 	if r.Method != http.MethodGet {
 		writeMethodNotAllowed(w)

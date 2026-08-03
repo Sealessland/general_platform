@@ -12,6 +12,7 @@ class TestAIGenerationGRPCServer(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
+        """类级准备：用随机端口启动真实 gRPC server，供各用例调用。"""
         # 用临时端口启动 server，避免与本地已运行实例冲突。
         cls.server = build_server()
         cls.port = cls.server.add_insecure_port("[::]:0")
@@ -22,10 +23,12 @@ class TestAIGenerationGRPCServer(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls) -> None:
+        """类级清理：关闭 channel 并停止 server。"""
         cls.channel.close()
         cls.server.stop(None)
 
     def test_generate_selling_points(self) -> None:
+        """正常路径：卖点结果应包含人群定向文案。"""
         request = ai_pb2.GenerateSellingPointsRequest(
             product_name="Travel Makeup Organizer",
             audience="dorm users",
@@ -36,12 +39,14 @@ class TestAIGenerationGRPCServer(unittest.TestCase):
         self.assertIn("Travel Makeup Organizer for dorm users", response.points)
 
     def test_generate_selling_points_requires_product_name(self) -> None:
+        """缺商品名应返回 INVALID_ARGUMENT。"""
         request = ai_pb2.GenerateSellingPointsRequest(product_name="")
         with self.assertRaises(grpc.RpcError) as cm:
             self.stub.GenerateSellingPoints(request)
         self.assertEqual(cm.exception.code(), grpc.StatusCode.INVALID_ARGUMENT)
 
     def test_generate_business_review(self) -> None:
+        """正常路径：复盘应返回诊断结论与至少一条下一步动作。"""
         request = ai_pb2.GenerateBusinessReviewRequest(
             window_days=7,
             gmv=10000,
@@ -52,12 +57,14 @@ class TestAIGenerationGRPCServer(unittest.TestCase):
         self.assertGreaterEqual(len(response.next_steps), 1)
 
     def test_generate_business_review_requires_positive_window(self) -> None:
+        """窗口天数非正应返回 INVALID_ARGUMENT。"""
         request = ai_pb2.GenerateBusinessReviewRequest(window_days=0)
         with self.assertRaises(grpc.RpcError) as cm:
             self.stub.GenerateBusinessReview(request)
         self.assertEqual(cm.exception.code(), grpc.StatusCode.INVALID_ARGUMENT)
 
     def test_generate_a2ui_surface(self) -> None:
+        """正常路径：A2UI 响应应包含 createSurface 与 updateComponents。"""
         request = ai_pb2.GenerateA2UISurfaceRequest(
             surface_id="test_surface",
             user_intent="show welcome",
@@ -69,6 +76,7 @@ class TestAIGenerationGRPCServer(unittest.TestCase):
         self.assertIn("updateComponents", response.a2ui_json)
 
     def test_generate_a2ui_surface_requires_surface_id(self) -> None:
+        """缺 surface_id 应返回 INVALID_ARGUMENT。"""
         request = ai_pb2.GenerateA2UISurfaceRequest(
             surface_id="",
             user_intent="show welcome",

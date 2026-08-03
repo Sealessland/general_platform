@@ -17,12 +17,14 @@ type mockAcker struct {
 	callCount int
 }
 
+// Ack 记录一次 ack 调用并返回 nil，供测试断言消费成功路径。
 func (m *mockAcker) Ack(multiple bool) error {
 	m.callCount++
 	m.acked = true
 	return nil
 }
 
+// Nack 记录一次 nack 调用（含是否重新入队），供测试断言失败路径。
 func (m *mockAcker) Nack(multiple, requeue bool) error {
 	m.callCount++
 	m.nacked = true
@@ -35,6 +37,7 @@ type mockHandler struct {
 	calls []event.Event
 }
 
+// Handle 记录调用的事件并返回预设错误，供测试断言业务处理结果。
 func (h *mockHandler) Handle(_ context.Context, evt event.Event) error {
 	h.calls = append(h.calls, evt)
 	return h.err
@@ -46,6 +49,7 @@ type countingDedup struct {
 	checkErr   error
 }
 
+// IsDuplicate 查询事件 ID 是否已处理；checkErr 非空时直接返回错误模拟故障。
 func (d *countingDedup) IsDuplicate(_ context.Context, eventID int64) (bool, error) {
 	if d.checkErr != nil {
 		return false, d.checkErr
@@ -53,12 +57,14 @@ func (d *countingDedup) IsDuplicate(_ context.Context, eventID int64) (bool, err
 	return d.duplicates[eventID], nil
 }
 
+// MarkProcessed 记录已处理事件 ID 并写回去重集合。
 func (d *countingDedup) MarkProcessed(_ context.Context, eventID int64) error {
 	d.processed = append(d.processed, eventID)
 	d.duplicates[eventID] = true
 	return nil
 }
 
+// encodeMessage 按发布端 envelope 结构把事件序列化为消息体，供消费测试使用。
 func encodeMessage(t *testing.T, evt event.Event) []byte {
 	t.Helper()
 	body, err := json.Marshal(map[string]any{
@@ -75,6 +81,7 @@ func encodeMessage(t *testing.T, evt event.Event) []byte {
 	return body
 }
 
+// newTestConsumer 构造一个不连接 AMQP 的 Consumer，便于直接驱动 processDelivery 测试。
 func newTestConsumer(h Handler, d Deduplicator) *Consumer {
 	return &Consumer{
 		handler: h,
@@ -83,6 +90,7 @@ func newTestConsumer(h Handler, d Deduplicator) *Consumer {
 	}
 }
 
+// TestProcessDeliverySuccessAcksAndMarksProcessed 验证成功路径：ack 且标记已处理。
 func TestProcessDeliverySuccessAcksAndMarksProcessed(t *testing.T) {
 	evt := event.Event{ID: 1, Type: event.TypeOrderCreated, Topic: "order.created", Payload: json.RawMessage(`{}`)}
 	body := encodeMessage(t, evt)
@@ -105,6 +113,7 @@ func TestProcessDeliverySuccessAcksAndMarksProcessed(t *testing.T) {
 	}
 }
 
+// TestProcessDeliveryHandlerFailureNacksToDLX 验证业务失败时 nack 到死信队列且不标记已处理。
 func TestProcessDeliveryHandlerFailureNacksToDLX(t *testing.T) {
 	evt := event.Event{ID: 2, Type: event.TypeOrderPaid, Topic: "order.paid", Payload: json.RawMessage(`{}`)}
 	body := encodeMessage(t, evt)
@@ -127,6 +136,7 @@ func TestProcessDeliveryHandlerFailureNacksToDLX(t *testing.T) {
 	}
 }
 
+// TestProcessDeliveryDuplicateSkipsHandler 验证重复事件被 ack 且跳过业务处理。
 func TestProcessDeliveryDuplicateSkipsHandler(t *testing.T) {
 	evt := event.Event{ID: 3, Type: event.TypeOrderCreated, Topic: "order.created", Payload: json.RawMessage(`{}`)}
 	body := encodeMessage(t, evt)
@@ -146,6 +156,7 @@ func TestProcessDeliveryDuplicateSkipsHandler(t *testing.T) {
 	}
 }
 
+// TestProcessDeliveryDecodeErrorNacksToDLX 验证解码失败时 nack 到死信队列。
 func TestProcessDeliveryDecodeErrorNacksToDLX(t *testing.T) {
 	h := &mockHandler{}
 	dedup := &countingDedup{duplicates: map[int64]bool{}}
@@ -165,6 +176,7 @@ func TestProcessDeliveryDecodeErrorNacksToDLX(t *testing.T) {
 	}
 }
 
+// TestProcessDeliveryDedupErrorRequeues 验证去重检查失败时重新入队。
 func TestProcessDeliveryDedupErrorRequeues(t *testing.T) {
 	evt := event.Event{ID: 4, Type: event.TypeOrderCreated, Topic: "order.created", Payload: json.RawMessage(`{}`)}
 	body := encodeMessage(t, evt)

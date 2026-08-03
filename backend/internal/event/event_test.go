@@ -2,6 +2,7 @@ package event
 
 import "testing"
 
+// TestEventTypeTopic 验证每种事件类型与 topic 的映射关系正确。
 func TestEventTypeTopic(t *testing.T) {
 	cases := []struct {
 		typ   Type

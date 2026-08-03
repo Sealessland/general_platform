@@ -8,6 +8,7 @@ import (
 	"time"
 )
 
+// 冒烟测试：验证仓储能连接真实 PostgreSQL 并返回种子数据（需数据库环境）。
 func TestRepositoryAgainstPostgres(t *testing.T) {
 	dsn := os.Getenv("POSTGRES_DSN")
 	if dsn == "" || os.Getenv("RUN_POSTGRES_INTEGRATION") != "1" {

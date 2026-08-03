@@ -32,6 +32,7 @@ var (
 // prometheusMiddleware records request count and latency for every HTTP
 // request. It uses gin.Context.FullPath() so path labels are stable
 // (e.g. "/api/orders/:id" not "/api/orders/42").
+// prometheusMiddleware 记录每个 HTTP 请求的计数与耗时指标；用 FullPath 保证路径标签稳定（如 /api/orders/:id）。
 func prometheusMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()

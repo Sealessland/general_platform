@@ -15,6 +15,7 @@ import (
 	postgresrepo "github.com/example/redcart-copilot/backend/internal/redcart/infrastructure/postgres"
 )
 
+// BenchmarkHTTPPostgresOrderPreview 基准测试 PostgreSQL 场景下的订单预览。
 func BenchmarkHTTPPostgresOrderPreview(b *testing.B) {
 	handler, cleanup := newPostgresTestHandler(b)
 	defer cleanup()
@@ -43,6 +44,7 @@ func BenchmarkHTTPPostgresOrderPreview(b *testing.B) {
 	}
 }
 
+// BenchmarkHTTPPostgresCreateOrder 基准测试 PostgreSQL 场景下的下单。
 func BenchmarkHTTPPostgresCreateOrder(b *testing.B) {
 	handler, cleanup := newPostgresTestHandler(b)
 	defer cleanup()
@@ -75,6 +77,7 @@ func BenchmarkHTTPPostgresCreateOrder(b *testing.B) {
 	}
 }
 
+// BenchmarkHTTPPostgresCreateOrderWithOutbox 基准测试事务 outbox 路径的下单，并校验事件落库。
 func BenchmarkHTTPPostgresCreateOrderWithOutbox(b *testing.B) {
 	repo, handler, cleanup := newPostgresTestHandlerWithBaseRepo(b)
 	defer cleanup()
@@ -118,6 +121,7 @@ func BenchmarkHTTPPostgresCreateOrderWithOutbox(b *testing.B) {
 	}
 }
 
+// mustJSON 将值序列化为 JSON 字节，失败直接终止测试/基准。
 func mustJSON(t testing.TB, value any) []byte {
 	t.Helper()
 	payload, err := json.Marshal(value)
@@ -129,6 +133,7 @@ func mustJSON(t testing.TB, value any) []byte {
 
 // newPostgresTestHandlerWithBaseRepo returns the underlying postgres Repository
 // so benchmarks can inspect the outbox table directly.
+// newPostgresTestHandlerWithBaseRepo 额外返回底层 postgres 仓库，便于基准校验 outbox 表数据。
 func newPostgresTestHandlerWithBaseRepo(t testing.TB) (*postgresrepo.Repository, http.Handler, func()) {
 	t.Helper()
 	if os.Getenv("RUN_POSTGRES_INTEGRATION") != "1" {

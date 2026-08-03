@@ -9,6 +9,7 @@ WORKTREE_BASE="${WORKTREE_BASE:-/tmp}"
 # 分支/工作区变动后以 fast 模式刷新状态板（fast 只做本地 git 汇总，不做 AI 摘要）
 STATUS_SCRIPT="$ROOT_DIR/scripts/update-branch-status.py"
 
+# 打印命令用法（create/list/path/remove/prune 五个子命令）。
 usage() {
   cat <<'EOF'
 Usage:
@@ -31,6 +32,7 @@ worktree_path_for_branch() {
   printf '%s/%s-%s\n' "$WORKTREE_BASE" "$REPO_NAME" "$(slugify_branch "$branch")"
 }
 
+# create 子命令：为分支创建 worktree；分支已存在则直接检出，否则基于 start_point 新建。
 cmd_create() {
   local branch="${1:-}"
   local start_point="${2:-HEAD}"
@@ -51,10 +53,12 @@ cmd_create() {
   printf '%s\n' "$path"
 }
 
+# list 子命令：列出仓库当前的全部 worktree。
 cmd_list() {
   git -C "$ROOT_DIR" worktree list
 }
 
+# path 子命令：打印指定分支对应的 worktree 路径。
 cmd_path() {
   local branch="${1:-}"
   if [[ -z "$branch" ]]; then
@@ -64,6 +68,7 @@ cmd_path() {
   worktree_path_for_branch "$branch"
 }
 
+# remove 子命令：移除指定路径的 worktree 并刷新分支状态板。
 cmd_remove() {
   local path="${1:-}"
   if [[ -z "$path" ]]; then
@@ -74,11 +79,13 @@ cmd_remove() {
   python3 "$STATUS_SCRIPT" fast >/dev/null
 }
 
+# prune 子命令：清理已失效的 worktree 记录并刷新分支状态板。
 cmd_prune() {
   git -C "$ROOT_DIR" worktree prune
   python3 "$STATUS_SCRIPT" fast >/dev/null
 }
 
+# 入口：解析子命令并分发到对应处理函数。
 main() {
   local cmd="${1:-}"
   shift || true

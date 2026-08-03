@@ -30,7 +30,7 @@ ALLOWED_BENCHMARKS = {
 
 
 def format_qps(ns_per_op: float) -> str:
-    # 将 ns/op 换算为 QPS，并按数量级格式化为 M/K 单位便于阅读
+    """将 ns/op 换算为 QPS，并按数量级格式化为 M/K 单位便于阅读。"""
     qps = 1_000_000_000.0 / ns_per_op
     if qps >= 1_000_000:
         return f"{qps / 1_000_000:.2f}M"
@@ -40,6 +40,7 @@ def format_qps(ns_per_op: float) -> str:
 
 
 def parse_benchmarks(text: str) -> list[dict]:
+    """解析 go test -bench 原始输出，白名单外基准直接拒绝并抛错。"""
     results = []
     for line in text.splitlines():
         match = BENCH_RE.match(line)
@@ -63,9 +64,11 @@ def parse_benchmarks(text: str) -> list[dict]:
 
 
 def parse_existing_table(content: str) -> dict[str, float]:
-    """Extract QPS numbers from the existing README performance table."""
-    # 解析当前 README 中的性能表（| Benchmark | QPS | ... 与 | `xxx` | ... 行），
-    # 用于计算与上次结果的环比变化
+    """Extract QPS numbers from the existing README performance table.
+
+    解析当前 README 中的性能表（| Benchmark | QPS | ... 与 | `xxx` | ... 行），
+    用于计算与上次结果的环比变化。
+    """
     old = {}
     in_table = False
     for line in content.splitlines():
@@ -84,6 +87,7 @@ def parse_existing_table(content: str) -> dict[str, float]:
 
 
 def parse_qps(qps_str: str) -> float:
+    """把 QPS 展示字符串（如 1.23M / 4.5K / 123.45）解析为浮点数。"""
     qps_str = qps_str.replace(",", "")
     if qps_str.endswith("M"):
         return float(qps_str[:-1]) * 1_000_000
@@ -93,6 +97,7 @@ def parse_qps(qps_str: str) -> float:
 
 
 def format_change(current: float, previous: float) -> str:
+    """计算当前值相对上次值的百分比变化，previous 为 0 时返回 "-"。"""
     if previous == 0:
         return "-"
     delta = (current - previous) / previous * 100
@@ -104,6 +109,7 @@ def format_change(current: float, previous: float) -> str:
 
 
 def render_table(results: list[dict]) -> str:
+    """按固定模板渲染 markdown 性能表，并对照 README 历史数据计算环比变化。"""
     if not results:
         return "_No benchmark results available._"
 
@@ -133,8 +139,8 @@ def render_table(results: list[dict]) -> str:
 
 
 def update_readme(table_markdown: str) -> None:
-    # 用一对标记（BENCHMARK_RESULTS_START/END）定位并替换 README 中的性能表区块；
-    # 若标记不存在则先在文件末尾初始化
+    """用一对标记（BENCHMARK_RESULTS_START/END）定位并替换 README 中的性能表区块；
+    若标记不存在则先在文件末尾初始化。"""
     start_marker = "<!-- BENCHMARK_RESULTS_START -->\n"
     end_marker = "\n<!-- BENCHMARK_RESULTS_END -->"
 
@@ -154,6 +160,7 @@ def update_readme(table_markdown: str) -> None:
 
 
 def main() -> int:
+    """入口：从 stdin 读取 benchmark 输出，解析并更新 README，失败时返回 1。"""
     raw = sys.stdin.read()
     try:
         results = parse_benchmarks(raw)

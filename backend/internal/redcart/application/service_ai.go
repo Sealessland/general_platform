@@ -205,6 +205,7 @@ func (s *Service) enrichA2UIContext(ctx context.Context, input A2UISurfaceInput)
 	return string(out), nil
 }
 
+// toA2UINotes 将笔记摘要转换为 A2UI 上下文用的精简结构（仅保留 ID/标题/浏览与点赞数）。
 func toA2UINotes(notes []NoteSummary) []map[string]any {
 	out := make([]map[string]any, 0, len(notes))
 	for _, note := range notes {
@@ -218,6 +219,7 @@ func toA2UINotes(notes []NoteSummary) []map[string]any {
 	return out
 }
 
+// relatedNotes 找出与给定商品集合关联的笔记（至多 4 条），供 A2UI 购物导购上下文注入种草内容。
 func (s *Service) relatedNotes(ctx context.Context, productIDs []int64) []NoteSummary {
 	_ = ctx
 	allNotes := s.repo.ListNotes(0, 0)
@@ -294,6 +296,7 @@ func canReadAITask(actor Actor, task domain.AIGenerationTask) bool {
 	return task.UserID == actor.UserID
 }
 
+// toAITaskView 将 AI 任务领域对象转为轮询视图。
 func (s *Service) toAITaskView(task domain.AIGenerationTask) AITaskView {
 	return AITaskView{
 		ID:           task.ID,

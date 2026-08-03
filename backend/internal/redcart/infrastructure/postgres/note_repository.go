@@ -5,6 +5,7 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 )
 
+// ListNotes 可选分页返回全部笔记，并批量加载每条笔记关联的商品 ID。
 func (r *Repository) ListNotes(limit, offset int) []domain.Note {
 	query := `SELECT id, author_id, title, content, cover_url, status, view_count, like_count, created_at, updated_at FROM notes ORDER BY id`
 	if limit > 0 {
@@ -39,6 +40,7 @@ func (r *Repository) ListNotes(limit, offset int) []domain.Note {
 	return notes
 }
 
+// GetNote 按 ID 查询笔记并加载其关联商品 ID；不存在返回 (零值, false)。
 func (r *Repository) GetNote(id int64) (domain.Note, bool) {
 	row := r.db.QueryRow(`SELECT id, author_id, title, content, cover_url, status, view_count, like_count, created_at, updated_at FROM notes WHERE id = $1`, id)
 	var note domain.Note
@@ -49,6 +51,7 @@ func (r *Repository) GetNote(id int64) (domain.Note, bool) {
 	return note, true
 }
 
+// UpdateNote 按 ID 更新笔记内容与计数等字段。
 func (r *Repository) UpdateNote(note domain.Note) error {
 	_, err := r.db.Exec(
 		`UPDATE notes SET author_id = $1, title = $2, content = $3, cover_url = $4, status = $5, view_count = $6, like_count = $7 WHERE id = $8`,
@@ -56,6 +59,8 @@ func (r *Repository) UpdateNote(note domain.Note) error {
 	)
 	return err
 }
+
+// loadNoteProductIDs 加载单条笔记关联的商品 ID，按关联 ID 升序。
 func (r *Repository) loadNoteProductIDs(noteID int64) []int64 {
 	rows, err := r.db.Query(`SELECT product_id FROM note_products WHERE note_id = $1 ORDER BY id`, noteID)
 	if err != nil {
@@ -73,6 +78,7 @@ func (r *Repository) loadNoteProductIDs(noteID int64) []int64 {
 	return out
 }
 
+// 批量加载多条笔记的商品 ID（按 note_id 分组），消除 ListNotes 的 N+1 查询问题。
 // loadNoteProductIDsBatch fetches product IDs for multiple notes in a single
 // query, eliminating the N+1 problem where ListNotes called loadNoteProductIDs
 // once per note. Returns a map keyed by note_id.

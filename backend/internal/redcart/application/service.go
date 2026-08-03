@@ -23,6 +23,7 @@ func NewService(repo Repository, aiProvider backendai.AIProvider) *Service {
 		repo:       repo,
 		outbox:     outbox,
 		aiProvider: aiProvider,
+		// now 统一提供 UTC 时钟，便于测试替换与时间断言。
 		now: func() time.Time {
 			return time.Now().UTC()
 		},

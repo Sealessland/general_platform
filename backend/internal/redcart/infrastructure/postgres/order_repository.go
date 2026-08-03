@@ -23,14 +23,17 @@ func (r *Repository) FindOrderByUserAndIdempotency(userID int64, idempotencyKey 
 	return r.GetOrder(orderID)
 }
 
+// ListOrdersByUser 可选分页返回指定用户的订单，按 ID 升序并批量加载明细。
 func (r *Repository) ListOrdersByUser(userID int64, limit, offset int) []domain.Order {
 	return r.listOrders(`SELECT id, order_no, user_id, merchant_id, status, total_amount_cent, pay_amount_cent, discount_amount_cent, idempotency_key, receiver_name, receiver_phone, receiver_address, paid_at, cancelled_at, shipped_at, finished_at, created_at, updated_at FROM orders WHERE user_id = $1 ORDER BY id`, userID, limit, offset)
 }
 
+// ListOrdersByMerchant 可选分页返回指定商家的订单，按 ID 升序并批量加载明细。
 func (r *Repository) ListOrdersByMerchant(merchantID int64, limit, offset int) []domain.Order {
 	return r.listOrders(`SELECT id, order_no, user_id, merchant_id, status, total_amount_cent, pay_amount_cent, discount_amount_cent, idempotency_key, receiver_name, receiver_phone, receiver_address, paid_at, cancelled_at, shipped_at, finished_at, created_at, updated_at FROM orders WHERE merchant_id = $1 ORDER BY id`, merchantID, limit, offset)
 }
 
+// GetOrder 按 ID 查询订单并加载其明细；不存在返回 (零值, false)。
 func (r *Repository) GetOrder(id int64) (domain.Order, bool) {
 	row := r.db.QueryRow(`SELECT id, order_no, user_id, merchant_id, status, total_amount_cent, pay_amount_cent, discount_amount_cent, idempotency_key, receiver_name, receiver_phone, receiver_address, paid_at, cancelled_at, shipped_at, finished_at, created_at, updated_at FROM orders WHERE id = $1`, id)
 	order, err := scanOrder(row)
@@ -44,6 +47,7 @@ func (r *Repository) GetOrder(id int64) (domain.Order, bool) {
 	return order, true
 }
 
+// SaveOrder 新增（ID 为 0）或更新订单：新增时在同一事务内写入订单与明细，更新时校验存在性。
 func (r *Repository) SaveOrder(order domain.Order) (domain.Order, error) {
 	if order.ID == 0 {
 		tx, err := r.db.Begin()
@@ -191,26 +195,32 @@ type pgOrderTx struct {
 	tx *gormTx
 }
 
+// GetSKU 在事务内按 ID 查询 SKU。
 func (t *pgOrderTx) GetSKU(id int64) (domain.SKU, bool) {
 	return getSKU(t.tx, id)
 }
 
+// SaveSKU 在事务内新增或更新 SKU。
 func (t *pgOrderTx) SaveSKU(sku domain.SKU) (domain.SKU, error) {
 	return saveSKU(t.tx, sku)
 }
 
+// ListInventoryLocksByOrder 在事务内查询订单的库存锁。
 func (t *pgOrderTx) ListInventoryLocksByOrder(orderID int64) []domain.InventoryLock {
 	return listInventoryLocksByOrder(t.tx, orderID)
 }
 
+// UpdateInventoryLock 在事务内更新库存锁状态。
 func (t *pgOrderTx) UpdateInventoryLock(lock domain.InventoryLock) error {
 	return updateInventoryLock(t.tx, lock)
 }
 
+// AppendOrderEvent 在事务内追加订单事件。
 func (t *pgOrderTx) AppendOrderEvent(event domain.OrderEvent) (domain.OrderEvent, error) {
 	return appendOrderEvent(t.tx, event)
 }
 
+// Append 在事务内追加 outbox 事件。
 func (t *pgOrderTx) Append(ctx context.Context, evt event.Event) (int64, error) {
 	return appendOutboxEvent(t.tx, evt)
 }
@@ -284,6 +294,7 @@ func (r *Repository) UpdateOrderStatus(orderID int64, fromStatus, toStatus strin
 	return order, nil
 }
 
+// listOrders 执行通用订单列表查询并批量加载明细，最后按 ID 升序排序。
 func (r *Repository) listOrders(query string, arg int64, limit, offset int) []domain.Order {
 	if limit > 0 {
 		query = fmt.Sprintf("%s LIMIT %d OFFSET %d", query, limit, offset)
@@ -319,6 +330,7 @@ func (r *Repository) listOrders(query string, arg int64, limit, offset int) []do
 	return out
 }
 
+// loadOrderItems 加载单个订单的全部明细，按 ID 升序。
 func (r *Repository) loadOrderItems(orderID int64) []domain.OrderItem {
 	rows, err := r.db.Query(`SELECT id, order_id, product_id, sku_id, product_title_snapshot, sku_name_snapshot, price_cent_snapshot, quantity, total_amount_cent, created_at, updated_at FROM order_items WHERE order_id = $1 ORDER BY id`, orderID)
 	if err != nil {
@@ -336,6 +348,7 @@ func (r *Repository) loadOrderItems(orderID int64) []domain.OrderItem {
 	return out
 }
 
+// 批量加载多个订单的明细（按 order_id 分组），消除 listOrders 的 N+1 查询问题。
 // loadOrderItemsBatch fetches order items for multiple orders in a single
 // query, eliminating the N+1 problem where listOrders called loadOrderItems
 // once per order. Returns a map keyed by order_id.

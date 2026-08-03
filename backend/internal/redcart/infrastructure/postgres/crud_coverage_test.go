@@ -9,6 +9,7 @@ import (
 	"time"
 )
 
+// 集成测试：覆盖 PostgreSQL 仓储各实体的增删改查路径（需真实数据库）。
 func TestRepositoryPostgresCRUDCoverage(t *testing.T) {
 	dsn := os.Getenv("POSTGRES_DSN")
 	if dsn == "" || os.Getenv("RUN_POSTGRES_INTEGRATION") != "1" {

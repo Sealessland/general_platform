@@ -5,6 +5,7 @@ import (
 	"testing"
 )
 
+// TestPostgresHTTPAuthCatalogAndCartRegression 回归认证、目录与购物车接口组合流程。
 func TestPostgresHTTPAuthCatalogAndCartRegression(t *testing.T) {
 	handler, cleanup := newPostgresTestHandler(t)
 	defer cleanup()
@@ -80,6 +81,7 @@ func TestPostgresHTTPAuthCatalogAndCartRegression(t *testing.T) {
 	_ = requestJSON(t, handler, http.MethodDelete, pathf("/api/cart/items/%d", itemID), refreshed["token"].(string), nil, http.StatusNotFound)
 }
 
+// TestPostgresHTTPMerchantAndAIRegression 回归商家管理与 AI 接口组合流程。
 func TestPostgresHTTPMerchantAndAIRegression(t *testing.T) {
 	handler, cleanup := newPostgresTestHandler(t)
 	defer cleanup()
@@ -166,6 +168,7 @@ func TestPostgresHTTPMerchantAndAIRegression(t *testing.T) {
 	}, http.StatusBadRequest)
 }
 
+// firstItem 返回列表响应中的第一个条目。
 func firstItem(t testing.TB, payload map[string]any) map[string]any {
 	t.Helper()
 	items, ok := payload["items"].([]any)

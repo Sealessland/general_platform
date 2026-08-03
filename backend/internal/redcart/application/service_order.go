@@ -115,10 +115,12 @@ func (s *Service) PayOrder(ctx context.Context, actor Actor, orderID int64) (*Or
 		return nil, newError(ErrorConflict, err.Error())
 	}
 	now := s.now()
+	// 状态流转事务内的变更回调：记录支付时间戳。
 	saved, err := s.repo.UpdateOrderStatus(order.ID, string(orderdomain.StatusCreated), string(orderdomain.StatusPaid), func(o *domain.Order) error {
 		o.PaidAt = &now
 		o.UpdatedAt = now
 		return nil
+		// sideEffect：事务内将锁定库存转正（扣减可用库存并确认锁定记录），并写入支付事件与 outbox。
 	}, func(tx OrderTx, o domain.Order) error {
 		for _, lock := range tx.ListInventoryLocksByOrder(o.ID) {
 			sku, ok := tx.GetSKU(lock.SKUID)
@@ -187,11 +189,13 @@ func (s *Service) CancelOrder(ctx context.Context, actor Actor, orderID int64) (
 		return nil, newError(ErrorConflict, err.Error())
 	}
 	now := s.now()
+	// 状态流转事务内的变更回调：记录取消时间戳。
 	saved, err := s.repo.UpdateOrderStatus(order.ID, string(orderdomain.StatusCreated), string(orderdomain.StatusCancelled), func(o *domain.Order) error {
 		o.CancelledAt = &now
 		o.UpdatedAt = now
 		return nil
 	}, func(tx OrderTx, o domain.Order) error {
+		// sideEffect：事务内释放未扣减的库存锁定，并写入取消事件与 outbox。
 		if err := s.releaseInventory(tx, o.ID, true); err != nil {
 			return err
 		}
@@ -243,6 +247,7 @@ func (s *Service) FinishOrder(ctx context.Context, actor Actor, orderID int64) (
 		return nil, newError(ErrorConflict, err.Error())
 	}
 	now := s.now()
+	// 状态流转事务内的变更回调：记录完成时间戳。
 	saved, err := s.repo.UpdateOrderStatus(order.ID, string(orderdomain.StatusShipped), string(orderdomain.StatusFinished), func(o *domain.Order) error {
 		o.FinishedAt = &now
 		o.UpdatedAt = now
@@ -288,6 +293,7 @@ func (s *Service) RequestRefund(ctx context.Context, actor Actor, orderID int64,
 	}
 	now := s.now()
 	prevStatus := order.Status
+	// 状态流转事务内的变更回调：仅更新时间戳。
 	saved, err := s.repo.UpdateOrderStatus(order.ID, string(prevStatus), string(orderdomain.StatusRefunding), func(o *domain.Order) error {
 		o.UpdatedAt = now
 		return nil

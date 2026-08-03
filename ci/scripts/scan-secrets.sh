@@ -22,6 +22,7 @@ allowed_files=(
   "ci/scripts/scan-secrets.sh"
 )
 
+# 判断文件是否命中允许名单（示例文件与脚本自身），命中返回 0 表示放行
 is_allowed_file() {
   local candidate="$1"
   for allowed in "${allowed_files[@]}"; do

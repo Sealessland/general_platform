@@ -21,6 +21,8 @@ type Client struct {
 // NewClient dials addr and returns a gRPC-backed AI provider.
 // The caller is responsible for calling Close.
 // If no dial options are supplied, an insecure transport is used.
+// NewClient 拨号连接 AI 服务并返回 gRPC 版 AIProvider；调用方负责 Close，
+// 未传 dial 选项时默认使用非加密传输。
 func NewClient(addr string, opts ...grpc.DialOption) (*Client, error) {
 	if len(opts) == 0 {
 		opts = []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}

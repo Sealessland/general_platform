@@ -15,11 +15,13 @@ type stubProfiler struct {
 	stopErr   error
 }
 
+// Stop 记录一次停止调用并返回预设错误，供测试断言停止行为。
 func (p *stubProfiler) Stop() error {
 	p.stopCalls++
 	return p.stopErr
 }
 
+// TestLoadProfilerConfigFromEnvDisabledByDefault 验证未配置服务地址时 profiler 默认禁用。
 func TestLoadProfilerConfigFromEnvDisabledByDefault(t *testing.T) {
 	t.Setenv("PYROSCOPE_SERVER_ADDRESS", "")
 	t.Setenv("PYROSCOPE_APPLICATION_NAME", "")
@@ -39,6 +41,7 @@ func TestLoadProfilerConfigFromEnvDisabledByDefault(t *testing.T) {
 	}
 }
 
+// TestLoadProfilerConfigFromEnvUsesDefaults 验证应用名缺省与认证/Tenant 配置解析。
 func TestLoadProfilerConfigFromEnvUsesDefaults(t *testing.T) {
 	t.Setenv("PYROSCOPE_SERVER_ADDRESS", "http://127.0.0.1:4040")
 	t.Setenv("PYROSCOPE_APPLICATION_NAME", "")
@@ -73,6 +76,7 @@ func TestLoadProfilerConfigFromEnvUsesDefaults(t *testing.T) {
 	}
 }
 
+// TestLoadProfilerConfigFromEnvAddsMutexAndBlockProfiles 验证开启互斥锁/阻塞采样后 profile 类型追加。
 func TestLoadProfilerConfigFromEnvAddsMutexAndBlockProfiles(t *testing.T) {
 	t.Setenv("PYROSCOPE_SERVER_ADDRESS", "http://127.0.0.1:4040")
 	t.Setenv("PYROSCOPE_MUTEX_PROFILE_FRACTION", "5")
@@ -104,6 +108,7 @@ func TestLoadProfilerConfigFromEnvAddsMutexAndBlockProfiles(t *testing.T) {
 	}
 }
 
+// TestLoadProfilerConfigFromEnvRejectsInvalidSamplingConfig 验证非法采样配置返回错误。
 func TestLoadProfilerConfigFromEnvRejectsInvalidSamplingConfig(t *testing.T) {
 	t.Setenv("PYROSCOPE_SERVER_ADDRESS", "http://127.0.0.1:4040")
 	t.Setenv("PYROSCOPE_MUTEX_PROFILE_FRACTION", "not-an-int")
@@ -122,6 +127,7 @@ func TestLoadProfilerConfigFromEnvRejectsInvalidSamplingConfig(t *testing.T) {
 	}
 }
 
+// TestStartProfilerFromEnvNoopWhenDisabled 验证未启用时返回空操作且不调用启动器。
 func TestStartProfilerFromEnvNoopWhenDisabled(t *testing.T) {
 	t.Setenv("PYROSCOPE_SERVER_ADDRESS", "")
 
@@ -140,6 +146,7 @@ func TestStartProfilerFromEnvNoopWhenDisabled(t *testing.T) {
 	stop()
 }
 
+// TestStartProfilerFromEnvStartsAndStopsProfiler 验证启用后启动器被调用且 stop 生效。
 func TestStartProfilerFromEnvStartsAndStopsProfiler(t *testing.T) {
 	t.Setenv("PYROSCOPE_SERVER_ADDRESS", "http://127.0.0.1:4040")
 	t.Setenv("PYROSCOPE_APPLICATION_NAME", "redcart.backend.dev")
@@ -164,6 +171,7 @@ func TestStartProfilerFromEnvStartsAndStopsProfiler(t *testing.T) {
 	}
 }
 
+// TestStartProfilerFromEnvAppliesAndRestoresRuntimeSettings 验证运行时采样配置被应用并在 stop 时恢复。
 func TestStartProfilerFromEnvAppliesAndRestoresRuntimeSettings(t *testing.T) {
 	t.Setenv("PYROSCOPE_SERVER_ADDRESS", "http://127.0.0.1:4040")
 	t.Setenv("PYROSCOPE_MUTEX_PROFILE_FRACTION", "7")
@@ -197,6 +205,7 @@ func TestStartProfilerFromEnvAppliesAndRestoresRuntimeSettings(t *testing.T) {
 	}
 }
 
+// TestStartProfilerFromEnvReturnsStartError 验证启动失败时返回错误并恢复采样配置。
 func TestStartProfilerFromEnvReturnsStartError(t *testing.T) {
 	t.Setenv("PYROSCOPE_SERVER_ADDRESS", "http://127.0.0.1:4040")
 	t.Setenv("PYROSCOPE_MUTEX_PROFILE_FRACTION", "9")
@@ -221,6 +230,7 @@ func TestStartProfilerFromEnvReturnsStartError(t *testing.T) {
 	}
 }
 
+// hasProfileType 判断 profile 类型列表中是否包含指定类型。
 func hasProfileType(types []pyroscope.ProfileType, want pyroscope.ProfileType) bool {
 	for _, profileType := range types {
 		if profileType == want {

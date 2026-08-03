@@ -65,6 +65,7 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (*AuthSession, er
 	return s.issueSession(user)
 }
 
+// Logout 使当前访问令牌失效：删除对应会话（兼容 Bearer 前缀）。
 func (s *Service) Logout(ctx context.Context, token string) error {
 	_ = ctx
 	s.repo.DeleteSession(strings.TrimPrefix(strings.TrimSpace(token), "Bearer "))
@@ -134,6 +135,7 @@ func (s *Service) issueSession(user domain.User) (*AuthSession, error) {
 	}, nil
 }
 
+// hashPassword 使用 bcrypt 对明文密码做不可逆哈希，供注册时落库。
 func hashPassword(password string) (string, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {

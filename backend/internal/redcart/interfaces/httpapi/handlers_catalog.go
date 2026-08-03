@@ -9,6 +9,7 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 )
 
+// handleNotes 分页查询种草笔记列表。
 func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeMethodNotAllowed(w)
@@ -47,6 +48,7 @@ func (s *Server) handleNoteByID(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+// handleProducts 分页查询在售商品列表。
 func (s *Server) handleProducts(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeMethodNotAllowed(w)
@@ -84,6 +86,7 @@ func (s *Server) handleProductByID(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+// handleProductSKUs 查询指定商品的全部 SKU。
 func (s *Server) handleProductSKUs(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeMethodNotAllowed(w)

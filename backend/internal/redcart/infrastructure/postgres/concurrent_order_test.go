@@ -13,6 +13,7 @@ import (
 	"time"
 )
 
+// 并发创建订单时库存扣减必须原子：库存为 1 时只允许恰好一个订单成功。
 func TestConcurrentCreateOrderReservesStockAtomically(t *testing.T) {
 	dsn := os.Getenv("POSTGRES_DSN")
 	if dsn == "" || os.Getenv("RUN_POSTGRES_INTEGRATION") != "1" {

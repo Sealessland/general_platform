@@ -9,6 +9,7 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 )
 
+// handleMerchantProducts 商家侧商品接口，按方法分发：GET 分页列表、POST 创建。
 func (s *Server) handleMerchantProducts(w http.ResponseWriter, r *http.Request, actor application.Actor) {
 	switch r.Method {
 	case http.MethodGet:
@@ -71,6 +72,7 @@ func (s *Server) handleMerchantProductByID(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+// handleMerchantCreateSKU 为指定商品创建新的 SKU。
 func handleMerchantCreateSKU(w http.ResponseWriter, r *http.Request, actor application.Actor, path string, s *Server) {
 	if r.Method != http.MethodPost {
 		writeMethodNotAllowed(w)
@@ -94,6 +96,7 @@ func handleMerchantCreateSKU(w http.ResponseWriter, r *http.Request, actor appli
 	writeJSON(w, http.StatusCreated, result)
 }
 
+// handleMerchantSetProductStatus 将商品置为 online/offline 上下架状态。
 func handleMerchantSetProductStatus(w http.ResponseWriter, r *http.Request, actor application.Actor, path string, s *Server, status string) {
 	if r.Method != http.MethodPost {
 		writeMethodNotAllowed(w)
@@ -112,6 +115,7 @@ func handleMerchantSetProductStatus(w http.ResponseWriter, r *http.Request, acto
 	writeJSON(w, http.StatusOK, result)
 }
 
+// handleMerchantSKUByID 更新指定 SKU 的信息。
 func (s *Server) handleMerchantSKUByID(w http.ResponseWriter, r *http.Request, actor application.Actor) {
 	if r.Method != http.MethodPut {
 		writeMethodNotAllowed(w)
@@ -135,6 +139,7 @@ func (s *Server) handleMerchantSKUByID(w http.ResponseWriter, r *http.Request, a
 	writeJSON(w, http.StatusOK, result)
 }
 
+// handleMerchantOrders 分页查询当前商家的订单列表。
 func (s *Server) handleMerchantOrders(w http.ResponseWriter, r *http.Request, actor application.Actor) {
 	if r.Method != http.MethodGet {
 		writeMethodNotAllowed(w)

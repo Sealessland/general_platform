@@ -21,42 +21,52 @@ type outboxStore struct {
 	db dbQuerier
 }
 
+// newOutboxStore 以给定查询器构造 outbox 存储。
 func newOutboxStore(db dbQuerier) *outboxStore {
 	return &outboxStore{db: db}
 }
 
+// Append 追加一条出站事件（委托给 Outbox 存储）。
 func (r *Repository) Append(ctx context.Context, evt event.Event) (int64, error) {
 	return r.Outbox.Append(ctx, evt)
 }
 
+// PollPending 轮询待发布事件（委托给 Outbox 存储）。
 func (r *Repository) PollPending(ctx context.Context, limit int) ([]event.Event, error) {
 	return r.Outbox.PollPending(ctx, limit)
 }
 
+// MarkPublished 将指定事件标记为已发布（委托给 Outbox 存储）。
 func (r *Repository) MarkPublished(ctx context.Context, ids []int64) error {
 	return r.Outbox.MarkPublished(ctx, ids)
 }
 
+// MarkFailed 标记事件发送失败并累计重试（委托给 Outbox 存储）。
 func (r *Repository) MarkFailed(ctx context.Context, id int64, reason string) error {
 	return r.Outbox.MarkFailed(ctx, id, reason)
 }
 
+// BeginTx 开启 outbox 事务（委托给 Outbox 存储）。
 func (r *Repository) BeginTx(ctx context.Context) (event.OutboxTx, error) {
 	return r.Outbox.BeginTx(ctx)
 }
 
+// PollPendingInTx 在事务内轮询待发布事件（委托给 Outbox 存储）。
 func (r *Repository) PollPendingInTx(ctx context.Context, tx event.OutboxTx, limit int) ([]event.Event, error) {
 	return r.Outbox.PollPendingInTx(ctx, tx, limit)
 }
 
+// MarkPublishedInTx 在事务内标记已发布（委托给 Outbox 存储）。
 func (r *Repository) MarkPublishedInTx(ctx context.Context, tx event.OutboxTx, ids []int64) error {
 	return r.Outbox.MarkPublishedInTx(ctx, tx, ids)
 }
 
+// MarkFailedInTx 在事务内标记失败（委托给 Outbox 存储）。
 func (r *Repository) MarkFailedInTx(ctx context.Context, tx event.OutboxTx, id int64, reason string) error {
 	return r.Outbox.MarkFailedInTx(ctx, tx, id, reason)
 }
 
+// Append 向 outbox 表插入一条待发布事件，payload 为空时回退为 {}。
 func (s *outboxStore) Append(ctx context.Context, evt event.Event) (int64, error) {
 	payload := evt.Payload
 	if len(payload) == 0 {
@@ -75,6 +85,7 @@ func (s *outboxStore) Append(ctx context.Context, evt event.Event) (int64, error
 	return id, nil
 }
 
+// PollPending 轮询未发布且重试未达上限的事件，按创建时间升序。
 func (s *outboxStore) PollPending(ctx context.Context, limit int) ([]event.Event, error) {
 	if limit <= 0 {
 		limit = 100
@@ -94,6 +105,7 @@ func (s *outboxStore) PollPending(ctx context.Context, limit int) ([]event.Event
 	return scanOutboxRows(rows)
 }
 
+// MarkPublished 批量将事件标记为已发布。
 func (s *outboxStore) MarkPublished(ctx context.Context, ids []int64) error {
 	if len(ids) == 0 {
 		return nil
@@ -140,6 +152,7 @@ func (s *outboxStore) MarkFailed(ctx context.Context, id int64, reason string) e
 	return nil
 }
 
+// BeginTx 开启底层数据库事务并包装为 event.OutboxTx。
 func (s *outboxStore) BeginTx(ctx context.Context) (event.OutboxTx, error) {
 	sqlDB, ok := s.db.(*gormSQL)
 	if !ok {
@@ -158,7 +171,10 @@ type outboxTx struct {
 	tx *gormTx
 }
 
-func (t *outboxTx) Commit() error   { return t.tx.Commit() }
+// Commit 提交 outbox 事务。
+func (t *outboxTx) Commit() error { return t.tx.Commit() }
+
+// Rollback 回滚 outbox 事务。
 func (t *outboxTx) Rollback() error { return t.tx.Rollback() }
 
 // PollPendingInTx 在事务内以 FOR UPDATE SKIP LOCKED 轮询待发布事件：
@@ -187,6 +203,7 @@ func (s *outboxStore) PollPendingInTx(ctx context.Context, tx event.OutboxTx, li
 	return scanOutboxRows(rows)
 }
 
+// MarkPublishedInTx 在事务内批量标记事件为已发布。
 func (s *outboxStore) MarkPublishedInTx(ctx context.Context, tx event.OutboxTx, ids []int64) error {
 	if len(ids) == 0 {
 		return nil
@@ -205,6 +222,7 @@ func (s *outboxStore) MarkPublishedInTx(ctx context.Context, tx event.OutboxTx, 
 	return nil
 }
 
+// MarkFailedInTx 在事务内累加重试次数，超过上限迁入死信表。
 func (s *outboxStore) MarkFailedInTx(ctx context.Context, tx event.OutboxTx, id int64, reason string) error {
 	otx, ok := tx.(*outboxTx)
 	if !ok {

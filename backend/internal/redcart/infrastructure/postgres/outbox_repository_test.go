@@ -9,6 +9,7 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/event"
 )
 
+// 验证 outbox 事件的追加、轮询与发布后移除。
 func TestOutboxAppendAndPoll(t *testing.T) {
 	repo := newPostgresRepo(t)
 	clearOutboxForTest(t, repo)
@@ -53,6 +54,7 @@ func TestOutboxAppendAndPoll(t *testing.T) {
 	}
 }
 
+// 验证失败重试达到上限后事件离开待发布队列（迁移死信）。
 func TestOutboxMarkFailedMovesToDeadLetter(t *testing.T) {
 	repo := newPostgresRepo(t)
 	clearOutboxForTest(t, repo)
@@ -85,6 +87,7 @@ func TestOutboxMarkFailedMovesToDeadLetter(t *testing.T) {
 	}
 }
 
+// 清空 outbox 与死信表，保证测试从干净状态开始。
 func clearOutboxForTest(t *testing.T, repo *Repository) {
 	t.Helper()
 	if _, err := repo.db.Exec(`DELETE FROM outbox_dead_letter`); err != nil {
@@ -95,6 +98,7 @@ func clearOutboxForTest(t *testing.T, repo *Repository) {
 	}
 }
 
+// 在事件列表中按 ID 查找目标事件。
 func findOutboxEvent(events []event.Event, id int64) (event.Event, bool) {
 	for _, evt := range events {
 		if evt.ID == id {

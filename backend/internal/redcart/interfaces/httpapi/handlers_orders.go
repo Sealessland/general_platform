@@ -9,6 +9,7 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 )
 
+// handleOrderPreview 下单前预览订单：校验库存并计算金额，不落库。
 func (s *Server) handleOrderPreview(w http.ResponseWriter, r *http.Request, actor application.Actor) {
 	if r.Method != http.MethodPost {
 		writeMethodNotAllowed(w)
@@ -27,6 +28,7 @@ func (s *Server) handleOrderPreview(w http.ResponseWriter, r *http.Request, acto
 	writeJSON(w, http.StatusOK, result)
 }
 
+// handleOrders 按方法分发：GET 分页查询订单，POST 创建订单（携带幂等键）。
 func (s *Server) handleOrders(w http.ResponseWriter, r *http.Request, actor application.Actor) {
 	switch r.Method {
 	case http.MethodGet:

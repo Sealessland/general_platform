@@ -16,6 +16,8 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
+// BenchmarkPostgresRabbitMQOutboxRelay 压测"Postgres outbox + RabbitMQ"完整
+// 转发链路；仅在设置 RUN_POSTGRES_INTEGRATION/POSTGRES_DSN/RABBITMQ_ADDR 时执行。
 func BenchmarkPostgresRabbitMQOutboxRelay(b *testing.B) {
 	if os.Getenv("RUN_POSTGRES_INTEGRATION") != "1" {
 		b.Skip("RUN_POSTGRES_INTEGRATION is not set")
@@ -77,8 +79,10 @@ func BenchmarkPostgresRabbitMQOutboxRelay(b *testing.B) {
 	}
 }
 
+// ioDiscard 是丢弃所有写入的日志输出，避免基准输出刷屏。
 type ioDiscard struct{}
 
+// Write 丢弃写入内容并返回字节数，实现 io.Writer。
 func (ioDiscard) Write(p []byte) (int, error) {
 	return len(p), nil
 }

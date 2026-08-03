@@ -11,6 +11,7 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 )
 
+// TestPostgresApplicationAuthSessionAndCatalogRegression 回归认证/会话（令牌类型隔离、登出）与内容/商品目录读链路。
 func TestPostgresApplicationAuthSessionAndCatalogRegression(t *testing.T) {
 	_, service := newPostgresApplicationService(t)
 	ctx := context.Background()
@@ -111,6 +112,7 @@ func TestPostgresApplicationAuthSessionAndCatalogRegression(t *testing.T) {
 	}
 }
 
+// TestPostgresApplicationMerchantCatalogOrderAndAIRegression 回归商家商品/SKU 管理、订单权限与幂等、经营诊断与 A2UI 生成。
 func TestPostgresApplicationMerchantCatalogOrderAndAIRegression(t *testing.T) {
 	_, service := newPostgresApplicationService(t)
 	ctx := context.Background()
@@ -249,6 +251,7 @@ func TestPostgresApplicationMerchantCatalogOrderAndAIRegression(t *testing.T) {
 	}
 }
 
+// TestPostgresApplicationCartCancelAndA2UIRegression 回归购物车增删、订单取消释放库存与多场景 A2UI 生成。
 func TestPostgresApplicationCartCancelAndA2UIRegression(t *testing.T) {
 	repo, service := newPostgresApplicationService(t)
 	ctx := context.Background()

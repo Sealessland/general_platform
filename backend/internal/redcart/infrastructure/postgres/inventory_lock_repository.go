@@ -4,6 +4,7 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 )
 
+// ListInventoryLocksByOrder 返回订单的全部库存锁，按 ID 升序。
 func (r *Repository) ListInventoryLocksByOrder(orderID int64) []domain.InventoryLock {
 	return listInventoryLocksByOrder(r.db, orderID)
 }
@@ -27,6 +28,7 @@ func listInventoryLocksByOrder(q dbQuerier, orderID int64) []domain.InventoryLoc
 	return out
 }
 
+// SaveInventoryLock 新增一条库存锁并返回带 ID 与时间戳的锁记录。
 func (r *Repository) SaveInventoryLock(lock domain.InventoryLock) (domain.InventoryLock, error) {
 	err := r.db.QueryRow(
 		`INSERT INTO inventory_locks (order_id, sku_id, quantity, status, locked_at, confirmed_at, released_at, created_at, updated_at)
@@ -40,10 +42,12 @@ func (r *Repository) SaveInventoryLock(lock domain.InventoryLock) (domain.Invent
 	return lock, nil
 }
 
+// UpdateInventoryLock 更新库存锁的状态与时间字段。
 func (r *Repository) UpdateInventoryLock(lock domain.InventoryLock) error {
 	return updateInventoryLock(r.db, lock)
 }
 
+// updateInventoryLock 按 ID 更新库存锁状态字段；与 listInventoryLocksByOrder 一样供事务路径复用。
 func updateInventoryLock(q dbQuerier, lock domain.InventoryLock) error {
 	_, err := q.Exec(
 		`UPDATE inventory_locks SET status = $1, locked_at = $2, confirmed_at = $3, released_at = $4 WHERE id = $5`,

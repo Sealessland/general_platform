@@ -2,6 +2,7 @@ package domain
 
 import "testing"
 
+// TestCloneHelpersReturnIndependentCopies 验证三个 Clone 助手返回独立副本，修改副本不影响原数据。
 func TestCloneHelpersReturnIndependentCopies(t *testing.T) {
 	strings := []string{"one", "two"}
 	clonedStrings := CloneStringSlice(strings)
@@ -25,6 +26,7 @@ func TestCloneHelpersReturnIndependentCopies(t *testing.T) {
 	}
 }
 
+// TestCloneHelpersPreserveNilForEmptyInputs 验证空输入时 Clone 助手返回 nil。
 func TestCloneHelpersPreserveNilForEmptyInputs(t *testing.T) {
 	if CloneStringSlice(nil) != nil {
 		t.Fatal("expected nil string slice clone")

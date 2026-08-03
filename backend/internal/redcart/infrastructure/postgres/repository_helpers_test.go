@@ -14,10 +14,12 @@ import (
 
 type scanFunc func(dest ...any) error
 
+// Scan 将函数适配为本地 scanner 接口，供扫描辅助函数的单元测试使用。
 func (f scanFunc) Scan(dest ...any) error {
 	return f(dest...)
 }
 
+// 验证各 scan* 辅助函数能正确解码模拟的数据库行。
 func TestScanHelpersDecodeDatabaseRows(t *testing.T) {
 	now := time.Date(2026, 6, 6, 10, 0, 0, 0, time.UTC)
 	later := now.Add(time.Hour)
@@ -169,6 +171,7 @@ func TestScanHelpersDecodeDatabaseRows(t *testing.T) {
 	}
 }
 
+// 验证各 scan* 辅助函数会原样返回底层扫描错误。
 func TestScanHelpersReturnScannerErrors(t *testing.T) {
 	expected := errors.New("scan failed")
 	scanner := scanFunc(func(dest ...any) error { return expected })
@@ -196,6 +199,7 @@ func TestScanHelpersReturnScannerErrors(t *testing.T) {
 	}
 }
 
+// 验证 NULL 转换辅助函数、gormResult 与迁移目录解析逻辑。
 func TestPostgresNullableHelpersAndMigrationResolution(t *testing.T) {
 	now := time.Date(2026, 6, 6, 10, 0, 0, 0, time.UTC)
 

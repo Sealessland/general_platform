@@ -64,18 +64,22 @@ type dbQuerier interface {
 var _ dbQuerier = (*gormSQL)(nil)
 var _ dbQuerier = (*gormTx)(nil)
 
+// QueryRow 执行单行查询。
 func (g *gormSQL) QueryRow(query string, args ...any) *sql.Row {
 	return g.db.QueryRow(query, args...)
 }
 
+// Query 执行多行查询。
 func (g *gormSQL) Query(query string, args ...any) (*sql.Rows, error) {
 	return g.db.Query(query, args...)
 }
 
+// Exec 执行写操作。
 func (g *gormSQL) Exec(query string, args ...any) (sql.Result, error) {
 	return g.db.Exec(query, args...)
 }
 
+// Begin 开启数据库事务并包装为 gormTx。
 func (g *gormSQL) Begin() (*gormTx, error) {
 	tx, err := g.db.Begin()
 	if err != nil {
@@ -84,30 +88,37 @@ func (g *gormSQL) Begin() (*gormTx, error) {
 	return &gormTx{tx: tx}, nil
 }
 
+// QueryRow 在事务内执行单行查询。
 func (tx *gormTx) QueryRow(query string, args ...any) *sql.Row {
 	return tx.tx.QueryRow(query, args...)
 }
 
+// Query 在事务内执行多行查询。
 func (tx *gormTx) Query(query string, args ...any) (*sql.Rows, error) {
 	return tx.tx.Query(query, args...)
 }
 
+// Exec 在事务内执行写操作。
 func (tx *gormTx) Exec(query string, args ...any) (sql.Result, error) {
 	return tx.tx.Exec(query, args...)
 }
 
+// Commit 提交事务。
 func (tx *gormTx) Commit() error {
 	return tx.tx.Commit()
 }
 
+// Rollback 回滚事务。
 func (tx *gormTx) Rollback() error {
 	return tx.tx.Rollback()
 }
 
+// LastInsertId 不支持自增主键回读，一律返回错误。
 func (r gormResult) LastInsertId() (int64, error) {
 	return 0, fmt.Errorf("last insert id is not supported")
 }
 
+// RowsAffected 返回影响行数。
 func (r gormResult) RowsAffected() (int64, error) {
 	return r.rowsAffected, nil
 }
@@ -154,9 +165,12 @@ func NewRepository(dsn string) (*Repository, error) {
 	return repo, nil
 }
 
+// Close 关闭底层数据库连接池。
 func (r *Repository) Close() error {
 	return r.sqlDB.Close()
 }
+
+// queryUser 执行用户单行查询并解码为 domain.User。
 func (r *Repository) queryUser(query string, arg any) (domain.User, error) {
 	row := r.db.QueryRow(query, arg)
 	var user domain.User
@@ -164,6 +178,7 @@ func (r *Repository) queryUser(query string, arg any) (domain.User, error) {
 	return user, err
 }
 
+// queryMerchant 执行商家单行查询并解码为 domain.Merchant。
 func (r *Repository) queryMerchant(query string, arg any) (domain.Merchant, error) {
 	row := r.db.QueryRow(query, arg)
 	var merchant domain.Merchant
@@ -181,6 +196,7 @@ func nullTimePtr(value sql.NullTime) *time.Time {
 	return &result
 }
 
+// nullTime 将零值时间转为 nil（NULL），非零时间原样返回。
 func nullTime(value time.Time) any {
 	if value.IsZero() {
 		return nil
@@ -188,6 +204,7 @@ func nullTime(value time.Time) any {
 	return value
 }
 
+// nullableString 将空串转为 nil（NULL），非空串原样返回。
 func nullableString(value string) any {
 	if value == "" {
 		return nil
@@ -195,6 +212,7 @@ func nullableString(value string) any {
 	return value
 }
 
+// nullInt64 将 0 转为 nil（NULL），非零值原样返回。
 func nullInt64(value int64) any {
 	if value == 0 {
 		return nil
@@ -202,6 +220,7 @@ func nullInt64(value int64) any {
 	return value
 }
 
+// nullableJSON 将空或字面量 "null" 的 JSON 转为 nil（NULL），其余原样返回。
 func nullableJSON(payload []byte) any {
 	if len(payload) == 0 || string(payload) == "null" {
 		return nil
@@ -215,18 +234,22 @@ const (
 	defaultConnMaxLifetime = 30 * time.Minute
 )
 
+// poolMaxOpenConns 从环境变量读取连接池最大打开连接数。
 func poolMaxOpenConns() int {
 	return envInt("DB_MAX_OPEN_CONNS", defaultMaxOpenConns)
 }
 
+// poolMaxIdleConns 从环境变量读取连接池最大空闲连接数。
 func poolMaxIdleConns() int {
 	return envInt("DB_MAX_IDLE_CONNS", defaultMaxIdleConns)
 }
 
+// poolConnMaxLifetime 从环境变量读取连接最长复用时长。
 func poolConnMaxLifetime() time.Duration {
 	return envDuration("DB_CONN_MAX_LIFETIME", defaultConnMaxLifetime)
 }
 
+// envInt 读取环境变量为整数，非法或非正数时回退默认值。
 func envInt(key string, fallback int) int {
 	if v := os.Getenv(key); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
@@ -236,6 +259,7 @@ func envInt(key string, fallback int) int {
 	return fallback
 }
 
+// envDuration 读取环境变量为时长，非法或非正数时回退默认值。
 func envDuration(key string, fallback time.Duration) time.Duration {
 	if v := os.Getenv(key); v != "" {
 		if d, err := time.ParseDuration(v); err == nil && d > 0 {

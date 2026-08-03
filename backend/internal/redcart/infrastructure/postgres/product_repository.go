@@ -7,6 +7,7 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 )
 
+// ListProducts 可选分页返回全部商品，按 ID 升序。
 func (r *Repository) ListProducts(limit, offset int) []domain.Product {
 	query := `SELECT id, merchant_id, title, description, cover_url, category_id, status, selling_points, created_at, updated_at FROM products ORDER BY id`
 	if limit > 0 {
@@ -28,6 +29,7 @@ func (r *Repository) ListProducts(limit, offset int) []domain.Product {
 	return out
 }
 
+// GetProduct 按 ID 查询商品；不存在返回 (零值, false)。
 func (r *Repository) GetProduct(id int64) (domain.Product, bool) {
 	row := r.db.QueryRow(`SELECT id, merchant_id, title, description, cover_url, category_id, status, selling_points, created_at, updated_at FROM products WHERE id = $1`, id)
 	product, err := scanProduct(row)
@@ -37,6 +39,7 @@ func (r *Repository) GetProduct(id int64) (domain.Product, bool) {
 	return product, err == nil
 }
 
+// SaveProduct 新增（ID 为 0）或更新商品，卖点以 JSONB 落库。
 func (r *Repository) SaveProduct(product domain.Product) (domain.Product, error) {
 	payload, err := json.Marshal(product.SellingPoints)
 	if err != nil {

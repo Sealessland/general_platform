@@ -13,12 +13,16 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/event"
 )
 
+// memoryTx 是测试用的内存事务句柄，记录是否已提交/回滚。
 type memoryTx struct {
 	committed  bool
 	rolledBack bool
 }
 
-func (t *memoryTx) Commit() error   { t.committed = true; return nil }
+// Commit 标记事务已提交。
+func (t *memoryTx) Commit() error { t.committed = true; return nil }
+
+// Rollback 标记事务已回滚。
 func (t *memoryTx) Rollback() error { t.rolledBack = true; return nil }
 
 type memoryOutbox struct {
@@ -29,11 +33,13 @@ type memoryOutbox struct {
 	locked  []int64
 }
 
+// Append 将事件追加到内存列表并返回其序号作为 ID。
 func (m *memoryOutbox) Append(ctx context.Context, evt event.Event) (int64, error) {
 	m.events = append(m.events, evt)
 	return int64(len(m.events)), nil
 }
 
+// PollPending 返回待发布列表（按 limit 截断），模拟未发布事件读取。
 func (m *memoryOutbox) PollPending(ctx context.Context, limit int) ([]event.Event, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -44,6 +50,7 @@ func (m *memoryOutbox) PollPending(ctx context.Context, limit int) ([]event.Even
 	return out, nil
 }
 
+// MarkPublished 从待发布列表移除已发布的事件，模拟发布成功后出队。
 func (m *memoryOutbox) MarkPublished(ctx context.Context, ids []int64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -61,6 +68,7 @@ func (m *memoryOutbox) MarkPublished(ctx context.Context, ids []int64) error {
 	return nil
 }
 
+// MarkFailed 将失败的事件 ID 记入 failed 列表。
 func (m *memoryOutbox) MarkFailed(ctx context.Context, id int64, reason string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -68,10 +76,13 @@ func (m *memoryOutbox) MarkFailed(ctx context.Context, id int64, reason string) 
 	return nil
 }
 
+// BeginTx 返回一个新的内存事务句柄。
 func (m *memoryOutbox) BeginTx(ctx context.Context) (event.OutboxTx, error) {
 	return &memoryTx{}, nil
 }
 
+// PollPendingInTx 返回未锁定且未发布的至多 limit 条事件，并标记为已锁定，
+// 模拟 SELECT ... FOR UPDATE SKIP LOCKED 的并发互斥行为。
 func (m *memoryOutbox) PollPendingInTx(ctx context.Context, tx event.OutboxTx, limit int) ([]event.Event, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -96,6 +107,7 @@ func (m *memoryOutbox) PollPendingInTx(ctx context.Context, tx event.OutboxTx, l
 	return out, nil
 }
 
+// MarkPublishedInTx 在事务内从待发布列表移除已发布事件，模拟置 published_at。
 func (m *memoryOutbox) MarkPublishedInTx(ctx context.Context, tx event.OutboxTx, ids []int64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -113,6 +125,7 @@ func (m *memoryOutbox) MarkPublishedInTx(ctx context.Context, tx event.OutboxTx,
 	return nil
 }
 
+// MarkFailedInTx 在事务内将失败的事件 ID 记入 failed 列表。
 func (m *memoryOutbox) MarkFailedInTx(ctx context.Context, tx event.OutboxTx, id int64, reason string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -120,6 +133,7 @@ func (m *memoryOutbox) MarkFailedInTx(ctx context.Context, tx event.OutboxTx, id
 	return nil
 }
 
+// mockPublisher 是测试用的发布器替身：可注入延迟与错误，记录已发布事件。
 type mockPublisher struct {
 	mu        sync.Mutex
 	published []event.Event
@@ -127,6 +141,7 @@ type mockPublisher struct {
 	delay     time.Duration
 }
 
+// Publish 可选地模拟延迟与失败，成功时把事件记入 published 列表。
 func (p *mockPublisher) Publish(ctx context.Context, evt event.Event) error {
 	if p.delay > 0 {
 		time.Sleep(p.delay)
@@ -140,12 +155,14 @@ func (p *mockPublisher) Publish(ctx context.Context, evt event.Event) error {
 	return nil
 }
 
+// count 返回已发布事件数量，供测试断言发布结果。
 func (p *mockPublisher) count() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return len(p.published)
 }
 
+// TestPublisherRelaysPendingEvents 验证 tick 会把待发布事件全部发布并清空 outbox。
 func TestPublisherRelaysPendingEvents(t *testing.T) {
 	now := time.Now().UTC()
 	store := &memoryOutbox{
@@ -170,6 +187,7 @@ func TestPublisherRelaysPendingEvents(t *testing.T) {
 	}
 }
 
+// TestPublisherMarksFailedEvents 验证发布失败的事件被标记为失败。
 func TestPublisherMarksFailedEvents(t *testing.T) {
 	now := time.Now().UTC()
 	store := &memoryOutbox{
@@ -193,6 +211,7 @@ func TestPublisherMarksFailedEvents(t *testing.T) {
 	}
 }
 
+// TestPublisherNoDuplicatePublishUnderConcurrency 验证并发 tick 不会重复发布同一事件。
 func TestPublisherNoDuplicatePublishUnderConcurrency(t *testing.T) {
 	now := time.Now().UTC()
 	pending := make([]event.Event, 50)
@@ -214,6 +233,7 @@ func TestPublisherNoDuplicatePublishUnderConcurrency(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(2)
+	// 两个转发器并发执行 tick，验证锁定机制避免重复发布。
 	go func() { defer wg.Done(); relay1.tick(context.Background()) }()
 	go func() { defer wg.Done(); relay2.tick(context.Background()) }()
 	wg.Wait()
@@ -224,6 +244,7 @@ func TestPublisherNoDuplicatePublishUnderConcurrency(t *testing.T) {
 	}
 }
 
+// TestPublisherRollbackOnPublishFailure 验证发布失败后事务回滚且事件保留在 outbox。
 func TestPublisherRollbackOnPublishFailure(t *testing.T) {
 	now := time.Now().UTC()
 	store := &memoryOutbox{

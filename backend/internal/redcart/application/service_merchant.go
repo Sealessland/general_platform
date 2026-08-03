@@ -190,6 +190,7 @@ func (s *Service) MerchantShipOrder(ctx context.Context, actor Actor, orderID in
 		return nil, newError(ErrorConflict, err.Error())
 	}
 	now := s.now()
+	// 状态流转事务内的变更回调：记录发货时间戳。
 	saved, err := s.repo.UpdateOrderStatus(order.ID, string(orderdomain.StatusPaid), string(orderdomain.StatusShipped), func(o *domain.Order) error {
 		o.ShippedAt = &now
 		o.UpdatedAt = now
@@ -235,9 +236,11 @@ func (s *Service) MerchantApproveRefund(ctx context.Context, actor Actor, orderI
 		return nil, newError(ErrorConflict, err.Error())
 	}
 	now := s.now()
+	// 状态流转事务内的变更回调：仅更新时间戳。
 	saved, err := s.repo.UpdateOrderStatus(order.ID, string(orderdomain.StatusRefunding), string(orderdomain.StatusRefunded), func(o *domain.Order) error {
 		o.UpdatedAt = now
 		return nil
+		// sideEffect：事务内返还已确认的库存，并写入退款事件与 outbox，与状态变更原子提交。
 	}, func(tx OrderTx, o domain.Order) error {
 		if err := s.releaseInventory(tx, o.ID, false); err != nil {
 			return err

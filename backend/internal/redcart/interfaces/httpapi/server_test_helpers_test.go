@@ -19,6 +19,8 @@ import (
 
 var testUniqueCounter atomic.Int64
 
+// newPostgresTestHandler 构造接入真实 PostgreSQL 与 Redis 的 HTTP 处理器，
+// 未设置 RUN_POSTGRES_INTEGRATION 等环境变量时跳过测试。
 func newPostgresTestHandler(t testing.TB) (http.Handler, func()) {
 	t.Helper()
 	if os.Getenv("RUN_POSTGRES_INTEGRATION") != "1" {
@@ -42,6 +44,7 @@ func newPostgresTestHandler(t testing.TB) (http.Handler, func()) {
 	}
 }
 
+// wrapPostgresRepoWithRedisForTest 用 Redis 会话仓库包装基础仓库，返回关闭 Redis 的清理函数。
 func wrapPostgresRepoWithRedisForTest(t testing.TB, base application.Repository) (application.Repository, func()) {
 	t.Helper()
 	addr := os.Getenv("REDIS_ADDR")
@@ -75,6 +78,7 @@ type headerKV struct {
 	value string
 }
 
+// requestJSON 发送 JSON 请求并断言期望状态码，返回解析后的响应体。
 func requestJSON(t testing.TB, handler http.Handler, method, path, token string, body any, wantStatus int, extraHeaders ...headerKV) map[string]any {
 	t.Helper()
 	var buf bytes.Buffer
@@ -105,6 +109,7 @@ func requestJSON(t testing.TB, handler http.Handler, method, path, token string,
 	return payload
 }
 
+// postJSONStatus 发送请求并仅返回状态码，用于只关心成功/失败的断言。
 func postJSONStatus(handler http.Handler, method, path, token string, body any, extraHeaders ...headerKV) int {
 	var buf bytes.Buffer
 	if body != nil {
@@ -125,6 +130,7 @@ func postJSONStatus(handler http.Handler, method, path, token string, body any, 
 	return rec.Code
 }
 
+// loginAndGetToken 登录并返回 access token。
 func loginAndGetToken(t testing.TB, handler http.Handler, body map[string]any) string {
 	t.Helper()
 	resp := requestJSON(t, handler, http.MethodPost, "/api/auth/login", "", body, http.StatusOK)
@@ -135,6 +141,7 @@ func loginAndGetToken(t testing.TB, handler http.Handler, body map[string]any) s
 	return token
 }
 
+// registerAndGetToken 注册指定角色账号并返回其 access token。
 func registerAndGetToken(t testing.TB, handler http.Handler, nickname, role string) string {
 	t.Helper()
 	password := "pass-" + uniqueSuffix()
@@ -151,6 +158,7 @@ func registerAndGetToken(t testing.TB, handler http.Handler, nickname, role stri
 	return token
 }
 
+// createOnlineProductAndSKU 创建上架商品及其 SKU，返回两者 ID。
 func createOnlineProductAndSKU(t testing.TB, handler http.Handler, merchantToken, suffix string, stock int) (int64, int64) {
 	t.Helper()
 	product := requestJSON(t, handler, http.MethodPost, "/api/merchant/products", merchantToken, map[string]any{
@@ -175,6 +183,7 @@ func createOnlineProductAndSKU(t testing.TB, handler http.Handler, merchantToken
 	return productID, skuID
 }
 
+// createOrder 以指定幂等键创建一个待支付订单，返回订单响应体。
 func createOrder(t testing.TB, handler http.Handler, consumerToken string, skuID int64, idempotencyKey string) map[string]any {
 	t.Helper()
 	return requestJSON(t, handler, http.MethodPost, "/api/orders", consumerToken, map[string]any{
@@ -187,6 +196,7 @@ func createOrder(t testing.TB, handler http.Handler, consumerToken string, skuID
 	}, http.StatusCreated, headerKV{"Idempotency-Key", idempotencyKey})
 }
 
+// assertSKUStock 断言商品 SKU 的库存与锁定库存。
 func assertSKUStock(t testing.TB, handler http.Handler, productID, skuID int64, wantStock, wantLockedStock int64) {
 	t.Helper()
 	skus := requestJSON(t, handler, http.MethodGet, pathf("/api/products/%d/skus", productID), "", nil, http.StatusOK)
@@ -196,10 +206,12 @@ func assertSKUStock(t testing.TB, handler http.Handler, productID, skuID int64, 
 	}
 }
 
+// pathf 格式化拼接路径，避免在调用处重复内联 fmt.Sprintf。
 func pathf(format string, values ...any) string {
 	return fmt.Sprintf(format, values...)
 }
 
+// productStatusFromList 从商品列表响应中提取指定商品的 status。
 func productStatusFromList(t testing.TB, payload map[string]any, productID int) string {
 	t.Helper()
 	items, ok := payload["items"].([]any)
@@ -219,6 +231,7 @@ func productStatusFromList(t testing.TB, payload map[string]any, productID int) 
 	return ""
 }
 
+// findSKU 从 SKU 列表响应中按 ID 查找 SKU。
 func findSKU(t testing.TB, payload map[string]any, skuID int64) map[string]any {
 	t.Helper()
 	items, ok := payload["items"].([]any)
@@ -238,6 +251,7 @@ func findSKU(t testing.TB, payload map[string]any, skuID int64) map[string]any {
 	return nil
 }
 
+// int64Field 从 JSON 响应中读取数字字段并转为 int64。
 func int64Field(t testing.TB, payload map[string]any, field string) int64 {
 	t.Helper()
 	value, ok := payload[field].(float64)
@@ -247,6 +261,7 @@ func int64Field(t testing.TB, payload map[string]any, field string) int64 {
 	return int64(value)
 }
 
+// uniqueSuffix 生成基于时间戳与计数器的唯一后缀，避免测试数据相互冲突。
 func uniqueSuffix() string {
 	return fmt.Sprintf("%d-%d", time.Now().UnixNano(), testUniqueCounter.Add(1))
 }

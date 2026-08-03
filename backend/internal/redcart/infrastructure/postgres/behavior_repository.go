@@ -5,6 +5,7 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 )
 
+// AppendBehaviorEvent 追加一条用户行为事件并返回带 ID 与创建时间的事件。
 func (r *Repository) AppendBehaviorEvent(event domain.BehaviorEvent) (domain.BehaviorEvent, error) {
 	err := r.db.QueryRow(
 		`INSERT INTO behavior_events (user_id, event_type, note_id, product_id, sku_id, order_id, merchant_id, created_at)
@@ -18,6 +19,7 @@ func (r *Repository) AppendBehaviorEvent(event domain.BehaviorEvent) (domain.Beh
 	return event, nil
 }
 
+// ListBehaviorEvents 按 ID 升序返回全部行为事件；查询失败返回 nil。
 func (r *Repository) ListBehaviorEvents() []domain.BehaviorEvent {
 	rows, err := r.db.Query(`SELECT id, user_id, event_type, note_id, product_id, sku_id, order_id, merchant_id, created_at FROM behavior_events ORDER BY id`)
 	if err != nil {

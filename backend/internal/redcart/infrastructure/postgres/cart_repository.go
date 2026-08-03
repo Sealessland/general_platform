@@ -6,6 +6,7 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 )
 
+// ListCartItems 返回指定用户的购物车条目，按 ID 升序。
 func (r *Repository) ListCartItems(userID int64) []domain.CartItem {
 	rows, err := r.db.Query(`SELECT id, user_id, product_id, sku_id, quantity, selected, created_at, updated_at FROM cart_items WHERE user_id = $1 ORDER BY id`, userID)
 	if err != nil {
@@ -23,6 +24,7 @@ func (r *Repository) ListCartItems(userID int64) []domain.CartItem {
 	return items
 }
 
+// GetCartItem 查询指定用户的某条购物车条目；不存在返回 (零值, false)。
 func (r *Repository) GetCartItem(userID, itemID int64) (domain.CartItem, bool) {
 	row := r.db.QueryRow(`SELECT id, user_id, product_id, sku_id, quantity, selected, created_at, updated_at FROM cart_items WHERE user_id = $1 AND id = $2`, userID, itemID)
 	var item domain.CartItem
@@ -62,6 +64,7 @@ RETURNING id, created_at, updated_at`
 	return item, nil
 }
 
+// DeleteCartItem 删除指定用户的购物车条目；条目不存在时返回错误。
 func (r *Repository) DeleteCartItem(userID, itemID int64) error {
 	result, err := r.db.Exec(`DELETE FROM cart_items WHERE user_id = $1 AND id = $2`, userID, itemID)
 	if err != nil {
@@ -74,6 +77,7 @@ func (r *Repository) DeleteCartItem(userID, itemID int64) error {
 	return nil
 }
 
+// DeleteSelectedCartItems 清空指定用户所有勾选（selected）的购物车条目。
 func (r *Repository) DeleteSelectedCartItems(userID int64) error {
 	_, err := r.db.Exec(`DELETE FROM cart_items WHERE user_id = $1 AND selected = TRUE`, userID)
 	return err

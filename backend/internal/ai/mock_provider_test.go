@@ -6,6 +6,7 @@ import (
 	"testing"
 )
 
+// TestMockProviderGenerateSellingPoints 验证 Mock 卖点生成返回非空结果。
 func TestMockProviderGenerateSellingPoints(t *testing.T) {
 	provider := MockProvider{}
 	result, err := provider.GenerateSellingPoints(context.Background(), SellingPointRequest{
@@ -20,6 +21,7 @@ func TestMockProviderGenerateSellingPoints(t *testing.T) {
 	}
 }
 
+// TestMockProviderGenerateSellingPointsWithDefaultAudience 验证人群缺省时回退到 target users。
 func TestMockProviderGenerateSellingPointsWithDefaultAudience(t *testing.T) {
 	provider := MockProvider{}
 	result, err := provider.GenerateSellingPoints(context.Background(), SellingPointRequest{
@@ -33,6 +35,7 @@ func TestMockProviderGenerateSellingPointsWithDefaultAudience(t *testing.T) {
 	}
 }
 
+// TestMockProviderRejectsEmptyProductName 验证空商品名返回错误。
 func TestMockProviderRejectsEmptyProductName(t *testing.T) {
 	provider := MockProvider{}
 	if _, err := provider.GenerateSellingPoints(context.Background(), SellingPointRequest{}); err == nil {
@@ -40,6 +43,7 @@ func TestMockProviderRejectsEmptyProductName(t *testing.T) {
 	}
 }
 
+// TestMockProviderGenerateBusinessReview 验证 Mock 经营复盘返回诊断结论。
 func TestMockProviderGenerateBusinessReview(t *testing.T) {
 	provider := MockProvider{}
 	result, err := provider.GenerateBusinessReview(context.Background(), BusinessReviewRequest{WindowDays: 7})
@@ -51,6 +55,7 @@ func TestMockProviderGenerateBusinessReview(t *testing.T) {
 	}
 }
 
+// TestMockProviderRejectsInvalidBusinessReviewWindow 验证非正窗口天数返回错误。
 func TestMockProviderRejectsInvalidBusinessReviewWindow(t *testing.T) {
 	provider := MockProvider{}
 	if _, err := provider.GenerateBusinessReview(context.Background(), BusinessReviewRequest{}); err == nil {
@@ -58,6 +63,7 @@ func TestMockProviderRejectsInvalidBusinessReviewWindow(t *testing.T) {
 	}
 }
 
+// TestMockProviderGenerateA2UISurfaceGreeting 验证问候界面的 createSurface 指令输出。
 func TestMockProviderGenerateA2UISurfaceGreeting(t *testing.T) {
 	provider := MockProvider{}
 	result, err := provider.GenerateA2UISurface(context.Background(), A2UISurfaceRequest{
@@ -75,6 +81,7 @@ func TestMockProviderGenerateA2UISurfaceGreeting(t *testing.T) {
 	}
 }
 
+// TestMockProviderGenerateA2UISurfaceRejectsMissingSurfaceID 验证缺少 surface_id 返回错误。
 func TestMockProviderGenerateA2UISurfaceRejectsMissingSurfaceID(t *testing.T) {
 	provider := MockProvider{}
 	if _, err := provider.GenerateA2UISurface(context.Background(), A2UISurfaceRequest{UserIntent: "hi"}); err == nil {
@@ -82,6 +89,7 @@ func TestMockProviderGenerateA2UISurfaceRejectsMissingSurfaceID(t *testing.T) {
 	}
 }
 
+// TestMockProviderGenerateA2UISurfaceRejectsMissingIntent 验证缺少 user_intent 返回错误。
 func TestMockProviderGenerateA2UISurfaceRejectsMissingIntent(t *testing.T) {
 	provider := MockProvider{}
 	if _, err := provider.GenerateA2UISurface(context.Background(), A2UISurfaceRequest{SurfaceID: "s1"}); err == nil {
@@ -89,6 +97,7 @@ func TestMockProviderGenerateA2UISurfaceRejectsMissingIntent(t *testing.T) {
 	}
 }
 
+// TestMockProviderGenerateA2UISurfaceShoppingGuide 验证导购界面生成场景标题与数据模型指令。
 func TestMockProviderGenerateA2UISurfaceShoppingGuide(t *testing.T) {
 	provider := MockProvider{}
 	result, err := provider.GenerateA2UISurface(context.Background(), A2UISurfaceRequest{
@@ -107,6 +116,7 @@ func TestMockProviderGenerateA2UISurfaceShoppingGuide(t *testing.T) {
 	}
 }
 
+// TestMockProviderGenerateA2UISurfaceShoppingGuideWithoutNotes 验证无种草笔记时不输出 notes 区块。
 func TestMockProviderGenerateA2UISurfaceShoppingGuideWithoutNotes(t *testing.T) {
 	provider := MockProvider{}
 	result, err := provider.GenerateA2UISurface(context.Background(), A2UISurfaceRequest{
@@ -122,6 +132,7 @@ func TestMockProviderGenerateA2UISurfaceShoppingGuideWithoutNotes(t *testing.T) 
 	}
 }
 
+// TestSceneTitle 验证场景标识到中文标题的映射与默认回退。
 func TestSceneTitle(t *testing.T) {
 	if sceneTitle("dorm_desk") != "宿舍书桌改造方案" {
 		t.Fatal("unexpected dorm title")
@@ -137,6 +148,7 @@ func TestSceneTitle(t *testing.T) {
 	}
 }
 
+// TestMockProviderGenerateA2UISurfaceShoppingGuideNoBudget 验证预算为 0 时展示"预算不限"。
 func TestMockProviderGenerateA2UISurfaceShoppingGuideNoBudget(t *testing.T) {
 	provider := MockProvider{}
 	result, err := provider.GenerateA2UISurface(context.Background(), A2UISurfaceRequest{
@@ -152,6 +164,7 @@ func TestMockProviderGenerateA2UISurfaceShoppingGuideNoBudget(t *testing.T) {
 	}
 }
 
+// TestMockProviderNormalizeNotesHandlesInt64Fields 验证笔记数值字段统一为 int64。
 func TestMockProviderNormalizeNotesHandlesInt64Fields(t *testing.T) {
 	provider := MockProvider{}
 	notes := []map[string]any{
@@ -167,6 +180,7 @@ func TestMockProviderNormalizeNotesHandlesInt64Fields(t *testing.T) {
 	}
 }
 
+// TestMockProviderNormalizeProductsHandlesVariants 验证商品字段精简与数值类型兼容。
 func TestMockProviderNormalizeProductsHandlesVariants(t *testing.T) {
 	provider := MockProvider{}
 	products := []any{

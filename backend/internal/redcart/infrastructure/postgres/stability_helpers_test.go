@@ -12,6 +12,7 @@ import (
 	"time"
 )
 
+// skipIfNoPostgres 未配置 PostgreSQL 集成环境时跳过测试，并返回 DSN。
 func skipIfNoPostgres(t *testing.T) (string, bool) {
 	t.Helper()
 	dsn := os.Getenv("POSTGRES_DSN")
@@ -21,6 +22,7 @@ func skipIfNoPostgres(t *testing.T) (string, bool) {
 	return dsn, true
 }
 
+// newPostgresRepo 创建连接真实 PostgreSQL 的仓储，测试结束时自动关闭。
 func newPostgresRepo(t *testing.T) *Repository {
 	t.Helper()
 	dsn, _ := skipIfNoPostgres(t)
@@ -32,12 +34,14 @@ func newPostgresRepo(t *testing.T) *Repository {
 	return repo
 }
 
+// newPostgresService 创建仓储与应用服务（Mock AI），供集成测试复用。
 func newPostgresService(t *testing.T) (*Repository, *application.Service) {
 	t.Helper()
 	repo := newPostgresRepo(t)
 	return repo, application.NewService(repo, backendai.MockProvider{})
 }
 
+// openRawConn 打开直连 PostgreSQL 的裸连接，用于模拟外部并发事务。
 func openRawConn(t *testing.T, dsn string) *sql.DB {
 	t.Helper()
 	db, err := sql.Open("pgx", dsn)
@@ -51,6 +55,7 @@ func openRawConn(t *testing.T, dsn string) *sql.DB {
 	return db
 }
 
+// createStabilityProductAndSKU 创建用于稳定性测试的商品与指定库存的 SKU。
 func createStabilityProductAndSKU(t *testing.T, repo *Repository, stock int) domain.SKU {
 	t.Helper()
 	now := time.Now().UTC()
@@ -84,6 +89,7 @@ func createStabilityProductAndSKU(t *testing.T, repo *Repository, stock int) dom
 	return sku
 }
 
+// createStabilityOrder 通过应用服务创建一条指定数量 SKU 的稳定性测试订单。
 func createStabilityOrder(t *testing.T, service *application.Service, sku domain.SKU, quantity int) *application.OrderView {
 	t.Helper()
 	view, err := service.CreateOrder(context.Background(), application.Actor{UserID: 1, Role: domain.RoleConsumer}, fmt.Sprintf("stability-%d-%d", sku.ID, time.Now().UnixNano()), application.CheckoutInput{

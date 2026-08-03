@@ -5,6 +5,7 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 )
 
+// ListOrderEvents 返回订单的全部状态事件，按 ID 升序。
 func (r *Repository) ListOrderEvents(orderID int64) []domain.OrderEvent {
 	rows, err := r.db.Query(`SELECT id, order_id, from_status, to_status, event_type, operator_id, operator_role, remark, created_at FROM order_events WHERE order_id = $1 ORDER BY id`, orderID)
 	if err != nil {
@@ -22,6 +23,7 @@ func (r *Repository) ListOrderEvents(orderID int64) []domain.OrderEvent {
 	return events
 }
 
+// AppendOrderEvent 追加一条订单事件并返回带 ID 与创建时间的事件。
 func (r *Repository) AppendOrderEvent(event domain.OrderEvent) (domain.OrderEvent, error) {
 	return appendOrderEvent(r.db, event)
 }

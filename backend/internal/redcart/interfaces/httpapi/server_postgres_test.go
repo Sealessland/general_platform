@@ -8,6 +8,7 @@ import (
 	"testing"
 )
 
+// TestPostgresHTTPCriticalPath 覆盖下单核心链路：预览→下单→幂等重试→支付→发货→完成→看板→AI 任务。
 func TestPostgresHTTPCriticalPath(t *testing.T) {
 	handler, cleanup := newPostgresTestHandler(t)
 	defer cleanup()
@@ -97,6 +98,8 @@ func TestPostgresHTTPCriticalPath(t *testing.T) {
 		t.Fatalf("expected completed ai task, got %+v", fetchedTask)
 	}
 }
+
+// TestPostgresHTTPConcurrentOrderReservesStockAtomically 验证并发抢购时库存扣减的原子性。
 func TestPostgresHTTPConcurrentOrderReservesStockAtomically(t *testing.T) {
 	handler, cleanup := newPostgresTestHandler(t)
 	defer cleanup()
@@ -149,6 +152,8 @@ func TestPostgresHTTPConcurrentOrderReservesStockAtomically(t *testing.T) {
 		t.Fatalf("expected stock=1 locked_stock=1 after concurrent reservation, got %+v", sku)
 	}
 }
+
+// TestPostgresHTTPInventoryCompensationPaths 验证取消与退款路径的库存补偿释放。
 func TestPostgresHTTPInventoryCompensationPaths(t *testing.T) {
 	handler, cleanup := newPostgresTestHandler(t)
 	defer cleanup()
@@ -195,6 +200,8 @@ func TestPostgresHTTPInventoryCompensationPaths(t *testing.T) {
 		t.Fatalf("expected released lock after refund, got %+v", refundLocks[0])
 	}
 }
+
+// TestPostgresHTTPRejectsInsufficientStockWithoutSideEffects 验证库存不足被拒绝且不留副作用。
 func TestPostgresHTTPRejectsInsufficientStockWithoutSideEffects(t *testing.T) {
 	handler, cleanup := newPostgresTestHandler(t)
 	defer cleanup()
@@ -226,6 +233,8 @@ func TestPostgresHTTPRejectsInsufficientStockWithoutSideEffects(t *testing.T) {
 	}
 	assertSKUStock(t, handler, productID, skuID, 1, 0)
 }
+
+// TestPostgresHTTPRejectsGETStateChanges 验证对状态流转接口用 GET 不会触发状态变更。
 func TestPostgresHTTPRejectsGETStateChanges(t *testing.T) {
 	handler, cleanup := newPostgresTestHandler(t)
 	defer cleanup()
@@ -251,6 +260,8 @@ func TestPostgresHTTPRejectsGETStateChanges(t *testing.T) {
 	}
 	assertSKUStock(t, handler, productID, skuID, 3, 1)
 }
+
+// TestPostgresHTTPAuthorizationBoundaries 验证订单/商品/任务的越权访问被拒绝。
 func TestPostgresHTTPAuthorizationBoundaries(t *testing.T) {
 	handler, cleanup := newPostgresTestHandler(t)
 	defer cleanup()

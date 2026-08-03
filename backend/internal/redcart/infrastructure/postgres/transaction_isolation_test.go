@@ -6,6 +6,7 @@ import (
 
 // TestReadCommittedNoDirtyRead verifies that uncommitted writes are invisible
 // to other transactions under PostgreSQL default READ COMMITTED isolation.
+// 验证 READ COMMITTED 下未提交写入对其他事务不可见（无脏读）。
 func TestReadCommittedNoDirtyRead(t *testing.T) {
 	dsn, _ := skipIfNoPostgres(t)
 	db := openRawConn(t, dsn)
@@ -40,6 +41,7 @@ func TestReadCommittedNoDirtyRead(t *testing.T) {
 // TestNonRepeatableReadInventory documents that READ COMMITTED allows
 // non-repeatable reads: a second read in the same transaction sees committed
 // changes from other transactions. This is expected behaviour, not a bug.
+// 记录 READ COMMITTED 允许不可重复读的行为（预期行为而非缺陷）。
 func TestNonRepeatableReadInventory(t *testing.T) {
 	dsn, _ := skipIfNoPostgres(t)
 	db := openRawConn(t, dsn)
@@ -74,6 +76,7 @@ func TestNonRepeatableReadInventory(t *testing.T) {
 // TestPhantomInventoryLocks documents that READ COMMITTED allows phantom reads:
 // a second query in the same transaction can see rows inserted by other
 // transactions. This is expected behaviour, not a bug.
+// 记录 READ COMMITTED 允许幻读的行为（预期行为而非缺陷）。
 func TestPhantomInventoryLocks(t *testing.T) {
 	dsn, _ := skipIfNoPostgres(t)
 	db := openRawConn(t, dsn)

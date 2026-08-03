@@ -7,6 +7,7 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 )
 
+// handleHealth 健康检查接口，返回服务存活状态。
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeMethodNotAllowed(w)
@@ -15,6 +16,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 }
 
+// handleRegister 处理用户注册，成功即返回会话令牌。
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeMethodNotAllowed(w)
@@ -33,6 +35,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, result)
 }
 
+// handleLogin 处理账号密码登录，返回会话令牌。
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeMethodNotAllowed(w)
@@ -69,6 +72,7 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request, actor applicat
 	writeJSON(w, http.StatusOK, result)
 }
 
+// handleLogout 使当前会话令牌失效。
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request, actor application.Actor) {
 	if r.Method != http.MethodPost {
 		writeMethodNotAllowed(w)
@@ -84,6 +88,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request, actor appl
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 }
 
+// handleRefresh 使用刷新令牌换取新的会话令牌。
 func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request, actor application.Actor) {
 	if r.Method != http.MethodPost {
 		writeMethodNotAllowed(w)

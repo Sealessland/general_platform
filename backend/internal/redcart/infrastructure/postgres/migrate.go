@@ -51,6 +51,7 @@ func (r *Repository) migrate(ctx context.Context) error {
 	return nil
 }
 
+// ensureSchemaMigrationsTable 创建 schema_migrations 版本表（幂等）。
 func (r *Repository) ensureSchemaMigrationsTable(ctx context.Context) error {
 	return r.gormDB.WithContext(ctx).Exec(`
 		CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -60,6 +61,7 @@ func (r *Repository) ensureSchemaMigrationsTable(ctx context.Context) error {
 	`).Error
 }
 
+// isMigrationApplied 判断指定版本的迁移是否已应用。
 func (r *Repository) isMigrationApplied(ctx context.Context, version string) (bool, error) {
 	var count int64
 	err := r.gormDB.WithContext(ctx).Raw(`SELECT COUNT(*) FROM schema_migrations WHERE version = ?`, version).Row().Scan(&count)
@@ -243,6 +245,7 @@ func seededPasswordHash(password string) string {
 	return string(hash)
 }
 
+// envOrDefault 读取环境变量，未设置或为空时返回默认值。
 func envOrDefault(key, fallback string) string {
 	if value := os.Getenv(key); value != "" {
 		return value

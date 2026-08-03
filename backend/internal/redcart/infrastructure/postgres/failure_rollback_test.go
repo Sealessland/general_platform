@@ -12,6 +12,7 @@ import (
 // side effect of PayOrder fails, the order status change is rolled back and the
 // SKU remains unchanged. This confirms status migration and inventory mutation
 // are atomic.
+// 支付时库存副作用失败，订单状态必须回滚且 SKU 保持不变（状态与库存变更的原子性）。
 func TestPayOrderInventoryFailureRollsBackStatus(t *testing.T) {
 	dsn, _ := skipIfNoPostgres(t)
 	db := openRawConn(t, dsn)

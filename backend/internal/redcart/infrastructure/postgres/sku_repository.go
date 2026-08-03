@@ -7,6 +7,7 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/redcart/domain"
 )
 
+// ListSKUsByProduct 返回指定商品的全部 SKU，按 ID 升序。
 func (r *Repository) ListSKUsByProduct(productID int64) []domain.SKU {
 	rows, err := r.db.Query(`SELECT id, product_id, sku_name, sku_attrs_json, price_cent, stock, locked_stock, status, created_at, updated_at FROM product_skus WHERE product_id = $1 ORDER BY id`, productID)
 	if err != nil {
@@ -24,6 +25,7 @@ func (r *Repository) ListSKUsByProduct(productID int64) []domain.SKU {
 	return out
 }
 
+// GetSKU 按 ID 查询 SKU；不存在返回 (零值, false)。
 func (r *Repository) GetSKU(id int64) (domain.SKU, bool) {
 	return getSKU(r.db, id)
 }
@@ -39,10 +41,12 @@ func getSKU(q dbQuerier, id int64) (domain.SKU, bool) {
 	return sku, err == nil
 }
 
+// SaveSKU 新增（ID 为 0）或更新 SKU，属性以 JSONB 落库。
 func (r *Repository) SaveSKU(sku domain.SKU) (domain.SKU, error) {
 	return saveSKU(r.db, sku)
 }
 
+// saveSKU 新增或更新 SKU（与 getSKU 相同，供事务路径复用）。
 func saveSKU(q dbQuerier, sku domain.SKU) (domain.SKU, error) {
 	attrs, err := json.Marshal(sku.SKUAttrs)
 	if err != nil {

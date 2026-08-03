@@ -28,6 +28,7 @@ type Handler interface {
 // HandlerFunc adapts a function to the Handler interface.
 type HandlerFunc func(ctx context.Context, evt event.Event) error
 
+// Handle 直接调用底层函数，把 HandlerFunc 适配为 Handler 接口。
 func (f HandlerFunc) Handle(ctx context.Context, evt event.Event) error { return f(ctx, evt) }
 
 // Deduplicator provides idempotency for consumers. RabbitMQ may redeliver
@@ -35,8 +36,10 @@ func (f HandlerFunc) Handle(ctx context.Context, evt event.Event) error { return
 // against duplicate side-effects using the outbox event ID.
 type Deduplicator interface {
 	// IsDuplicate returns true if the event was already processed.
+	// IsDuplicate 返回事件是否已被处理过。
 	IsDuplicate(ctx context.Context, eventID int64) (bool, error)
 	// MarkProcessed records that the event has been processed.
+	// MarkProcessed 记录事件已处理。
 	MarkProcessed(ctx context.Context, eventID int64) error
 }
 
@@ -53,12 +56,14 @@ func NewMemoryDeduplicator() *MemoryDeduplicator {
 	return &MemoryDeduplicator{seen: make(map[int64]bool)}
 }
 
+// IsDuplicate 判断事件 ID 是否已被处理过（内存 map 查重）。
 func (m *MemoryDeduplicator) IsDuplicate(_ context.Context, eventID int64) (bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.seen[eventID], nil
 }
 
+// MarkProcessed 将事件 ID 记入已处理集合。
 func (m *MemoryDeduplicator) MarkProcessed(_ context.Context, eventID int64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -69,7 +74,9 @@ func (m *MemoryDeduplicator) MarkProcessed(_ context.Context, eventID int64) err
 // Acknowledger abstracts ack/nack so the consume logic is testable without
 // a live AMQP channel. amqp.Delivery satisfies this interface.
 type Acknowledger interface {
+	// Ack 确认消息处理成功，multiple 表示是否批量确认。
 	Ack(multiple bool) error
+	// Nack 拒绝消息，requeue 为 true 时重新入队，否则进入死信队列。
 	Nack(multiple, requeue bool) error
 }
 
@@ -125,6 +132,8 @@ func NewConsumer(addr, exchange string, handler Handler, dedup Deduplicator, cfg
 	return c, nil
 }
 
+// connect 建立 AMQP 连接与 channel，声明死信 exchange/队列、主队列并设置
+// QoS 预取；任一环节失败都会关闭已打开的资源并返回错误。
 func (c *Consumer) connect() error {
 	conn, err := amqp.Dial(c.addr)
 	if err != nil {
@@ -184,6 +193,7 @@ func (c *Consumer) connect() error {
 
 // Start begins consuming. It blocks until Close is called or the channel
 // is lost.
+// Start 开始消费并阻塞，直到 Close 被调用或 channel 断开。
 func (c *Consumer) Start(ctx context.Context) error {
 	msgs, err := c.channel.Consume(
 		c.queueName,
@@ -206,6 +216,8 @@ func (c *Consumer) Start(ctx context.Context) error {
 // processDelivery is the core consume loop. It is extracted so tests can
 // drive it with a mock Acknowledger and body without a live AMQP channel.
 // amqp.Delivery satisfies Acknowledger via its Ack/Nack methods.
+// processDelivery 是消费核心逻辑：解码 → 幂等去重 → 业务处理 → 标记已处理并 ack；
+// 解码失败或业务失败 nack 到死信队列，去重检查失败则重新入队。
 func (c *Consumer) processDelivery(ctx context.Context, body []byte, acker Acknowledger) {
 	evt, err := decodeBody(body)
 	if err != nil {

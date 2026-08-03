@@ -28,6 +28,7 @@ class AIGenerationServicer(ai_pb2_grpc.AIGenerationServiceServicer):
     """AIGenerationService 的实现：商品卖点生成与经营复盘。"""
 
     def __init__(self, provider: MockAIProvider | None = None) -> None:
+        """初始化 Servicer，未注入 provider 时使用默认的 MockAIProvider。"""
         self.provider = provider or MockAIProvider()
 
     def GenerateSellingPoints(
@@ -35,6 +36,7 @@ class AIGenerationServicer(ai_pb2_grpc.AIGenerationServiceServicer):
         request: ai_pb2.GenerateSellingPointsRequest,
         context: grpc.ServicerContext,
     ) -> ai_pb2.GenerateSellingPointsResponse:
+        """生成商品卖点：将 protobuf 请求转为领域模型，校验失败时映射为 INVALID_ARGUMENT。"""
         # 将 protobuf 请求转换为内部领域模型；参数校验失败时返回 INVALID_ARGUMENT。
         try:
             points = self.provider.generate_selling_points(
@@ -54,6 +56,7 @@ class AIGenerationServicer(ai_pb2_grpc.AIGenerationServiceServicer):
         request: ai_pb2.GenerateBusinessReviewRequest,
         context: grpc.ServicerContext,
     ) -> ai_pb2.GenerateBusinessReviewResponse:
+        """生成经营复盘：校验入参，将诊断结论与下一步动作透出给调用方。"""
         try:
             result = self.provider.generate_business_review(
                 BusinessReviewRequest(
@@ -77,6 +80,7 @@ class A2UIServicer(ai_pb2_grpc.A2UIServiceServicer):
     """A2UIService 的实现：按用户意图与上下文生成可渲染的 A2UI 界面 JSON。"""
 
     def __init__(self, provider: MockAIProvider | None = None) -> None:
+        """初始化 Servicer，未注入 provider 时使用默认的 MockAIProvider。"""
         self.provider = provider or MockAIProvider()
 
     def GenerateA2UISurface(
@@ -84,6 +88,7 @@ class A2UIServicer(ai_pb2_grpc.A2UIServiceServicer):
         request: ai_pb2.GenerateA2UISurfaceRequest,
         context: grpc.ServicerContext,
     ) -> ai_pb2.GenerateA2UISurfaceResponse:
+        """生成 A2UI 界面：将意图与上下文交给 provider，校验失败时返回 INVALID_ARGUMENT。"""
         try:
             result = self.provider.generate_a2ui_surface(
                 A2UISurfaceRequest(
