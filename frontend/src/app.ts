@@ -99,10 +99,12 @@ function emptyBlock(text) {
   return node("div", { class: "empty", text: text || "暂无数据" });
 }
 
+// 通用错误块：展示接口失败信息。
 function errorBlock(text) {
   return node("div", { class: "error", text: text || "加载失败" });
 }
 
+// 通用加载块：转圈动画 + 提示文字。
 function loadBlock(text) {
   return node("div", { class: "empty" }, [
     node("span", { class: "spinner" }),
@@ -189,10 +191,12 @@ function routePath() {
   return path.split("?")[0];
 }
 
+// 跳转：设置 hash 触发 hashchange 路由。
 function go(path) {
   window.location.hash = path;
 }
 
+// 登录后的默认落地页：商家进经营看板，消费者进内容流。
 function defaultPath() {
   if (!store.user) {
     return "/login";
@@ -225,6 +229,7 @@ function lineText(list) {
   return (list || []).join("\n");
 }
 
+// 多行文本转字符串数组：按行拆分、去首尾空白并丢弃空行。
 function splitLines(text) {
   return String(text || "")
     .split("\n")
@@ -249,6 +254,7 @@ function parseAttrLines(text) {
   return out;
 }
 
+// 属性对象序列化为「key: value」多行文本，供 textarea 回显（SKU 属性编辑用）。
 function attrLines(attrs) {
   const rows = [];
   Object.keys(attrs || {}).forEach((key) => {
@@ -271,6 +277,7 @@ function calcProductPrice(product) {
   }, 0);
 }
 
+// 可售库存：各 SKU 的 stock - locked_stock 求和（下限 0）。
 function calcProductStock(product) {
   const skus = Array.isArray(product.skus) ? product.skus : [];
   return skus.reduce((sum, sku) => sum + Math.max(0, sku.stock - sku.locked_stock), 0);
@@ -683,6 +690,7 @@ function cartView() {
   const body = node("div");
   wrap.appendChild(body);
 
+  // 重新拉取购物车并重绘列表。
   function refresh() {
     body.innerHTML = "";
     body.appendChild(loadBlock());
@@ -802,6 +810,7 @@ function checkoutView() {
   const previewBox = node("div");
   const message = node("div", { class: "error", style: "display:none" });
 
+  // 拉取结算预览（金额与库存检查）并渲染明细表格。
   async function loadPreview() {
     previewBox.innerHTML = "";
     previewBox.appendChild(loadBlock("拉取结算预览..."));
@@ -1089,6 +1098,7 @@ function orderItemsPanel(items) {
   return panel;
 }
 
+// 订单状态事件流面板：按时间列出状态流转记录。
 function orderEventsPanel(items) {
   const panel = node("section", { class: "panel" });
   panel.appendChild(node("h3", { text: "状态事件" }));
@@ -1126,6 +1136,7 @@ function orderEventsPanel(items) {
   return panel;
 }
 
+// 库存锁面板：展示 SKU 锁定数量与状态。
 function orderLocksPanel(items) {
   const panel = node("section", { class: "panel" });
   panel.appendChild(node("h3", { text: "库存锁" }));
@@ -1264,6 +1275,7 @@ function merchantProductsView() {
   const body = node("div");
   wrap.appendChild(body);
 
+  // 重新拉取商品列表并重绘表格。
   function refresh() {
     body.innerHTML = "";
     body.appendChild(loadBlock());
@@ -1435,6 +1447,7 @@ function skuView(productId) {
   const body = node("div");
   wrap.appendChild(body);
 
+  // 重新拉取商品与 SKU 列表并重绘。
   function refresh() {
     body.innerHTML = "";
     body.appendChild(loadBlock());
@@ -1788,6 +1801,7 @@ function a2uiRenderPanel(surfaceId, a2uiJSON) {
     }
   });
 
+  // 重绘 surface：把根组件（root）渲染进 host 容器。
   function refresh() {
     host.innerHTML = "";
     const root = surface.components.get("root");
@@ -1937,6 +1951,7 @@ async function a2uiAddToCart(context) {
   }
 }
 
+// A2UI 批量加购：依次对列表中的商品执行加购。
 async function a2uiAddAllToCart(items) {
   const list = Array.isArray(items) ? items : [];
   if (!list.length) {
@@ -1951,10 +1966,10 @@ async function a2uiAddAllToCart(items) {
 
 // A2UI 数据解析：组件引用解析、路径取值、模板插值（${path}）与动作上下文求值。
 function a2uiResolveChildren(surface, component, dataModel) {
-  if (!component.children) return [];
   if (Array.isArray(component.children)) {
     return component.children.map((id) => a2uiRenderComponent(surface, surface.components.get(id), dataModel)).filter(Boolean);
   }
+  // 注意：child（单个子组件引用）与 children 数组是两种形态，不能被提前 return 短路
   if (component.child) {
     const child = a2uiRenderComponent(surface, surface.components.get(component.child), dataModel);
     return child ? [child] : [];
@@ -1962,6 +1977,7 @@ function a2uiResolveChildren(surface, component, dataModel) {
   return [];
 }
 
+// 按「/」分隔路径从 dataModel 取值；path 为空时返回整个 dataModel。
 function a2uiResolvePath(dataModel, path) {
   if (path == null) return dataModel;
   const parts = String(path).split("/").filter(Boolean);
@@ -1973,6 +1989,7 @@ function a2uiResolvePath(dataModel, path) {
   return target;
 }
 
+// 取值：普通值原样返回；path 取路径值；formatString 做 ${path} 模板插值。
 function a2uiResolveValue(value, dataModel) {
   if (value == null) return "";
   if (typeof value === "object") {
@@ -1992,6 +2009,7 @@ function a2uiResolveValue(value, dataModel) {
   return String(value);
 }
 
+// 动作上下文求值：把 context 中的每个值都解析为最终字符串。
 function a2uiResolveActionContext(context, dataModel) {
   if (!context || typeof context !== "object") return {};
   const out = {};
@@ -2114,6 +2132,7 @@ function metricCard(title, value, hint) {
   return card;
 }
 
+// 页头组件：标题 + 副标题说明。
 function titleBar(title, text) {
   const box = node("section", { class: "page-head" });
   box.appendChild(node("h1", { text: title }));
@@ -2121,6 +2140,7 @@ function titleBar(title, text) {
   return box;
 }
 
+// 表单项容器：标签 + 输入控件。
 function formRow(label, input) {
   const row = node("label", { class: "form-row" });
   row.appendChild(node("span", { class: "label", text: label }));
@@ -2153,6 +2173,7 @@ function mount() {
   window.addEventListener("hashchange", renderRoute);
 }
 
+// 应用启动：挂载骨架、恢复会话（/api/auth/me），随后进入首屏路由。
 async function boot() {
   mount();
   if (store.session) {
