@@ -23,6 +23,8 @@ func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"items": result})
 }
 
+// handleNoteByID 详情接口允许匿名访问：尝试认证成功则附带身份（用于浏览计数等），
+// 失败则以 nil Actor 继续。
 func (s *Server) handleNoteByID(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeMethodNotAllowed(w)
@@ -59,15 +61,7 @@ func (s *Server) handleProducts(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"items": result})
 }
 
-func (s *Server) handleProductRoutes(w http.ResponseWriter, r *http.Request) {
-	switch {
-	case strings.HasSuffix(r.URL.Path, "/skus"):
-		s.handleProductSKUs(w, r)
-	default:
-		s.handleProductByID(w, r)
-	}
-}
-
+// handleProductByID 与 handleNoteByID 相同，允许匿名访问，认证成功则附带身份。
 func (s *Server) handleProductByID(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeMethodNotAllowed(w)

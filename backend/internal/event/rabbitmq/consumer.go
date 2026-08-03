@@ -42,12 +42,13 @@ type Deduplicator interface {
 
 // MemoryDeduplicator is an in-process deduplicator for demos. Production
 // should use a Redis-backed or DB-backed implementation that survives
-// consumer restarts.
+// consumer restarts. 当前未接线，为预留/演示能力。
 type MemoryDeduplicator struct {
 	mu   sync.Mutex
 	seen map[int64]bool
 }
 
+// NewMemoryDeduplicator 创建基于内存的去重器，仅用于单进程演示场景。
 func NewMemoryDeduplicator() *MemoryDeduplicator {
 	return &MemoryDeduplicator{seen: make(map[int64]bool)}
 }
@@ -89,12 +90,16 @@ type Consumer struct {
 	closed  bool
 }
 
+// ConsumerConfig 是 NewConsumer 的可选配置；为零值时使用默认值
+// （Prefetch 默认 10，QueueName 默认 redcart.events.consumer，Logger 默认 log.Default()）。
 type ConsumerConfig struct {
 	QueueName string
 	Prefetch  int
 	Logger    *log.Logger
 }
 
+// NewConsumer 创建并连接 RabbitMQ 消费者：声明死信 exchange/队列、主队列及
+// QoS 预取限制，返回的 Consumer 需调用 Start 开始消费。
 func NewConsumer(addr, exchange string, handler Handler, dedup Deduplicator, cfg ConsumerConfig) (*Consumer, error) {
 	if cfg.Prefetch <= 0 {
 		cfg.Prefetch = defaultPrefetch
@@ -235,6 +240,8 @@ func (c *Consumer) processDelivery(ctx context.Context, body []byte, acker Ackno
 	_ = acker.Ack(false)
 }
 
+// decodeBody 将消息体反序列化为 event.Event；字段结构与
+// rabbitmq.Publisher.Publish 序列化的 envelope 一一对应。
 func decodeBody(body []byte) (event.Event, error) {
 	var msg struct {
 		EventID       int64           `json:"event_id"`
@@ -257,6 +264,7 @@ func decodeBody(body []byte) (event.Event, error) {
 	}, nil
 }
 
+// Close 标记关闭并释放 channel 与连接。
 func (c *Consumer) Close() error {
 	c.mu.Lock()
 	c.closed = true

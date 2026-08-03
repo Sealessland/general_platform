@@ -31,7 +31,7 @@ func (s *Server) handleOrders(w http.ResponseWriter, r *http.Request, actor appl
 	switch r.Method {
 	case http.MethodGet:
 		limit, offset := parsePagination(r)
-	result, err := s.service.ListOrders(r.Context(), actor, limit, offset)
+		result, err := s.service.ListOrders(r.Context(), actor, limit, offset)
 		if err != nil {
 			writeAppError(w, err)
 			return
@@ -54,6 +54,8 @@ func (s *Server) handleOrders(w http.ResponseWriter, r *http.Request, actor appl
 	}
 }
 
+// handleOrderByID 按路径后缀分发订单动作：/pay、/cancel、/finish、/refund 为状态
+// 流转接口，其余视为按 ID 查询。各动作仅接受 POST，避免 GET 触发状态变更。
 func (s *Server) handleOrderByID(w http.ResponseWriter, r *http.Request, actor application.Actor) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/orders/")
 	switch {

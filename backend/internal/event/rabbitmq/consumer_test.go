@@ -31,7 +31,7 @@ func (m *mockAcker) Nack(multiple, requeue bool) error {
 }
 
 type mockHandler struct {
-	err  error
+	err   error
 	calls []event.Event
 }
 
@@ -66,7 +66,7 @@ func encodeMessage(t *testing.T, evt event.Event) []byte {
 		"event_type":     string(evt.Type),
 		"topic":          evt.Topic,
 		"correlation_id": evt.CorrelationID,
-		"occurred_at":   evt.OccurredAt,
+		"occurred_at":    evt.OccurredAt,
 		"payload":        evt.Payload,
 	})
 	if err != nil {

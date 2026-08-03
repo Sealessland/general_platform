@@ -14,8 +14,8 @@ import (
 )
 
 type memoryTx struct {
-	committed   bool
-	rolledBack  bool
+	committed  bool
+	rolledBack bool
 }
 
 func (t *memoryTx) Commit() error   { t.committed = true; return nil }

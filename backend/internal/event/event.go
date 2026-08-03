@@ -22,6 +22,7 @@ const (
 	TypeOrderRefundRequested Type = "ORDER_REFUND_REQUESTED"
 	TypeOrderRefunded        Type = "ORDER_REFUNDED"
 
+	// TypeBehavior* 系列为行为埋点事件，当前未接线，为预留/演示能力。
 	TypeBehaviorNoteView     Type = "BEHAVIOR_NOTE_VIEW"
 	TypeBehaviorProductClick Type = "BEHAVIOR_PRODUCT_CLICK"
 	TypeBehaviorAddToCart    Type = "BEHAVIOR_ADD_TO_CART"

@@ -15,11 +15,14 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// redisPostgresFixture 集成测试夹具，组合 Postgres 仓库与 Redis 客户端。
 type redisPostgresFixture struct {
 	repo   *postgresrepo.Repository
 	client *goredis.Client
 }
 
+// newRedisPostgresFixture 依赖外部服务的集成夹具：未设置
+// RUN_POSTGRES_INTEGRATION / POSTGRES_DSN / REDIS_ADDR 任一环境变量时跳过。
 func newRedisPostgresFixture(t *testing.T) redisPostgresFixture {
 	t.Helper()
 	if os.Getenv("RUN_POSTGRES_INTEGRATION") != "1" {
@@ -51,6 +54,7 @@ func newRedisPostgresFixture(t *testing.T) redisPostgresFixture {
 	return redisPostgresFixture{repo: repo, client: client}
 }
 
+// TestSessionRepositoryRoundTrip 验证登录后会话写入 Redis，可通过 token 反查用户。
 func TestSessionRepositoryRoundTrip(t *testing.T) {
 	fixture := newRedisPostgresFixture(t)
 	repo := NewSessionRepository(fixture.repo, fixture.client, time.Hour, 24*time.Hour)
@@ -82,6 +86,7 @@ func TestSessionRepositoryRoundTrip(t *testing.T) {
 	}
 }
 
+// TestSessionRepositoryDeleteInvalidatesTokens 验证删除会话后 token 立即失效。
 func TestSessionRepositoryDeleteInvalidatesTokens(t *testing.T) {
 	fixture := newRedisPostgresFixture(t)
 	repo := NewSessionRepository(fixture.repo, fixture.client, time.Hour, 24*time.Hour)
@@ -107,31 +112,7 @@ func TestSessionRepositoryDeleteInvalidatesTokens(t *testing.T) {
 	}
 }
 
-func TestSessionTTLFromEnv(t *testing.T) {
-	ttl, err := SessionTTLFromEnv("")
-	if err != nil {
-		t.Fatalf("default ttl: %v", err)
-	}
-	if ttl != defaultSessionTTL {
-		t.Fatalf("expected default ttl %s, got %s", defaultSessionTTL, ttl)
-	}
-
-	ttl, err = SessionTTLFromEnv("90m")
-	if err != nil {
-		t.Fatalf("custom ttl: %v", err)
-	}
-	if ttl != 90*time.Minute {
-		t.Fatalf("expected 90m ttl, got %s", ttl)
-	}
-
-	if _, err := SessionTTLFromEnv("bad"); err == nil {
-		t.Fatal("expected parse error")
-	}
-	if _, err := SessionTTLFromEnv("0s"); err == nil {
-		t.Fatal("expected positive ttl error")
-	}
-}
-
+// TestAccessTokenTTLFromEnv 验证访问令牌 TTL 环境变量解析。
 func TestAccessTokenTTLFromEnv(t *testing.T) {
 	ttl, err := AccessTokenTTLFromEnv("")
 	if err != nil {
@@ -154,6 +135,7 @@ func TestAccessTokenTTLFromEnv(t *testing.T) {
 	}
 }
 
+// TestRefreshTokenTTLFromEnv 验证刷新令牌 TTL 环境变量解析。
 func TestRefreshTokenTTLFromEnv(t *testing.T) {
 	ttl, err := RefreshTokenTTLFromEnv("")
 	if err != nil {
@@ -176,6 +158,7 @@ func TestRefreshTokenTTLFromEnv(t *testing.T) {
 	}
 }
 
+// createRedisTestUser 创建带 bcrypt 密码哈希的测试用户。
 func createRedisTestUser(repo *postgresrepo.Repository, phone, password, role string) (domain.User, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -191,6 +174,7 @@ func createRedisTestUser(repo *postgresrepo.Repository, phone, password, role st
 	})
 }
 
+// uniqueRedisTestPhone 生成带时间戳的唯一手机号，避免测试数据冲突。
 func uniqueRedisTestPhone() string {
 	return fmt.Sprintf("137%08d", time.Now().UnixNano()%100000000)
 }

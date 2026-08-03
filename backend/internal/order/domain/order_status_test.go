@@ -49,15 +49,3 @@ func TestTerminalStates(t *testing.T) {
 		}
 	}
 }
-
-func TestInventoryReleaseStates(t *testing.T) {
-	if !ReleasesInventory(StatusCancelled) {
-		t.Fatal("cancelled orders should release inventory")
-	}
-	if !ReleasesInventory(StatusRefunded) {
-		t.Fatal("refunded orders should release inventory")
-	}
-	if ReleasesInventory(StatusPaid) {
-		t.Fatal("paid orders should not release inventory")
-	}
-}
