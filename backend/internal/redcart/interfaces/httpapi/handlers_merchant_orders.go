@@ -19,7 +19,7 @@ func (s *Server) handleMerchantOrderByID(w http.ResponseWriter, r *http.Request,
 			writeMethodNotAllowed(w)
 			return
 		}
-		id, err := parseSuffixID(path, "/ship")
+		id, err := parsePathID(path, "", "/ship")
 		if err != nil {
 			writeBadRequest(w, err)
 			return
@@ -40,7 +40,7 @@ func (s *Server) handleMerchantOrderByID(w http.ResponseWriter, r *http.Request,
 			writeMethodNotAllowed(w)
 			return
 		}
-		id, err := parseSuffixID(path, "/refund/approve")
+		id, err := parsePathID(path, "", "/refund/approve")
 		if err != nil {
 			writeBadRequest(w, err)
 			return

@@ -29,23 +29,19 @@ func decodeJSON(r *http.Request, out any) error {
 
 var errEmptyBody = fmt.Errorf("empty request body")
 
-// parseIDFromPath 从形如 /api/cart/items/42 的路径中解析末尾数字 ID。
-func parseIDFromPath(path, prefix string) (int64, error) {
-	idStr := strings.Trim(strings.TrimPrefix(path, prefix), "/")
+// parsePathID 从路径中解析数字 ID：依次剥去可选前缀 prefix 与后缀 suffix，
+// 再去掉两端斜杠后解析。三种用法：
+//   - 仅前缀：/api/cart/items/42 → parsePathID(path, "/api/cart/items/", "") → 42；
+//   - 仅后缀：/api/orders/42/pay → parsePathID(path, "", "/pay") → 42；
+//   - 前缀+后缀：/api/products/42/skus → parsePathID(path, "/api/products/", "/skus") → 42。
+//
+// 剥离后仍含路径分隔符（非法路径）或非数字内容时返回错误。
+func parsePathID(path, prefix, suffix string) (int64, error) {
+	idStr := strings.TrimSuffix(strings.TrimPrefix(path, prefix), suffix)
+	idStr = strings.Trim(idStr, "/")
 	if strings.Contains(idStr, "/") {
 		return 0, fmt.Errorf("invalid path")
 	}
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("invalid id")
-	}
-	return id, nil
-}
-
-// parseSuffixID 从形如 /api/orders/42/pay 的路径中解析动作前的数字 ID。
-func parseSuffixID(path, suffix string) (int64, error) {
-	idStr := strings.TrimSuffix(path, suffix)
-	idStr = strings.Trim(idStr, "/")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
 		return 0, fmt.Errorf("invalid id")

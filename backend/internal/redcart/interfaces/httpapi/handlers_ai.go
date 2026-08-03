@@ -78,7 +78,7 @@ func (s *Server) handleAITaskByID(w http.ResponseWriter, r *http.Request, actor 
 		writeMethodNotAllowed(w)
 		return
 	}
-	id, err := parseIDFromPath(r.URL.Path, "/api/ai/tasks/")
+	id, err := parsePathID(r.URL.Path, "/api/ai/tasks/", "")
 	if err != nil {
 		writeBadRequest(w, err)
 		return

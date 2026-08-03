@@ -1,10 +1,7 @@
 package httpapi
 
 import (
-	"fmt"
 	"net/http"
-	"strconv"
-	"strings"
 
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 )
@@ -31,7 +28,7 @@ func (s *Server) handleNoteByID(w http.ResponseWriter, r *http.Request) {
 		writeMethodNotAllowed(w)
 		return
 	}
-	id, err := parseIDFromPath(r.URL.Path, "/api/notes/")
+	id, err := parsePathID(r.URL.Path, "/api/notes/", "")
 	if err != nil {
 		writeBadRequest(w, err)
 		return
@@ -69,7 +66,7 @@ func (s *Server) handleProductByID(w http.ResponseWriter, r *http.Request) {
 		writeMethodNotAllowed(w)
 		return
 	}
-	id, err := parseIDFromPath(r.URL.Path, "/api/products/")
+	id, err := parsePathID(r.URL.Path, "/api/products/", "")
 	if err != nil {
 		writeBadRequest(w, err)
 		return
@@ -92,10 +89,9 @@ func (s *Server) handleProductSKUs(w http.ResponseWriter, r *http.Request) {
 		writeMethodNotAllowed(w)
 		return
 	}
-	idStr := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/products/"), "/skus")
-	id, err := strconv.ParseInt(strings.Trim(idStr, "/"), 10, 64)
+	id, err := parsePathID(r.URL.Path, "/api/products/", "/skus")
 	if err != nil {
-		writeBadRequest(w, fmt.Errorf("invalid product id"))
+		writeBadRequest(w, err)
 		return
 	}
 	result, svcErr := s.service.ListProductSKUs(r.Context(), id)

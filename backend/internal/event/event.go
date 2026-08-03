@@ -101,8 +101,15 @@ type Outbox interface {
 	Append(ctx context.Context, event Event) (int64, error)
 }
 
-// OutboxPoller is used by the background publisher to read pending events.
-// OutboxPoller 供后台转发器读取待发布事件使用。
+// OutboxPoller is the shared read-side base for both OutboxStore and
+// OutboxRelayStore: it reads pending events and records outcomes outside a
+// transaction. The background relay prefers the transaction-scoped variants
+// in OutboxRelayStore; the plain methods here are the non-transactional path
+// (still implemented by the postgres Repository facade and exercised by tests).
+// OutboxPoller 是 OutboxStore 与 OutboxRelayStore 共用的读取侧基础接口，
+// 非事务地读取待发布事件并记录结果。后台转发器优先使用 OutboxRelayStore
+// 的事务内变体（InTx）；这里的普通方法是非事务路径，postgres 的 Repository
+// 门面仍为实现并暴露，测试也直接使用。
 type OutboxPoller interface {
 	// PollPending returns up to limit events that have not been published yet.
 	// PollPending 返回最多 limit 条尚未发布的事件。
@@ -123,8 +130,9 @@ type OutboxPoller interface {
 // the background relay. PollPendingInTx and MarkPublishedInTx run inside a
 // caller-managed transaction so the relay can lock rows, publish, and mark in
 // one atomic unit — preventing duplicate publishes across concurrent instances.
-// OutboxRelayStore 在 OutboxPoller 之上补充事务内操作：锁定、发布、标记在同一个
-// 调用方管理的事务里原子完成，避免并发实例重复发布。
+// OutboxRelayStore 是后台转发器（relay）依赖的完整读取接口：在 OutboxPoller
+// 之上补充事务内操作，锁定、发布、标记在同一个调用方管理的事务里原子完成，
+// 避免并发实例重复发布。它只负责"读取 + 标记结果"，不含写入侧的 Append。
 type OutboxRelayStore interface {
 	OutboxPoller
 
@@ -157,8 +165,21 @@ type OutboxTx interface {
 	Rollback() error
 }
 
-// OutboxStore combines the write and read sides of the outbox.
-// OutboxStore 合并 outbox 的写入与读取两侧能力。
+// OutboxStore combines the write and read sides of the outbox: it is the
+// union of Outbox (write) and OutboxPoller (non-transactional read). By
+// contrast, OutboxRelayStore is the read+relay contract the background relay
+// actually consumes. Responsibilities: callers that only write depend on
+// Outbox; callers that need transactional relay operations depend on
+// OutboxRelayStore; OutboxStore is currently referenced only as a capability
+// aggregate on the implementation side. If the non-transactional poll methods
+// are removed, OutboxStore (and OutboxPoller's plain methods) can be retired,
+// leaving OutboxRelayStore as the single read-side contract.
+// OutboxStore 是 outbox 写入（Outbox）与非事务读取（OutboxPoller）两侧能力的
+// 并集；而 OutboxRelayStore 才是后台转发器实际消费的"读取 + 事务操作"契约。
+// 职责划分：只写一侧的调用方依赖 Outbox；需要事务内转发操作的调用方依赖
+// OutboxRelayStore；OutboxStore 目前仅被实现侧用作能力聚合断言。演进关系：
+// 若未来移除无事务版轮询方法，OutboxStore（连同 OutboxPoller 的普通方法）
+// 即可删除，OutboxRelayStore 将成为唯一的读取侧契约。
 type OutboxStore interface {
 	Outbox
 	OutboxPoller

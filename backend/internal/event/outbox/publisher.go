@@ -11,9 +11,11 @@ import (
 	"github.com/example/redcart-copilot/backend/internal/event"
 )
 
-// Publisher 是 outbox 后台转发器：周期性轮询 outbox 表中未发布的事件，
-// 通过注入的 event.Publisher 发布到消息队列，并在同一数据库事务内标记状态，
+// Publisher 是 outbox 后台转发器（relay）：周期性轮询 outbox 表中未发布的事件，
+// 通过注入的 event.Publisher（消息队列发布器）投递，并在同一数据库事务内标记状态，
 // 从而保证"发布成功才标记"的可靠性语义。
+// 注意与 event.Publisher 区分：本类型是转发驱动方（relay），负责读取 outbox 并
+// 编排"发布 + 标记"；注入的 event.Publisher 才是真正向 broker 发布消息的一方。
 type Publisher struct {
 	store     event.OutboxRelayStore
 	publisher event.Publisher

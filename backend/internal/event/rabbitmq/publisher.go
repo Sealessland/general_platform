@@ -118,9 +118,10 @@ func (p *Publisher) watchClose() {
 	}
 }
 
-// ensureConnected 检查当前 channel 是否可用；不可用时返回错误。
-// 注意：它只做检测，实际的重连由 watchClose 的重连循环负责。
-func (p *Publisher) ensureConnected() error {
+// checkConnection 校验当前 channel 是否可用：不可用时返回错误。
+// 注意：它只做状态检测，不会主动建立或重建连接——断线后的重连由
+// watchClose 的重连循环负责，发布前调用它只是尽早暴露不可用状态。
+func (p *Publisher) checkConnection() error {
 	if p.channel != nil && !p.channel.IsClosed() {
 		return nil
 	}
@@ -145,7 +146,7 @@ func (p *Publisher) Publish(ctx context.Context, evt event.Event) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if err := p.ensureConnected(); err != nil {
+	if err := p.checkConnection(); err != nil {
 		return err
 	}
 

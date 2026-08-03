@@ -66,7 +66,7 @@ func (s *Server) handleOrderByID(w http.ResponseWriter, r *http.Request, actor a
 			writeMethodNotAllowed(w)
 			return
 		}
-		id, err := parseSuffixID(path, "/pay")
+		id, err := parsePathID(path, "", "/pay")
 		if err != nil {
 			writeBadRequest(w, err)
 			return
@@ -82,7 +82,7 @@ func (s *Server) handleOrderByID(w http.ResponseWriter, r *http.Request, actor a
 			writeMethodNotAllowed(w)
 			return
 		}
-		id, err := parseSuffixID(path, "/cancel")
+		id, err := parsePathID(path, "", "/cancel")
 		if err != nil {
 			writeBadRequest(w, err)
 			return
@@ -98,7 +98,7 @@ func (s *Server) handleOrderByID(w http.ResponseWriter, r *http.Request, actor a
 			writeMethodNotAllowed(w)
 			return
 		}
-		id, err := parseSuffixID(path, "/finish")
+		id, err := parsePathID(path, "", "/finish")
 		if err != nil {
 			writeBadRequest(w, err)
 			return
@@ -114,7 +114,7 @@ func (s *Server) handleOrderByID(w http.ResponseWriter, r *http.Request, actor a
 			writeMethodNotAllowed(w)
 			return
 		}
-		id, err := parseSuffixID(path, "/refund")
+		id, err := parsePathID(path, "", "/refund")
 		if err != nil {
 			writeBadRequest(w, err)
 			return

@@ -78,7 +78,7 @@ func handleMerchantCreateSKU(w http.ResponseWriter, r *http.Request, actor appli
 		writeMethodNotAllowed(w)
 		return
 	}
-	id, err := parseSuffixID(path, "/skus")
+	id, err := parsePathID(path, "", "/skus")
 	if err != nil {
 		writeBadRequest(w, err)
 		return
@@ -102,7 +102,7 @@ func handleMerchantSetProductStatus(w http.ResponseWriter, r *http.Request, acto
 		writeMethodNotAllowed(w)
 		return
 	}
-	id, err := parseSuffixID(path, "/"+status)
+	id, err := parsePathID(path, "", "/"+status)
 	if err != nil {
 		writeBadRequest(w, err)
 		return
@@ -121,7 +121,7 @@ func (s *Server) handleMerchantSKUByID(w http.ResponseWriter, r *http.Request, a
 		writeMethodNotAllowed(w)
 		return
 	}
-	id, err := parseIDFromPath(r.URL.Path, "/api/merchant/skus/")
+	id, err := parsePathID(r.URL.Path, "/api/merchant/skus/", "")
 	if err != nil {
 		writeBadRequest(w, err)
 		return
