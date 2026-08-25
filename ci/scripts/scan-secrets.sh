@@ -33,7 +33,7 @@ is_allowed_file() {
   return 1
 }
 
-# 遍历仓库文件，跳过 .git、依赖、构建产物与虚拟环境
+# 遍历仓库文件，跳过 .git、依赖、构建产物、虚拟环境与本地容器卷
 while IFS= read -r file; do
   if is_allowed_file "$file"; then
     continue
@@ -45,11 +45,9 @@ while IFS= read -r file; do
       fail=1
     fi
   done
-done < <(find . -type f \
-  -not -path './.git/*' \
-  -not -path './frontend/node_modules/*' \
-  -not -path './frontend/dist/*' \
-  -not -path '*/.venv/*')
+done < <(find . \
+  \( -path './.git' -o -path './frontend/node_modules' -o -path './frontend/dist' -o -path './.volumes' -o -path '*/.venv' \) -prune -o \
+  -type f -print)
 
 rm -f /tmp/redcart-secret-match
 

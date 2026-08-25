@@ -15,7 +15,7 @@ func (s *Service) MerchantListProducts(ctx context.Context, actor Actor, limit, 
 	if actor.Role != domain.RoleMerchant {
 		return nil, newError(ErrorForbidden, "merchant access required")
 	}
-	products := s.repo.ListProducts(limit, offset)
+	products := s.repo.ListProducts(0, 0)
 	out := make([]ProductDetail, 0)
 	for _, product := range products {
 		if product.MerchantID != actor.MerchantID {
@@ -23,7 +23,21 @@ func (s *Service) MerchantListProducts(ctx context.Context, actor Actor, limit, 
 		}
 		out = append(out, s.toProductDetail(product))
 	}
-	return out, nil
+	return paginateProductDetails(out, limit, offset), nil
+}
+
+func paginateProductDetails(items []ProductDetail, limit, offset int) []ProductDetail {
+	if offset < 0 {
+		offset = 0
+	}
+	if offset >= len(items) {
+		return []ProductDetail{}
+	}
+	end := len(items)
+	if limit > 0 && offset+limit < end {
+		end = offset + limit
+	}
+	return items[offset:end]
 }
 
 // MerchantCreateProduct 创建商品：仅限商家角色，标题必填，初始状态为草稿。

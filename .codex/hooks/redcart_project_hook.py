@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[2]
 TEST_NAME_RE = re.compile(r"^func\s+((?:Test|Benchmark)[A-Za-z0-9_]*)\s*\(", re.MULTILINE)
 DEPRECATED_TEST_ENTRYPOINTS = {
     # Handler-only/memory benchmarks were intentionally retired when runtime
-    # evidence moved to PostgreSQL/Redis/RabbitMQ and live HTTP paths.
+    # evidence moved to PostgreSQL/Redis/Kafka and live HTTP paths.
     "BenchmarkHTTPNotes",
     "BenchmarkHTTPOrderPreview",
 }

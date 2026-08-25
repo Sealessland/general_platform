@@ -13,7 +13,7 @@
 3. 当前可执行 MVP 的运行时路径使用 PostgreSQL 适配层完成原子校验和预锁定
 4. 下单时通过仓储契约一次性写入订单、订单明细和库存锁记录
 5. PostgreSQL 路径在同一个事务中使用条件更新预锁库存：`locked_stock = locked_stock + quantity` 且 `stock - locked_stock >= quantity`
-6. 仓储层不再保留内存适配器；服务层、HTTP 层和性能验证均使用 PostgreSQL/Redis/RabbitMQ 真实运行路径，保证证据来源与运行时一致
+6. 仓储层不再保留内存适配器；服务层、HTTP 层和性能验证均使用 PostgreSQL/Redis/Kafka 真实运行路径，保证证据来源与运行时一致
 7. 库存不足时必须返回冲突错误，不允许先创建订单再补偿失败
 8. 支付成功后确认扣减库存
 9. 取消订单或退款完成后释放或恢复库存

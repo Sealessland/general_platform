@@ -784,7 +784,7 @@ rtk bash scripts/validate-workspace.sh
 - `/metrics` 端点无鉴权，生产环境需要保护。
 - 未加 Grafana 面板，当前只能通过 Prometheus API 或自带 UI 查询。
 - 未采集数据库连接池指标（`database/sql` 的 `db.Stats()`），后续可加 `redcart_db_open_connections` 等 gauge。
-- 未采集 Redis 和 RabbitMQ 指标，后续可加 exporter。
+- 未采集 Redis 和 Kafka 指标，后续可加 exporter。
 
 ## 2026-06-27：数据库查询优化
 
@@ -857,18 +857,18 @@ rtk bash scripts/validate-workspace.sh
 
 ### AI 参与范围
 
-- 在 `feature/consumer-reliability` 独立 worktree 上实现 RabbitMQ 消费者可靠性，补上 publisher 侧完成后的架构最大缺口。
-- 新增 `backend/internal/event/rabbitmq/consumer.go`：`Consumer` 结构体声明 DLX exchange + DLQ queue + 主队列（`x-dead-letter-exchange` 参数），`QoS` prefetch 限流，`autoAck=false` 手动 ack。
-- 新增 `Handler` / `HandlerFunc` / `Deduplicator` / `Acknowledger` 接口：`Handler` 封装业务逻辑，`Deduplicator` 提供 `event_id` 幂等去重，`Acknowledger` 抽象 ack/nack 使消费逻辑可测试。
+- 在 `feature/consumer-reliability` 独立 worktree 上实现消息消费者可靠性，补上 publisher 侧完成后的架构最大缺口。
+- 新增 Kafka consumer：使用 consumer group、显式 offset commit、主 topic 与死信 topic，并保留可测试的消息处理边界。
+- 新增 `Handler` / `HandlerFunc` / `Deduplicator` 接口：`Handler` 封装业务逻辑，`Deduplicator` 提供 `event_id` 幂等去重，offset 提交由消费者统一控制。
 - 新增 `MemoryDeduplicator`（进程内 map，demo 用，生产换 Redis/DB）。
-- 核心消费逻辑抽为 `processDelivery(ctx, body, acker)`，`amqp.Delivery` 天然实现 `Acknowledger` 接口，测试无需真实 AMQP channel。
-- 新增 `consumer_test.go`：5 个测试覆盖成功 ack+mark、handler 失败进 DLX、重复消息跳过、decode 错误进 DLX、dedup 瞬态错误 requeue。
+- 核心消费逻辑抽为 `processMessage(ctx, msg)`，测试无需真实 Kafka broker。
+- 新增 consumer 单元测试：覆盖成功处理、handler 失败写死信、重复消息跳过、decode 错误写死信、dedup 瞬态错误等待重投。
 - 更新 ADR 0006 新增第 7 节「消费侧可靠性」、CHANGELOG。
 
 ### 人工或主代理修正
 
-- 确认 `MarkProcessed` 在 `Ack` 之前执行的顺序：进程在 Ack 后、MarkProcessed 前崩溃 → redelivery 被 `IsDuplicate` 跳过；反过来会执行两次副作用。
-- decode 失败和 handler 失败均 `Nack(requeue=false)` 进 DLX（永久错误）；dedup 检查失败 `Nack(requeue=true)` 重新入队（瞬态错误）。
+- 确认 `MarkProcessed` 在 offset commit 之前执行的顺序：进程在 Mark 后、Commit 前崩溃，redelivery 会跳过已处理副作用；反过来则可能执行两次副作用。
+- decode 失败和 handler 失败均写入死信 topic 后提交源 offset；dedup 检查失败不提交 offset，等待消息系统重投。
 - 范围严格限定在消费者基础设施：不实现具体业务 handler（通知/分析服务），不引入 Redis 去重实现，不实现 consumer auto-reconnect（与 publisher 相同模式，面试口述即可）。
 - 不修改 `event.go`，`Handler` / `Deduplicator` 接口放在 `consumer.go` 内，保持改动面最小。
 
@@ -877,7 +877,7 @@ rtk bash scripts/validate-workspace.sh
 ```bash
 rtk go build ./...
 rtk go vet ./...
-rtk go test ./internal/event/rabbitmq -v
+rtk go test ./internal/event/kafka -v
 rtk go test ./...
 rtk bash scripts/validate-workspace.sh
 ```
@@ -885,19 +885,19 @@ rtk bash scripts/validate-workspace.sh
 ### 剩余风险
 
 - `MemoryDeduplicator` 不持久化，消费者重启后去重失效；生产环境必须替换为 Redis `SETNX` 或数据库去重表。
-- Consumer 未实现 auto-reconnect（`NotifyClose` 监听），与 publisher 侧模式相同但代码未复制；生产环境需要补充。
+- Consumer 未实现自动重连监听；生产环境需要补充。
 - 尚未实现具体业务消费者（通知服务、分析服务）；当前只有消费者基础设施。
-- DLX 路由用 fanout exchange + `#` binding key，所有死信消息进同一 DLQ；如需按错误类型分类，可改为 topic exchange + 不同 routing key。
+- 死信 topic 当前统一接收永久失败消息；如需按错误类型分类，可扩展 headers 或拆分 topic。
 
 ## 2026-06-27：发布器可靠性加固
 
 ### AI 参与范围
 
-- 在 `feature/publisher-hardening` 独立 worktree 上重做 RabbitMQ publisher 可靠性加固（前一次迭代因 worktree 清理未提交而丢失）。
+- 在 `feature/publisher-hardening` 独立 worktree 上重做消息 publisher 可靠性加固（前一次迭代因 worktree 清理未提交而丢失）。
 - 新增迁移 `backend/migrations/0003_outbox_published_at.sql`：`published_at` 列 + `idx_outbox_pending` 部分索引 + `idx_outbox_dead_letter_failed_at` 索引。
 - 在 `event.go` 新增 `OutboxRelayStore` 与 `OutboxTx` 接口，提供 `BeginTx`、`PollPendingInTx`、`MarkPublishedInTx`、`MarkFailedInTx` 事务感知方法。
 - 重写 `outbox_repository.go`：`PollPending` / `PollPendingInTx` 过滤 `published_at IS NULL` 并使用 `FOR UPDATE SKIP LOCKED`；`MarkPublished` / `MarkPublishedInTx` 改为 `UPDATE SET published_at = NOW()`（软标记而非删除）；`*Repository` 新增完整委托方法实现 `OutboxRelayStore`。
-- 重写 `rabbitmq/publisher.go`：启用 publisher confirm 模式（`PublishWithDeferredConfirmWithContext` + `WaitContext`），`NotifyClose` 自动重连（3 秒延迟），`sync.Mutex` 保护 conn/channel。
+- 重写 Kafka publisher：启用同步写入、`RequiredAcks=RequireAll`、`event_id` message key，并保持发送路径可被 relay 事务边界驱动。
 - 重写 `outbox/publisher.go`：`tick` 改为 `BeginTx → PollPendingInTx → 逐条发布 → MarkPublishedInTx / MarkFailedInTx → Commit`，失败时回滚。
 - 修复 `repository.go`：`Outbox` 字段类型从 `event.OutboxStore` 改为 `*outboxStore`，移除未使用的 `event` import。
 - 修复 `main.go`：类型断言从 `event.OutboxStore` 改为 `event.OutboxRelayStore`（原断言因 `*Repository` 未实现完整 `OutboxStore` 而始终失败）。
@@ -921,8 +921,8 @@ rtk bash scripts/validate-workspace.sh
 
 ### 剩余风险
 
-- 尚未实现 RabbitMQ 消费者；通知、分析、库存等下游服务仍停留在规划阶段。
-- publisher confirm 超时为固定 10 秒，未做指数退避；网络长时间不可用时 relay 周期会被阻塞。
+- 当时尚未实现具体消费者；通知、分析、库存等下游服务仍停留在规划阶段。
+- publisher 写入确认超时为固定 10 秒，未做指数退避；网络长时间不可用时 relay 周期会被阻塞。
 - 自动重连为无限重试，没有最大重试次数或告警；生产环境需要补充监控。
 
 ## 2026-06-16：消息队列与事件驱动边界
@@ -930,13 +930,13 @@ rtk bash scripts/validate-workspace.sh
 ### AI 参与范围
 
 - 基于 `main` 最新提交创建独立 git worktree `feature/microservice-boundaries-mq`，与当前未提交的 MQ 工作并行。
-- 撰写 `docs/adr/0006-message-queue-and-event-driven.md`，确定 RabbitMQ + 事务性发件箱（Transactional Outbox）方案，把订单状态变更事件发布到消息队列。
+- 撰写 `docs/adr/0006-message-queue-and-event-driven.md`，确定 Kafka + 事务性发件箱（Transactional Outbox）方案，把订单状态变更事件发布到消息队列。
 - 更新 `docs/architecture.md` 与 `docs/index.md`，记录事件与异步边界成为当前运行时架构的一部分。
-- 新增 `backend/internal/event` 事件发布契约、`backend/internal/event/rabbitmq` RabbitMQ 适配器、`backend/internal/event/outbox` 发件箱发布器。
+- 新增 `backend/internal/event` 事件发布契约、`backend/internal/event/kafka` Kafka 适配器、`backend/internal/event/outbox` 发件箱发布器。
 - 新增 `backend/migrations/0002_outbox.sql` 发件箱与死信表，并将迁移机制升级为按文件名顺序执行的版本化迁移（`schema_migrations` 表）。
 - 在 PostgreSQL 与内存仓储中实现 `event.Outbox` / `event.OutboxStore`；Redis 包装器（CatalogCacheRepository、SessionRepository）透传 Append 到基础仓储。
 - 在应用层订单服务（CreateOrder、PayOrder、CancelOrder、FinishOrder、RequestRefund）与商家服务（MerchantShipOrder、MerchantApproveRefund）中写入发件箱事件。
-- 更新 `docker-compose.yml` 加入 `rabbitmq` 服务，并配置后端 `RABBITMQ_ADDR` / `RABBITMQ_EXCHANGE`。
+- 更新 `docker-compose.yml` 加入 Kafka 服务，并配置后端 `KAFKA_BROKERS` / `KAFKA_TOPIC_PREFIX`。
 - 更新 `README.md`、`.env.example`，补充事件驱动相关说明。
 - 新增单元测试：`backend/internal/event/event_test.go`、`backend/internal/event/outbox/publisher_test.go`、`backend/internal/redcart/infrastructure/postgres/outbox_repository_test.go`。
 - 新增 MQ 对照 benchmark：`backend/internal/redcart/application/benchmark_test.go` 中 `BenchmarkCreateOrderOutbox` 与 `BenchmarkCreateOrderSyncSideEffects` 对比，证明在模拟 3 个 500μs 下游调用时，发件箱模式吞吐提升约 365 倍。
@@ -947,7 +947,7 @@ rtk bash scripts/validate-workspace.sh
 - 调研公开 benchmark 后确认：SPECjms2007（已退役）和 OpenMessaging Benchmark Framework 都是 broker-centric，不评估「事务性发件箱 + 业务请求路径」的收益；因此手工构建控制变量 benchmark，并在 ADR / 测试文件顶部说明理由与引用。
 - 保持核心交易路径仍为数据库事务强一致；消息队列只承担异步解耦，不引入 Saga/TCC。
 - 订单创建等暂无法纳入 `UpdateOrderStatus` 事务路径的写事件，使用非事务发件箱写入，后续可扩展 `SaveOrderWithInventoryLocks` 的 side-effect 机制实现完全原子性。
-- gRPC 仍使用 insecure 传输，跨网络部署需补充 TLS；RabbitMQ 当前也使用 plain AMQP。
+- gRPC 仍使用 insecure 传输，跨网络部署需补充 TLS；消息队列链路当前也使用明文传输。
 
 ### 验证证据
 
@@ -962,7 +962,7 @@ rtk bash scripts/validate-workspace.sh
 
 ### 剩余风险
 
-- 尚未实现 RabbitMQ 消费者；通知、分析、库存等下游服务仍停留在规划阶段。
+- 当时尚未实现具体消费者；通知、分析、库存等下游服务仍停留在规划阶段。
 - 行为事件（`behavior.*`）尚未接入发件箱，仍直接写入 `behavior_events` 表。
 - 死信队列目前只写到 `outbox_dead_letter` 表，没有自动重放或告警机制。
 - 未引入服务发现、API 网关、链路追踪、Service Mesh；这些按 ADR 0005 继续后置。

@@ -6,9 +6,13 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR/ai-service"
 
+# 依赖安装：测试会导入 grpcio 生成代码，CI 与本地门禁都从服务内 requirements 固化依赖。
+python -m venv .venv
+".venv/bin/python" -m pip install -r requirements.txt
+
 # 编译检查：不实际执行，仅验证 app 与 tests 的语法
-python -m compileall app tests
+".venv/bin/python" -m compileall app tests
 # 单元测试：自动发现 tests 目录下的用例
-python -m unittest discover -s tests -v
+".venv/bin/python" -m unittest discover -s tests -v
 # prompt 检查：校验 prompts/ 中的模板是否包含约定占位符
-python app/check_prompts.py
+".venv/bin/python" app/check_prompts.py

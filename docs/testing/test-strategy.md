@@ -14,7 +14,7 @@
 ## 质量门禁
 
 - 后端：`go test ./...`
-- 后端质量指标：`ci/scripts/backend-test-metrics.sh` 校验总覆盖率、关键包覆盖率、测试数量、PostgreSQL benchmark 数量和 RabbitMQ benchmark 数量，并输出 CI artifact
+- 后端质量指标：`ci/scripts/backend-test-metrics.sh` 校验总覆盖率、关键包覆盖率、测试数量、PostgreSQL benchmark 数量和 Kafka benchmark 数量，并输出 CI artifact
 - PostgreSQL 集成：`RUN_POSTGRES_INTEGRATION=1` 且提供 `POSTGRES_DSN` 后运行 PostgreSQL 仓储测试和 PostgreSQL-backed HTTP 测试
 - 前端：`npm run typecheck`、`npm run lint`、`npm run build`
 - AI 服务：`python -m compileall app tests`、`python -m unittest discover -s tests -v`、`python app/check_prompts.py`
@@ -36,17 +36,17 @@
 | 领域模型覆盖率 | 95.0% | `backend/internal/redcart/domain` |
 | 后端测试数量 | 55 | `go test ./... -list '^Test'` 中的 `Test*` 数量 |
 | PostgreSQL benchmark 数量 | 3 | `BenchmarkHTTPPostgresOrderPreview`、`BenchmarkHTTPPostgresCreateOrder`、`BenchmarkHTTPPostgresCreateOrderWithOutbox`，与 `ci/scripts/backend-test-metrics.sh` 的 `^BenchmarkHTTPPostgres` 口径一致，仅 `RUN_POSTGRES_INTEGRATION=1` 时要求 |
-| RabbitMQ benchmark 数量 | 2 | `BenchmarkRabbitMQPublish`、`BenchmarkPostgresRabbitMQOutboxRelay`，仅 `RUN_POSTGRES_INTEGRATION=1` 且提供 `RABBITMQ_ADDR` 时要求 |
+| Kafka benchmark 数量 | 2 | `BenchmarkKafkaPublish`、`BenchmarkPostgresKafkaOutboxRelay`，仅 `RUN_POSTGRES_INTEGRATION=1` 且提供 `KAFKA_BROKERS` 时要求 |
 
 阈值按当前 MVP 稳定通过水平设置，目标是阻断覆盖率、测试规模和 benchmark 产物回退；后续功能稳定后应逐步提高阈值。
 
 ## 性能基线口径
 
-- 运行时性能基线只使用 PostgreSQL/Redis/RabbitMQ-backed benchmark 或 live HTTP benchmark。
+- 运行时性能基线只使用 PostgreSQL/Redis/Kafka-backed benchmark 或 live HTTP benchmark。
 - `BenchmarkHTTPPostgresOrderPreview` 使用真实 PostgreSQL 仓储，衡量读多查询路径的运行时基线。
 - `BenchmarkHTTPPostgresCreateOrder` 使用真实 PostgreSQL 仓储，覆盖幂等下单、事务、库存条件更新、订单明细和库存锁写入。
-- `BenchmarkRabbitMQPublish` 使用真实 RabbitMQ broker，衡量事件发布组件路径。
-- `BenchmarkPostgresRabbitMQOutboxRelay` 使用真实 PostgreSQL outbox 和真实 RabbitMQ publisher，衡量 outbox relay 路径。
+- `BenchmarkKafkaPublish` 使用真实 Kafka broker，衡量事件发布组件路径。
+- `BenchmarkPostgresKafkaOutboxRelay` 使用真实 PostgreSQL outbox 和真实 Kafka publisher，衡量 outbox relay 路径。
 - `BenchmarkLiveHTTP*` 要求 `LIVE_HTTP_BASE_URL` 指向已启动后端进程，通过真实 TCP 请求运行服务。
 - PostgreSQL benchmark 默认不在普通单元测试中执行；需要 `RUN_POSTGRES_INTEGRATION=1` 和 `POSTGRES_DSN`。
  - 内存仓储、空 publisher、模拟延迟和 `httptest` handler-only benchmark 不允许作为性能 baseline 或简历指标来源。
@@ -76,7 +76,7 @@
 - PostgreSQL-backed HTTP 测试在 `RUN_POSTGRES_INTEGRATION=1` 时覆盖真实 Gin -> 应用层 -> PostgreSQL/GORM 路径，包括主链路、并发库存、库存补偿、库存不足无副作用、错误 method 和越权。
 - `frontend/tests/app.test.mjs` 是源码守卫，确认前端仍使用整数分金额、可售库存扣减 locked stock、结算幂等键、购物车、dashboard 和 AI 入口。
 - `ai-service/tests/test_provider.py` 覆盖 mock selling points、business review 以及非法输入。
-- `ci/scripts/backend-test-metrics.sh` 将覆盖率、测试数量、PostgreSQL benchmark 数量和 RabbitMQ benchmark 数量固化为 CI 门禁，并上传 `backend-test-metrics.json`、`backend-coverage-summary.txt`、`backend-coverage-functions.txt` 和 `backend-test-list.txt`。
+- `ci/scripts/backend-test-metrics.sh` 将覆盖率、测试数量、PostgreSQL benchmark 数量和 Kafka benchmark 数量固化为 CI 门禁，并上传 `backend-test-metrics.json`、`backend-coverage-summary.txt`、`backend-coverage-functions.txt` 和 `backend-test-list.txt`。
 
 ## 已知测试边界
 

@@ -87,6 +87,91 @@ func TestOutboxMarkFailedMovesToDeadLetter(t *testing.T) {
 	}
 }
 
+// 验证 relay 使用的事务型 outbox 路径：同一事务内锁定、标记发布/失败并提交。
+func TestOutboxRelayTransactionPaths(t *testing.T) {
+	repo := newPostgresRepo(t)
+	clearOutboxForTest(t, repo)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	publishedID, err := repo.Append(ctx, event.Event{
+		Type:          event.TypeOrderCreated,
+		Topic:         event.TypeOrderCreated.Topic(),
+		CorrelationID: "tx-published",
+		Payload:       json.RawMessage(`{"order_id":101}`),
+		OccurredAt:    now,
+	})
+	if err != nil {
+		t.Fatalf("append published candidate: %v", err)
+	}
+	failedID, err := repo.Append(ctx, event.Event{
+		Type:          event.TypeOrderPaid,
+		Topic:         event.TypeOrderPaid.Topic(),
+		CorrelationID: "tx-failed",
+		Payload:       json.RawMessage(`{"order_id":102}`),
+		OccurredAt:    now,
+	})
+	if err != nil {
+		t.Fatalf("append failed candidate: %v", err)
+	}
+
+	tx, err := repo.BeginTx(ctx)
+	if err != nil {
+		t.Fatalf("begin outbox tx: %v", err)
+	}
+	pending, err := repo.PollPendingInTx(ctx, tx, 0)
+	if err != nil {
+		_ = tx.Rollback()
+		t.Fatalf("poll pending in tx: %v", err)
+	}
+	if _, ok := findOutboxEvent(pending, publishedID); !ok {
+		_ = tx.Rollback()
+		t.Fatalf("expected published candidate %d in %+v", publishedID, pending)
+	}
+	if _, ok := findOutboxEvent(pending, failedID); !ok {
+		_ = tx.Rollback()
+		t.Fatalf("expected failed candidate %d in %+v", failedID, pending)
+	}
+	if err := repo.MarkPublishedInTx(ctx, tx, nil); err != nil {
+		_ = tx.Rollback()
+		t.Fatalf("mark empty published in tx: %v", err)
+	}
+	if err := repo.MarkPublishedInTx(ctx, tx, []int64{publishedID}); err != nil {
+		_ = tx.Rollback()
+		t.Fatalf("mark published in tx: %v", err)
+	}
+	if err := repo.MarkFailedInTx(ctx, tx, failedID, "temporary failure"); err != nil {
+		_ = tx.Rollback()
+		t.Fatalf("mark failed in tx: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("commit outbox tx: %v", err)
+	}
+
+	pending, err = repo.PollPending(ctx, 100)
+	if err != nil {
+		t.Fatalf("poll after tx commit: %v", err)
+	}
+	if _, ok := findOutboxEvent(pending, publishedID); ok {
+		t.Fatalf("expected published event %d to leave pending queue", publishedID)
+	}
+	if _, ok := findOutboxEvent(pending, failedID); !ok {
+		t.Fatalf("expected failed event %d to remain retryable in %+v", failedID, pending)
+	}
+
+	rollbackTx, err := repo.BeginTx(ctx)
+	if err != nil {
+		t.Fatalf("begin rollback tx: %v", err)
+	}
+	if _, err := repo.PollPendingInTx(ctx, rollbackTx, 1); err != nil {
+		_ = rollbackTx.Rollback()
+		t.Fatalf("poll pending before rollback: %v", err)
+	}
+	if err := rollbackTx.Rollback(); err != nil {
+		t.Fatalf("rollback outbox tx: %v", err)
+	}
+}
+
 // 清空 outbox 与死信表，保证测试从干净状态开始。
 func clearOutboxForTest(t *testing.T, repo *Repository) {
 	t.Helper()

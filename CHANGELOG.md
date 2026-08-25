@@ -34,27 +34,35 @@
 - 新增 `TestAccessTokenTTLFromEnv` 和 `TestRefreshTokenTTLFromEnv` 单元测试。
 - 在 `TestPostgresApplicationAuthSessionAndCatalogRegression` 中新增 token 类型隔离断言：refresh token 不能通过 `Authenticate`，access token 不能通过 `RefreshSession`。
 
-### 消费侧可靠性
+### 消息队列 Kafka 化
 
-- 新增 RabbitMQ 消费者实现（`backend/internal/event/rabbitmq/consumer.go`）：手动 ack（至少一次语义）、QoS prefetch 限流、`event_id` 幂等去重、DLX 死信队列。
-- 新增 `Handler` / `Deduplicator` / `Acknowledger` 接口，使消费逻辑可测试且不耦合 AMQP SDK；`MemoryDeduplicator` 提供 demo 级进程内去重。
-- 新增 5 个 consumer 单元测试：成功 ack+mark、handler 失败进 DLX、重复消息跳过、decode 错误进 DLX、dedup 瞬态错误 requeue。
-- 更新 ADR 0006 新增第 7 节「消费侧可靠性」，记录手动 ack、prefetch、幂等顺序（MarkProcessed before Ack）和 DLX 路由决策。
+- 将事件总线适配器切换为 Kafka：新增 `backend/internal/event/kafka` publisher/consumer，运行时通过 `KAFKA_BROKERS` 与 `KAFKA_TOPIC_PREFIX` 配置。
+- Kafka publisher 使用 `segmentio/kafka-go` 同步写入、`RequiredAcks=RequireAll` 和 `event_id` message key；outbox relay 仍保持 `BeginTx → PollPendingInTx → Publish → MarkPublishedInTx / MarkFailedInTx → Commit` 事务边界。
+- Kafka consumer 使用 consumer group + 显式 offset commit；处理成功、重复跳过或写入死信 topic 后才提交 offset，去重/标记失败则不提交以等待重投。
+- 新增 `Handler` / `Deduplicator` 接口与 `MemoryDeduplicator`，消费逻辑可测试且不耦合 Kafka SDK；死信消息写入 `redcart.events.dlq` 并携带源 topic/partition/offset headers。
+- 新增 Kafka consumer 单元测试与真实 Kafka benchmark：`BenchmarkKafkaPublish`、`BenchmarkPostgresKafkaOutboxRelay`；CI artifact 与 README 性能白名单同步改为 Kafka 口径。
+- `docker-compose.yml`、GitHub Actions、README、ADR 0006、架构/测试文档和 showcase 全部改为 Kafka 运行时形状。
 
 ### 发布器可靠性加固
 
 - outbox 表新增 `published_at` 列与 `idx_outbox_pending` 部分索引（`backend/migrations/0003_outbox_published_at.sql`）；已发布事件改为软标记而非删除，保留审计轨迹。
 - outbox relay 改为事务内轮询：`BeginTx → PollPendingInTx（FOR UPDATE SKIP LOCKED）→ 逐条发布 → MarkPublishedInTx / MarkFailedInTx → Commit`，防止多实例并发重复发布。
 - 新增 `event.OutboxRelayStore` 与 `event.OutboxTx` 接口，提供事务感知的轮询与标记方法；`*Repository` 实现完整委托。
-- RabbitMQ publisher 启用 publisher confirm 模式（`PublishWithDeferredConfirmWithContext` + `WaitContext`），并通过 `NotifyClose` 自动重连（3 秒间隔），`sync.Mutex` 保护并发 publish。
 - 修复 `main.go` 中 `repo.(event.OutboxStore)` 类型断言始终失败的潜在 bug（`*Repository` 未实现完整 `OutboxStore`），改为 `event.OutboxRelayStore` 断言。
 - 新增 `TestPublisherNoDuplicatePublishUnderConcurrency`（2 relay × 50 事件，零重复）与 `TestPublisherRollbackOnPublishFailure` 测试。
-- 更新 ADR 0006 第 2、6 节，记录软标记、行锁、confirm 模式与自动重连决策。
+- 更新 ADR 0006 第 2、6 节，记录软标记、行锁、Kafka 同步 ack 与死信 topic 决策。
 
 ### 工程
 
-- 删除内存仓储实现、内存仓储单元测试、handler-only HTTP benchmark、空 publisher outbox benchmark 和模拟下游延迟 benchmark；后端测试与性能证据收束到 PostgreSQL/Redis/RabbitMQ-backed 路径和 live HTTP benchmark。
+- 删除内存仓储实现、内存仓储单元测试、handler-only HTTP benchmark、空 publisher outbox benchmark 和模拟下游延迟 benchmark；后端测试与性能证据收束到 PostgreSQL/Redis/Kafka-backed 路径和 live HTTP benchmark。
 - 新增 live HTTP benchmark，要求 `LIVE_HTTP_BASE_URL` 指向已启动后端进程，通过真实 TCP 请求验证 `/healthz`、结算预览和下单写路径；README 性能表更新脚本拒绝非真实运行时 benchmark 名称。
+- 修复 `backend/cmd/api/repository_factory_test.go` 中已废弃 `REDIS_SESSION_TTL` 测试配置，改为显式设置 `REDIS_ACCESS_TOKEN_TTL` / `REDIS_REFRESH_TOKEN_TTL`。
+- `scripts/update-branch-status.py` 现在会标记缺失 worktree 为 `missing` 而不是在交付 hook 中崩溃。
+- 修复商家商品列表先全局分页再按商家过滤的问题；现在先按 `merchant_id` 过滤，再对当前商家商品分页，避免复用集成库时返回空列表。
+- 新增 PostgreSQL outbox relay 事务路径测试，覆盖 `BeginTx` / `PollPendingInTx` / `MarkPublishedInTx` / `MarkFailedInTx` 的真实数据库行为。
+- `ci/scripts/ai-service-ci.sh` 现在使用服务内 `.venv` 安装 `requirements.txt`，保证 gRPC 单元测试在本地门禁和 CI 中都可复现。
+- 密钥扫描现在跳过本地容器卷 `.volumes/`，避免 PostgreSQL 数据目录权限噪声影响交付验证输出。
+- 清理历史工作流记录中的旧消息队列供应商痕迹，统一保留 Kafka/中性事件驱动表述。
 - 建立本地 `main` 分支作为集成主干；删除已合并或停滞的 `feature/*` 分支以及过期的 `ai/live-*`、`ai/codex-*` 会话分支；清理所有非主工作区的 worktree；将 `.aidev-local/` 加入 `.gitignore`，保持主工作区干净。
 
 ### 优化

@@ -63,27 +63,27 @@ else
   printf 'postgres http qps skipped: RUN_POSTGRES_INTEGRATION is not 1\n' | tee "$ARTIFACT_DIR/backend-postgres-http-qps.txt"
 fi
 
-# RabbitMQ 发布与 PostgreSQL outbox -> relay 路径基准，需要同时具备数据库与 RabbitMQ
-if [[ "${RUN_POSTGRES_INTEGRATION:-0}" == "1" && -n "${RABBITMQ_ADDR:-}" ]]; then
+# Kafka 发布与 PostgreSQL outbox -> relay 路径基准，需要同时具备数据库与 Kafka
+if [[ "${RUN_POSTGRES_INTEGRATION:-0}" == "1" && -n "${KAFKA_BROKERS:-}" ]]; then
   POSTGRES_DSN="${POSTGRES_DSN:-postgres://postgres:postgres@127.0.0.1:5432/redcart_test?sslmode=disable}" \
     RUN_POSTGRES_INTEGRATION=1 \
-    RABBITMQ_ADDR="${RABBITMQ_ADDR}" \
-    RABBITMQ_EXCHANGE="${RABBITMQ_EXCHANGE:-redcart.events.bench}" \
-    go test ./internal/event/rabbitmq ./internal/event/outbox -run '^$' -bench 'BenchmarkRabbitMQPublish|BenchmarkPostgresRabbitMQOutboxRelay' -benchmem -count=1 -benchtime="${RABBITMQ_BENCHTIME:-1s}" \
-    | tee "$ARTIFACT_DIR/backend-rabbitmq-benchmark.txt"
+    KAFKA_BROKERS="${KAFKA_BROKERS}" \
+    KAFKA_TOPIC_PREFIX="${KAFKA_TOPIC_PREFIX:-redcart.events.bench}" \
+    go test ./internal/event/kafka ./internal/event/outbox -run '^$' -bench 'BenchmarkKafkaPublish|BenchmarkPostgresKafkaOutboxRelay' -benchmem -count=1 -benchtime="${KAFKA_BENCHTIME:-1s}" \
+    | tee "$ARTIFACT_DIR/backend-kafka-benchmark.txt"
 
   # 同上：换算 QPS 便于阅读
   awk '
-/^Benchmark(RabbitMQ|PostgresRabbitMQ)/ {
+/^Benchmark(Kafka|PostgresKafka)/ {
   bench=$1
   ns=$3
   qps=1000000000/ns
   printf "%s qps=%.2f ns_per_op=%s\n", bench, qps, ns
 }
-' "$ARTIFACT_DIR/backend-rabbitmq-benchmark.txt" | tee "$ARTIFACT_DIR/backend-rabbitmq-qps.txt"
+' "$ARTIFACT_DIR/backend-kafka-benchmark.txt" | tee "$ARTIFACT_DIR/backend-kafka-qps.txt"
 else
-  printf 'rabbitmq benchmark skipped: RUN_POSTGRES_INTEGRATION is not 1 or RABBITMQ_ADDR is empty\n' | tee "$ARTIFACT_DIR/backend-rabbitmq-benchmark.txt"
-  printf 'rabbitmq qps skipped: RUN_POSTGRES_INTEGRATION is not 1 or RABBITMQ_ADDR is empty\n' | tee "$ARTIFACT_DIR/backend-rabbitmq-qps.txt"
+  printf 'kafka benchmark skipped: RUN_POSTGRES_INTEGRATION is not 1 or KAFKA_BROKERS is empty\n' | tee "$ARTIFACT_DIR/backend-kafka-benchmark.txt"
+  printf 'kafka qps skipped: RUN_POSTGRES_INTEGRATION is not 1 or KAFKA_BROKERS is empty\n' | tee "$ARTIFACT_DIR/backend-kafka-qps.txt"
 fi
 
 # 覆盖率/测试数量/benchmark 数量门禁与指标产物

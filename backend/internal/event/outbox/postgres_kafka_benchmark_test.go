@@ -11,14 +11,15 @@ import (
 	"time"
 
 	"github.com/example/redcart-copilot/backend/internal/event"
-	rabbitmqevent "github.com/example/redcart-copilot/backend/internal/event/rabbitmq"
+	kafkaevent "github.com/example/redcart-copilot/backend/internal/event/kafka"
 	postgresrepo "github.com/example/redcart-copilot/backend/internal/redcart/infrastructure/postgres"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-// BenchmarkPostgresRabbitMQOutboxRelay 压测"Postgres outbox + RabbitMQ"完整
-// 转发链路；仅在设置 RUN_POSTGRES_INTEGRATION/POSTGRES_DSN/RABBITMQ_ADDR 时执行。
-func BenchmarkPostgresRabbitMQOutboxRelay(b *testing.B) {
+// BenchmarkPostgresKafkaOutboxRelay measures the full Postgres outbox -> Kafka
+// relay path. It only runs when RUN_POSTGRES_INTEGRATION, POSTGRES_DSN, and
+// KAFKA_BROKERS are configured.
+func BenchmarkPostgresKafkaOutboxRelay(b *testing.B) {
 	if os.Getenv("RUN_POSTGRES_INTEGRATION") != "1" {
 		b.Skip("RUN_POSTGRES_INTEGRATION is not set")
 	}
@@ -26,9 +27,9 @@ func BenchmarkPostgresRabbitMQOutboxRelay(b *testing.B) {
 	if dsn == "" {
 		b.Skip("POSTGRES_DSN is not set")
 	}
-	addr := os.Getenv("RABBITMQ_ADDR")
-	if addr == "" {
-		b.Skip("RABBITMQ_ADDR is not set")
+	brokers := kafkaevent.ParseBrokers(os.Getenv("KAFKA_BROKERS"))
+	if len(brokers) == 0 {
+		b.Skip("KAFKA_BROKERS is not set")
 	}
 
 	repo, err := postgresrepo.NewRepository(dsn)
@@ -36,9 +37,11 @@ func BenchmarkPostgresRabbitMQOutboxRelay(b *testing.B) {
 		b.Fatalf("new postgres repository: %v", err)
 	}
 	defer repo.Close()
-	publisher, err := rabbitmqevent.NewPublisher(addr, os.Getenv("RABBITMQ_EXCHANGE"))
+	publisher, err := kafkaevent.NewPublisher(brokers, kafkaevent.PublisherConfig{
+		TopicPrefix: os.Getenv("KAFKA_TOPIC_PREFIX"),
+	})
 	if err != nil {
-		b.Fatalf("new rabbitmq publisher: %v", err)
+		b.Fatalf("new kafka publisher: %v", err)
 	}
 	defer publisher.Close()
 
@@ -64,8 +67,7 @@ func BenchmarkPostgresRabbitMQOutboxRelay(b *testing.B) {
 	})
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		if _, err := repo.Outbox.Append(ctx, event.Event{
 			Type:          event.TypeOrderPaid,
 			Topic:         event.TypeOrderPaid.Topic(),
@@ -79,10 +81,10 @@ func BenchmarkPostgresRabbitMQOutboxRelay(b *testing.B) {
 	}
 }
 
-// ioDiscard 是丢弃所有写入的日志输出，避免基准输出刷屏。
+// ioDiscard discards log writes during benchmarks.
 type ioDiscard struct{}
 
-// Write 丢弃写入内容并返回字节数，实现 io.Writer。
+// Write discards bytes and reports success.
 func (ioDiscard) Write(p []byte) (int, error) {
 	return len(p), nil
 }

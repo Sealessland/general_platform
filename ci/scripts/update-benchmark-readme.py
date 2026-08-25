@@ -15,14 +15,14 @@ BENCH_RE = re.compile(
     r"^(Benchmark\w+)-\d+\s+(\d+)\s+([\d.]+)\s+ns/op\s+([\d.]+)\s+B/op\s+([\d.]+)\s+allocs/op"
 )
 
-# 白名单：只允许真实运行时/中间件依赖（PostgreSQL、RabbitMQ、live HTTP）的基准，
+# 白名单：只允许真实运行时/中间件依赖（PostgreSQL、Kafka、live HTTP）的基准，
 # 内存仓储、空 publisher 或模拟延迟 benchmark 不允许进入 README 性能表
 ALLOWED_BENCHMARKS = {
     "BenchmarkHTTPPostgresOrderPreview",
     "BenchmarkHTTPPostgresCreateOrder",
     "BenchmarkHTTPPostgresCreateOrderWithOutbox",
-    "BenchmarkPostgresRabbitMQOutboxRelay",
-    "BenchmarkRabbitMQPublish",
+    "BenchmarkPostgresKafkaOutboxRelay",
+    "BenchmarkKafkaPublish",
     "BenchmarkLiveHTTPHealthz",
     "BenchmarkLiveHTTPOrderPreview",
     "BenchmarkLiveHTTPCreateOrder",
@@ -131,7 +131,7 @@ def render_table(results: list[dict]) -> str:
 
     lines.append("")
     lines.append(
-        "_Only PostgreSQL/Redis/RabbitMQ-backed component benchmarks and live HTTP "
+        "_Only PostgreSQL/Redis/Kafka-backed component benchmarks and live HTTP "
         "benchmarks from a running backend process are accepted._"
     )
 

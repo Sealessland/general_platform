@@ -109,10 +109,10 @@ python3 -m http.server 4173 --bind 127.0.0.1
 
 ## 当前实现说明
 
-当前 MVP 运行时采用 PostgreSQL + Redis + RabbitMQ 环境：
+当前 MVP 运行时采用 PostgreSQL + Redis + Kafka 环境：
 
 - 后端启动时必须提供 `POSTGRES_DSN` 与 `REDIS_ADDR`
-- RabbitMQ 通过 `RABBITMQ_ADDR` 可选启用；启用后，订单状态变更事件会通过事务性发件箱发布到 `RABBITMQ_EXCHANGE`（默认 `redcart.events`）
+- Kafka 通过 `KAFKA_BROKERS` 可选启用；启用后，订单状态变更事件会通过事务性发件箱发布到 `KAFKA_TOPIC_PREFIX` 前缀下的事件 topic（默认 `redcart.events`）
 - 后端连接 PostgreSQL 后会自动执行初始化迁移与演示种子数据
 - Redis 读侧适配默认启用：认证 session 以 Redis 为真相源并带本地热缓存，商品/SKU/SKU 列表读路径会优先命中 Redis 缓存
 - 商家经营看板由后端进程内实现：`service_dashboard.go` 直接读取 PostgreSQL 仓储计算漏斗/商品/汇总，无独立服务依赖
@@ -160,9 +160,9 @@ _Last updated: 2026-08-03 16:10 UTC via GitHub Actions._
 
 | Benchmark | QPS | Change vs previous | ns/op | B/op | allocs/op |
 |---|---|---|---|---|---|
-| `BenchmarkPostgresRabbitMQOutboxRelay` | 508.94 | -12.2% | 1964864 | 7887 | 198 |
-| `BenchmarkRabbitMQPublish` | 3.86K | -0.9% | 258766 | 3651 | 94 |
-| `BenchmarkLiveHTTPHealthz` | 2.49K | -9.1% | 401443 | 15840 | 102 |
+| `BenchmarkLiveHTTPHealthz` | 2.74K | - | 364935 | 15847 | 102 |
+| `BenchmarkLiveHTTPOrderPreview` | 2.54K | - | 393236 | 17271 | 115 |
+| `BenchmarkLiveHTTPCreateOrder` | 252.70 | - | 3957210 | 17329 | 119 |
 
-_Only PostgreSQL/Redis/RabbitMQ-backed component benchmarks and live HTTP benchmarks from a running backend process are accepted._
+_Only PostgreSQL/Redis/Kafka-backed component benchmarks and live HTTP benchmarks from a running backend process are accepted._
 <!-- BENCHMARK_RESULTS_END -->

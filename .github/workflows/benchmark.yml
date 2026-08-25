@@ -36,18 +36,29 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
-      rabbitmq:
-        image: rabbitmq:4-alpine
+      kafka:
+        image: apache/kafka:4.0.0
         env:
-          RABBITMQ_DEFAULT_USER: postgres
-          RABBITMQ_DEFAULT_PASS: postgres
+          KAFKA_NODE_ID: 1
+          KAFKA_PROCESS_ROLES: broker,controller
+          KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://127.0.0.1:9092
+          KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+          KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+          KAFKA_CONTROLLER_QUORUM_VOTERS: 1@127.0.0.1:9093
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+          KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+          KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+          KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+          KAFKA_NUM_PARTITIONS: 3
+          KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
         ports:
-          - 5672:5672
+          - 9092:9092
         options: >-
-          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-cmd "/opt/kafka/bin/kafka-topics.sh --bootstrap-server 127.0.0.1:9092 --list >/dev/null"
           --health-interval 10s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 10
 
     steps:
       - uses: actions/checkout@v4
@@ -61,13 +72,13 @@ jobs:
         env:
           POSTGRES_DSN: postgres://postgres:postgres@127.0.0.1:5432/redcart_test?sslmode=disable
           REDIS_ADDR: 127.0.0.1:6379
-          RABBITMQ_ADDR: amqp://postgres:postgres@127.0.0.1:5672/
-          RABBITMQ_EXCHANGE: redcart.events.bench
+          KAFKA_BROKERS: 127.0.0.1:9092
+          KAFKA_TOPIC_PREFIX: redcart.events.bench
           RUN_POSTGRES_INTEGRATION: "1"
         run: |
-          go test ./internal/redcart/interfaces/httpapi ./internal/event/outbox ./internal/event/rabbitmq \
+          go test ./internal/redcart/interfaces/httpapi ./internal/event/outbox ./internal/event/kafka \
             -run '^$' \
-            -bench 'BenchmarkHTTPPostgresOrderPreview|BenchmarkHTTPPostgresCreateOrder|BenchmarkHTTPPostgresCreateOrderWithOutbox|BenchmarkPostgresRabbitMQOutboxRelay|BenchmarkRabbitMQPublish' \
+            -bench 'BenchmarkHTTPPostgresOrderPreview|BenchmarkHTTPPostgresCreateOrder|BenchmarkHTTPPostgresCreateOrderWithOutbox|BenchmarkPostgresKafkaOutboxRelay|BenchmarkKafkaPublish' \
             -benchtime=1s \
             -benchmem \
             -count=1 \

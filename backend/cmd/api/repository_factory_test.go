@@ -41,7 +41,8 @@ func TestWrapRepositoryWithRedisSessionEnabled(t *testing.T) {
 		t.Skip("REDIS_ADDR is not set")
 	}
 	t.Setenv("REDIS_ADDR", addr)
-	t.Setenv("REDIS_SESSION_TTL", "45m")
+	t.Setenv("REDIS_ACCESS_TOKEN_TTL", "45m")
+	t.Setenv("REDIS_REFRESH_TOKEN_TTL", "168h")
 	t.Setenv("REDIS_CATALOG_TTL", "2m")
 
 	repo, limiter, cleanup, err := wrapRepositoryWithRedisSession(base, log.Default())

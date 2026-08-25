@@ -112,6 +112,69 @@ func TestPostgresApplicationAuthSessionAndCatalogRegression(t *testing.T) {
 	}
 }
 
+// TestPostgresApplicationMerchantListProductsFiltersBeforePagination verifies
+// merchant product pagination is scoped to the current merchant before limit/offset
+// are applied. This prevents reused integration databases from hiding a merchant's
+// own products behind earlier products owned by other merchants.
+func TestPostgresApplicationMerchantListProductsFiltersBeforePagination(t *testing.T) {
+	_, service := newPostgresApplicationService(t)
+	ctx := context.Background()
+	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
+
+	merchantA, err := service.Register(ctx, application.RegisterInput{
+		Nickname: "Merchant A " + suffix,
+		Phone:    "155" + suffix[len(suffix)-8:],
+		Password: "secret",
+		Role:     domain.RoleMerchant,
+	})
+	if err != nil {
+		t.Fatalf("register merchant A: %v", err)
+	}
+	actorA, err := service.Authenticate(merchantA.Token)
+	if err != nil {
+		t.Fatalf("authenticate merchant A: %v", err)
+	}
+
+	merchantB, err := service.Register(ctx, application.RegisterInput{
+		Nickname: "Merchant B " + suffix,
+		Phone:    "156" + suffix[len(suffix)-8:],
+		Password: "secret",
+		Role:     domain.RoleMerchant,
+	})
+	if err != nil {
+		t.Fatalf("register merchant B: %v", err)
+	}
+	actorB, err := service.Authenticate(merchantB.Token)
+	if err != nil {
+		t.Fatalf("authenticate merchant B: %v", err)
+	}
+
+	for i := range 3 {
+		if _, err := service.MerchantCreateProduct(ctx, *actorA, application.MerchantProductInput{Title: fmt.Sprintf("Other merchant product %d %s", i, suffix)}); err != nil {
+			t.Fatalf("create merchant A product: %v", err)
+		}
+	}
+	productB, err := service.MerchantCreateProduct(ctx, *actorB, application.MerchantProductInput{Title: "Target merchant product " + suffix})
+	if err != nil {
+		t.Fatalf("create merchant B product: %v", err)
+	}
+
+	products, err := service.MerchantListProducts(ctx, *actorB, 1, 0)
+	if err != nil {
+		t.Fatalf("list merchant B products: %v", err)
+	}
+	if len(products) != 1 || products[0].ID != productB.ID {
+		t.Fatalf("expected merchant B product after merchant-scoped pagination, got %+v", products)
+	}
+	empty, err := service.MerchantListProducts(ctx, *actorB, 1, 1)
+	if err != nil {
+		t.Fatalf("list merchant B second page: %v", err)
+	}
+	if len(empty) != 0 {
+		t.Fatalf("expected empty second page for single product, got %+v", empty)
+	}
+}
+
 // TestPostgresApplicationMerchantCatalogOrderAndAIRegression 回归商家商品/SKU 管理、订单权限与幂等、经营诊断与 A2UI 生成。
 func TestPostgresApplicationMerchantCatalogOrderAndAIRegression(t *testing.T) {
 	_, service := newPostgresApplicationService(t)

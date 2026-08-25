@@ -322,10 +322,14 @@ def render(cwd: Path, *, mode: str) -> str:
     for entry in wt_entries:
         path = Path(entry.get("worktree", ""))
         branch_ref = entry.get("branch", "")
-        # porcelain 中 detached 状态的 worktree 没有 branch 字段，此时回退读取当前分支名
+        sha = entry.get("HEAD", "")[:7]
+        if not path.exists():
+            branch = branch_ref.removeprefix("refs/heads/") or "(missing)"
+            seen_branches.add(branch)
+            lines.append(f"| `{branch}` | `{path}` | missing | `{sha}` | stale worktree path |")
+            continue
         branch = branch_ref.removeprefix("refs/heads/") or current_branch(path)
         seen_branches.add(branch)
-        sha = entry.get("HEAD", "")[:7]
         status = worktree_status(path)
         info = branch_info.get(branch, {})
         latest = info.get("subject", "")

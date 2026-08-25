@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
@@ -11,8 +12,9 @@ import (
 	backendai "github.com/example/redcart-copilot/backend/internal/ai"
 	aigrpc "github.com/example/redcart-copilot/backend/internal/ai/grpc"
 	"github.com/example/redcart-copilot/backend/internal/event"
+	kafkaevent "github.com/example/redcart-copilot/backend/internal/event/kafka"
 	"github.com/example/redcart-copilot/backend/internal/event/outbox"
-	rabbitmqevent "github.com/example/redcart-copilot/backend/internal/event/rabbitmq"
+	"github.com/example/redcart-copilot/backend/internal/observability"
 	"github.com/example/redcart-copilot/backend/internal/redcart/application"
 	redisrepo "github.com/example/redcart-copilot/backend/internal/redcart/infrastructure/redis"
 	"github.com/example/redcart-copilot/backend/internal/redcart/interfaces/httpapi"
@@ -25,6 +27,18 @@ func main() {
 		log.Fatal(err)
 	}
 	defer stopProfiler()
+
+	stopTracing, err := observability.SetupTracing(context.Background())
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := stopTracing(shutdownCtx); err != nil {
+			log.Printf("shut down tracing: %v", err)
+		}
+	}()
 
 	repo, limiter, cleanup, err := initRepository(log.Default())
 	if err != nil {
@@ -42,7 +56,7 @@ func main() {
 	}
 	server := &http.Server{
 		Addr:              ":" + envOrDefault("PORT", envOrDefault("HTTP_PORT", "18080")),
-		Handler:           httpapi.NewServerWithRateLimit(service, rateLimit).Handler(),
+		Handler:           observability.HTTPHandler(httpapi.NewServerWithRateLimit(service, rateLimit).Handler()),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -57,17 +71,20 @@ func main() {
 	}
 }
 
-// startOutboxPublisher 根据 RABBITMQ_ADDR 决定是否启用 outbox 后台转发：
-// 未配置地址或连接失败时返回空操作，保证无 RabbitMQ 的环境也能正常启动。
+// startOutboxPublisher 根据 KAFKA_BROKERS 决定是否启用 outbox 后台转发：
+// 未配置 brokers 时返回空操作，保证无 Kafka 的环境也能正常启动。
 // 返回的闭包用于停止转发器并关闭发布连接。
 func startOutboxPublisher(store event.OutboxRelayStore, logger *log.Logger) func() {
-	addr := envOrDefault("RABBITMQ_ADDR", "")
-	if addr == "" {
+	brokers := kafkaevent.ParseBrokers(envOrDefault("KAFKA_BROKERS", ""))
+	if len(brokers) == 0 {
 		return func() {}
 	}
-	publisher, err := rabbitmqevent.NewPublisher(addr, envOrDefault("RABBITMQ_EXCHANGE", "redcart.events"))
+	publisher, err := kafkaevent.NewPublisher(brokers, kafkaevent.PublisherConfig{
+		TopicPrefix: envOrDefault("KAFKA_TOPIC_PREFIX", "redcart.events"),
+		Logger:      logger,
+	})
 	if err != nil {
-		logger.Printf("rabbitmq publisher disabled: %v", err)
+		logger.Printf("kafka publisher disabled: %v", err)
 		return func() {}
 	}
 	relay := outbox.NewPublisher(store, publisher, outbox.Config{
@@ -76,7 +93,10 @@ func startOutboxPublisher(store event.OutboxRelayStore, logger *log.Logger) func
 		Logger:    logger,
 	})
 	relay.Start()
-	return func() { relay.Stop(); _ = publisher.Close() }
+	return func() {
+		relay.Stop()
+		_ = publisher.Close()
+	}
 }
 
 // newAIProvider 根据 AI_PROVIDER 环境变量选择 AI 实现：

@@ -5,7 +5,7 @@
 
 ## 一句话定位
 
-**RedCart Copilot 是一个「内容电商 + AI Copilot」的 AI Native 全栈示例项目**，把「内容种草 → 交易履约 → 商家经营 → AI 提效」的完整链路做成一个可运行、可演示、可解释的 MVP：后端 Go 单体 + PostgreSQL/Redis/RabbitMQ 运行时，前端无框架静态演示应用，AI 服务走 gRPC 契约并提供 A2UI 声明式界面。
+**RedCart Copilot 是一个「内容电商 + AI Copilot」的 AI Native 全栈示例项目**，把「内容种草 → 交易履约 → 商家经营 → AI 提效」的完整链路做成一个可运行、可演示、可解释的 MVP：后端 Go 单体 + PostgreSQL/Redis/Kafka 运行时，前端无框架静态演示应用，AI 服务走 gRPC 契约并提供 A2UI 声明式界面。
 
 项目不是功能堆砌，而是把**业务主链路、工程边界、AI 协作方式**讲清楚、跑起来——仓库本身就是 agent-native 工作流的产物：契约先行、可执行验证优先、AI 参与全程留痕。
 
@@ -55,7 +55,7 @@ graph TD
     APP --> DOM["领域层 domain<br/>订单状态机 · 库存锁 · 金额规则"]
     API --> PG[("PostgreSQL :15432<br/>业务真相 · 迁移 · 种子数据")]
     API --> RD[("Redis :6380<br/>session 会话源 · 读侧热缓存")]
-    APP --> MQ[("RabbitMQ :5672<br/>事务性发件箱 → 订单事件")]
+    APP --> MQ[("Kafka :9092<br/>事务性发件箱 → 订单事件")]
     API --> AI["AI 服务 ai-service（gRPC :50051）<br/>卖点 · 经营复盘 · A2UI surface"]
     API --> PROM["Prometheus :9090<br/>/metrics 指标采集"]
     API --> PYRO["Pyroscope :4040<br/>Go push mode 性能分析"]
@@ -73,7 +73,7 @@ graph TD
 
 - 订单、库存、购物车等交易真相在 PostgreSQL，事务边界不因 Redis 缓存命中而放宽；
 - Redis 只负责 session 会话源与商品/SKU 读侧热缓存，是**读侧增益**不是写侧增益；
-- RabbitMQ 承担异步解耦：订单状态变更通过事务性发件箱（Transactional Outbox）发布，核心交易仍保持数据库事务强一致（[ADR 0006](../docs/adr/0006-message-queue-and-event-driven.md)）；
+- Kafka 承担异步解耦：订单状态变更通过事务性发件箱（Transactional Outbox）发布，核心交易仍保持数据库事务强一致（[ADR 0006](../docs/adr/0006-message-queue-and-event-driven.md)）；
 - 领域层不依赖 Gin、GORM、供应商 SDK 或部署环境，集成细节全部收敛到适配层。
 
 ## 功能清单（与代码现状一致）
@@ -92,7 +92,7 @@ graph TD
 | 后端 | Go 1.25 + Gin + GORM + gRPC | `backend/go.mod` |
 | 数据库 | PostgreSQL 16（业务真相、迁移、种子数据） | `docker-compose.yml` |
 | 缓存/会话 | Redis 7（session 会话源、读侧热缓存） | `docker-compose.yml` |
-| 消息队列 | RabbitMQ 4（事务性发件箱发布订单事件） | `docker-compose.yml` |
+| 消息队列 | Kafka 4（事务性发件箱发布订单事件） | `docker-compose.yml` |
 | AI 服务 | Python + grpcio，Mock Provider（可替换为真实模型） | `ai-service/requirements.txt` |
 | 前端 | 原生 TypeScript 单文件 demo，零运行时依赖，自定义 node 校验脚本 | `frontend/package.json` |
 | 可观测 | Prometheus（`/metrics`）+ Grafana、Grafana Pyroscope（Go push mode） | `prometheus.yml`、`docker-compose.yml` |
@@ -113,7 +113,7 @@ bash scripts/check-openapi.sh
 bash scripts/local-dev.sh
 ```
 
-该命令启动 `postgres / redis / pyroscope / backend / frontend`；`backend` 的 `depends_on` 会自动连带启动 `rabbitmq` 与 `ai-service`。如需完整可观测栈，可再补：
+该命令启动 `postgres / redis / pyroscope / backend / frontend`；`backend` 的 `depends_on` 会自动连带启动 `kafka` 与 `ai-service`。如需完整可观测栈，可再补：
 
 ```bash
 docker compose up -d prometheus grafana
@@ -124,7 +124,7 @@ docker compose up -d prometheus grafana
 - 后端 API：`http://127.0.0.1:18080`，健康检查 `GET /healthz`
 - 前端演示：`http://127.0.0.1:4173`
 - PostgreSQL：`127.0.0.1:15432`（库 `redcart`，用户/密码 `postgres/postgres`）
-- Redis：`127.0.0.1:6380`；RabbitMQ：`amqp://redcart:redcart@127.0.0.1:5672/`
+- Redis：`127.0.0.1:6380`；Kafka：`127.0.0.1:9092`
 - Pyroscope：`http://127.0.0.1:4040`；Prometheus：`http://127.0.0.1:9090`
 - 演示账号：消费者 `13800000001 / consumer-demo`；商家 `13800000002 / merchant-demo`
 
@@ -177,7 +177,7 @@ npm run build
 ### CI 门禁（[ci/README.md](../ci/README.md)）
 
 - `.github/workflows/ci.yml` 是 PR 与 `main` push 的统一门禁入口；子 workflow（后端/前端/AI/安全/Docker）只保留 `workflow_call` 与 `workflow_dispatch`，可复用可手动触发，避免同一事件重复跑。
-- 后端 CI 连真实 PostgreSQL 与 Redis 运行，并产出 QPS 与 benchmark 产物到 `ci/artifacts/`（如 `backend-postgres-http-qps.txt`、`backend-rabbitmq-qps.txt`）；内存仓储 benchmark 不允许进入 CI 产物或性能表。
+- 后端 CI 连真实 PostgreSQL 与 Redis 运行，并产出 QPS 与 benchmark 产物到 `ci/artifacts/`（如 `backend-postgres-http-qps.txt`、`backend-kafka-qps.txt`）；内存仓储 benchmark 不允许进入 CI 产物或性能表。
 - 覆盖门禁由 [backend-test-metrics.sh](../ci/scripts/backend-test-metrics.sh) 固化：总覆盖率 ≥ 65.0%、应用层 ≥ 80.0%、AI 包 ≥ 95.0%、后端测试数量 ≥ 55 等，阻断测试规模与关键包覆盖率回退。
 
 ### 验证脚本与测试策略（[docs/testing/test-strategy.md](../docs/testing/test-strategy.md)）
@@ -185,7 +185,7 @@ npm run build
 - 仓库级结构门禁 `scripts/validate-workspace.sh`（转发到 `ci/scripts/validate-workspace.sh`）：必需文件清单、核心文档内容冒烟、Codex 项目 hook 自检、密钥扫描。
 - 分层测试：领域层（订单状态机/金额/库存）→ 应用层 → HTTP 层 → PostgreSQL-backed HTTP 集成测试（`RUN_POSTGRES_INTEGRATION=1` 时走真实 Gin → 应用层 → PostgreSQL/GORM 路径）。
 - 高风险场景专门覆盖：并发下单库存不超卖（200 并发抢 50 库存）、并发支付不重复扣减、越权与错误 method 无副作用、取消/退款库存恢复、非法状态流转。
-- 性能基线只认真实运行路径：PostgreSQL-backed benchmark（`OrderPreview` / `CreateOrder`）与真实 RabbitMQ 的 outbox relay benchmark；前端当前是源码守卫与构建检查，未引入浏览器级 E2E（见「已知测试边界」）。
+- 性能基线只认真实运行路径：PostgreSQL-backed benchmark（`OrderPreview` / `CreateOrder`）与真实 Kafka 的 outbox relay benchmark；前端当前是源码守卫与构建检查，未引入浏览器级 E2E（见「已知测试边界」）。
 
 ### 可复现、可解释的开发流
 
