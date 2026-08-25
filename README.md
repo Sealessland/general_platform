@@ -156,13 +156,13 @@ bash scripts/validate-workspace.sh
 <!-- BENCHMARK_RESULTS_START -->
 ## Performance
 
-_Last updated: 2026-08-03 16:10 UTC via GitHub Actions._
+_Last updated: 2026-08-25 06:58 UTC via GitHub Actions._
 
 | Benchmark | QPS | Change vs previous | ns/op | B/op | allocs/op |
 |---|---|---|---|---|---|
-| `BenchmarkLiveHTTPHealthz` | 2.74K | - | 364935 | 15847 | 102 |
-| `BenchmarkLiveHTTPOrderPreview` | 2.54K | - | 393236 | 17271 | 115 |
-| `BenchmarkLiveHTTPCreateOrder` | 252.70 | - | 3957210 | 17329 | 119 |
+| `BenchmarkPostgresKafkaOutboxRelay` | 86.35 | - | 11580503 | 26225 | 190 |
+| `BenchmarkKafkaPublish` | 88.52 | - | 11297061 | 23809 | 82 |
+| `BenchmarkLiveHTTPHealthz` | 3.75K | +36.9% | 266594 | 15844 | 102 |
 
 _Only PostgreSQL/Redis/Kafka-backed component benchmarks and live HTTP benchmarks from a running backend process are accepted._
 <!-- BENCHMARK_RESULTS_END -->
