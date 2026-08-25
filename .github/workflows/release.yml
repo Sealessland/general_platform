@@ -9,6 +9,6 @@ jobs:
   release-notes:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Print changelog
         run: sed -n '1,120p' CHANGELOG.md
